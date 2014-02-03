@@ -1,0 +1,15 @@
+# Doc: http://manuel.manuelles.nl/blog/2012/06/22/integrate-travis-ci-into-grunt/
+
+language: node_js
+
+node_js:
+  - 0.8
+
+notifications:
+  email:
+    recipients:
+      - jmillan@aliax.net
+      - ibc@aliax.net
+      - saghul@gmail.com
+    on_success: change
+    on_failure: always
