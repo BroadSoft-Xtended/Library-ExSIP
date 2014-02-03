@@ -31,20 +31,6 @@ test('reinvite with no sdp after audio only reinvite', function() {
   TestExSIP.Helpers.triggerOnIceCandidate(session);
   strictEqual(session.rtcMediaHandler.peerConnection.remoteDescription.hasVideo(), true);
 });
-test('GATEWAY-91 : reinvite with same media in sdp', function() {
-  var started = false;
-  session.on('started', function(){
-    started = true;
-  });
-  var formerRtcMediaHandler = session.rtcMediaHandler;
-  ua.transport.onMessage({data: TestExSIP.Helpers.sipRequestMessage({}, formerRtcMediaHandler.peerConnection.remoteDescription.sdp)});
-  TestExSIP.Helpers.triggerOnIceCandidate(session);
-  var answerMsg = TestExSIP.Helpers.popMessageSentAndClear(ua);
-  strictEqual(answerMsg.status_code, 200);
-  strictEqual(answerMsg.body.length > 0, true);
-  strictEqual(started, false);
-  strictEqual(session.rtcMediaHandler === formerRtcMediaHandler, true, "should NOT reconnect");
-});
 test('reinvite with no sdp and ACK with sdp', function() {
   var onReInviteEventReceived = false;
   ua.on('onReInvite', function(e){
@@ -199,8 +185,7 @@ test('request with no audio/video change received', function() {
   ua.transport.onMessage({data: TestExSIP.Helpers.inviteRequest(ua, {videoPort: "0", videoBandwidth: "1024"})});
   TestExSIP.Helpers.triggerOnIceCandidate(session);
   ok(!onReInviteEvent);
-  // GATEWAY-91 : will not be set as media has not changed
-  strictEqual(session.rtcMediaHandler.peerConnection.remoteDescription.getVideoBandwidth(), "512")
+  strictEqual(session.rtcMediaHandler.peerConnection.remoteDescription.getVideoBandwidth(), "1024")
   strictEqual(session.status, ExSIP.RTCSession.C.STATUS_WAITING_FOR_ACK);
 
   ua.transport.onMessage({data: TestExSIP.Helpers.ackResponse(ua)});

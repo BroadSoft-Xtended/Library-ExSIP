@@ -305,9 +305,6 @@
 
     logger.log("accepting re-INVITE", this.ua);
 
-    var mediaChanges = self.rtcMediaHandler.peerConnection.remoteDescription.mediaChanges(
-      new ExSIP.WebRTC.RTCSessionDescription({sdp: this.request.body, type: "answer"}));
-
     var replySucceeded = function() {
       var timeout = ExSIP.Timers.T1;
 
@@ -354,9 +351,7 @@
         ExSIP.Timers.TIMER_H
       );
 
-      if(mediaChanges.length > 0) {
-        self.started('local', undefined, true);
-      }
+      self.started('local', undefined, true);
     };
 
     var replyFailed = function() {
@@ -386,20 +381,9 @@
       self.request.reply(488);
     };
 
-    // GATEWAY-91 : not reconnect if media in sdp has not changed
-    if(mediaChanges.length === 0) {
-      logger.log("sdp media the same - replying without reconnecting", self.ua);
-      connectSuccess();
-//      this.rtcMediaHandler.onMessage("offer", this.request.body, function(){
-//        self.rtcMediaHandler.setOnIceCandidateCallback();
-//        self.rtcMediaHandler.createAnswer(connectSuccess, connectFailed);
-//      }, connectFailed);
-    } else {
-      logger.log("sdp media has changed - replying with reconnecting : "+mediaChanges, self.ua);
-      this.initialRemoteSdp = this.initialRemoteSdp || self.rtcMediaHandler.peerConnection.remoteDescription.sdp;
-      var sdp = this.request.body || this.initialRemoteSdp;
-      this.reconnectRtcMediaHandler(connectSuccess, connectFailed, {isAnswer: true, remoteSdp: sdp, isReconnect: true});
-    }
+    this.initialRemoteSdp = this.initialRemoteSdp || self.rtcMediaHandler.peerConnection.remoteDescription.sdp;
+    var sdp = this.request.body || this.initialRemoteSdp;
+    this.reconnectRtcMediaHandler(connectSuccess, connectFailed, {isAnswer: true, remoteSdp: sdp, isReconnect: true});
   };
 
   RTCSession.prototype.reconnectRtcMediaHandler = function(connectSuccess, connectFailed, options) {
