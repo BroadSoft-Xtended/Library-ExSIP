@@ -145,6 +145,9 @@ TestExSIP.Helpers = {
     session.rtcMediaHandler.peerConnection.onicecandidate({srcElement:{iceGatheringState:"complete"},
       candidate:{sdpMLineIndex:0,sdpMid:"audio",
         candidate:"a=candidate:23847997 1 udp 2113937151 169.254.193.143 49229 typ host generation 0"}});
+    session.rtcMediaHandler.peerConnection.onicecandidate({srcElement:{iceGatheringState:"complete"},
+      candidate:{sdpMLineIndex:0,sdpMid:"video",
+        candidate:"a=candidate:23847997 1 udp 2113937151 169.254.193.143 49229 typ host generation 0"}});
 //    session.rtcMediaHandler.peerConnection.onicecandidate({srcElement:{iceGatheringState:"complete"},
 //      candidate:null});
   },

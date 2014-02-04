@@ -317,7 +317,7 @@ RTCMediaHandler.prototype = {
   },
 
   setOnIceCandidateCallback: function(){
-    var sent = false, self = this;
+    var sent = false, audioCandidateReceived = false, videoCandidateReceived = false, self = this;
     this.peerConnection.onicecandidate = function(e) {
       if (e.candidate && !self.session.ua.rtcMediaHandlerOptions["disableICE"]) {
         logger.log('ICE candidate received: '+ e.candidate.candidate, self.session.ua);
@@ -328,7 +328,9 @@ RTCMediaHandler.prototype = {
         logger.log('onIceCompleted with sent : '+ sent+" and candidate : "+ExSIP.Utils.toString(e.candidate), self.session.ua);
 //        if(!sent && e.srcElement.iceGatheringState === 'complete') {
         // only trigger if e.candidate is not null
-        if(!sent && e.candidate) {
+        audioCandidateReceived = audioCandidateReceived || (e.candidate && e.candidate.sdpMid === 'audio');
+        videoCandidateReceived = videoCandidateReceived || (e.candidate && e.candidate.sdpMid === 'video');
+        if(!sent && audioCandidateReceived && videoCandidateReceived && e.candidate) {
           sent = true;
           self.onIceCompleted();
         }
