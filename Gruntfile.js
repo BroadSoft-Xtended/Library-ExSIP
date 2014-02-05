@@ -171,10 +171,15 @@ module.exports = function(grunt) {
       }
     },
     bump: {
+      files: [ 'package.json'],
       options: {
-        commit: false,
-        createTag: false,
-        push: false
+        part: 'patch',
+        onBumped: function ( data ) {
+          var currentFile = data.task.filesSrc[ data.index ];
+          if ( ( /package.json/ ).test( currentFile ) ) {
+            grunt.config( 'pkg', grunt.file.readJSON( currentFile ) );
+          }
+        }
       }
     }
   });
@@ -190,7 +195,7 @@ module.exports = function(grunt) {
   grunt.loadNpmTasks('grunt-contrib-watch');
   grunt.loadNpmTasks("grunt-qunit-serverless");
   grunt.loadNpmTasks('grunt-notify');
-  grunt.loadNpmTasks('grunt-bump');
+  grunt.loadNpmTasks('grunt-bumpx');
   grunt.loadNpmTasks('grunt-contrib-clean');
 
   // Task for building ExSIP Grammar.js and Grammar.min.js files.

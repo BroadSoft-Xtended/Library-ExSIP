@@ -70,7 +70,7 @@ DTMF.prototype.send = function(tone, options) {
   }
 
   // Check tone value
-  if (!tone.match(/^[0-9A-D#*]$/)) {
+  if (!tone.match(/^[0-9A-D#*,]+$/i)) {
     throw new TypeError('Invalid tone: '+ tone);
   } else {
     this.tone = tone;
@@ -83,25 +83,32 @@ DTMF.prototype.send = function(tone, options) {
 
   logger.log("sending DTMF with tone "+this.tone+", duration "+options.duration+", gap "+options.interToneGap, this.session.ua);
   this.dtmfSender.insertDTMF(this.tone, options.duration, options.interToneGap);
-
-  this.session.emit('newDTMF', this.session, {
-    originator: 'local',
-    dtmf: this
-  });
 };
 
 DTMF.prototype.enableDtmfSender = function(localstream, peerConnection) {
+  var self = this;
   if (localstream != null) {
     var local_audio_track = localstream.getAudioTracks()[0];
     this.dtmfSender = peerConnection.createDTMFSender(local_audio_track);
     logger.log("Created DTMF Sender with canInsertDTMF : "+this.dtmfSender.canInsertDTMF, this.session.ua);
-//    dtmfSender.ontonechange = dtmfOnToneChange;
+
+    this.dtmfSender.ontonechange = function(tone) {
+      if (tone) {
+        logger.log("Sent Dtmf tone: \t" + tone.tone);
+        self.session.emit('newDTMF', self.session, {
+          originator: 'local',
+          dtmf: self,
+          tone: tone.tone
+        });
+      }
+    };
   }
   else {
     logger.error("No Local Stream to create DTMF Sender");
   }
 };
-/**
+
+    /**
  * @private
  */
 DTMF.prototype.receiveResponse = function(response) {

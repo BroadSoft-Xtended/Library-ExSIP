@@ -18,7 +18,6 @@ var RTCMediaHandler = function(session, constraints) {
   this.localMedia = null;
   this.peerConnection = null;
   this.createOfferConstraints = null;
-  this.tones = null;
 
   this.init(constraints);
 };
@@ -362,7 +361,6 @@ RTCMediaHandler.prototype = {
 
   sendDTMF: function(tones, options) {
     var duration, interToneGap,
-      position = 0,
       self = this;
 
     options = options || {};
@@ -413,43 +411,8 @@ RTCMediaHandler.prototype = {
       interToneGap = Math.abs(interToneGap);
     }
 
-    if (this.tones) {
-      // Tones are already queued, just add to the queue
-      this.tones += tones;
-      return;
-    }
-
-    // New set of tones to start sending
-    this.tones = tones;
-
-    var sendDTMF = function () {
-      var tone, timeout,
-        tones = self.tones;
-
-      if (self.status === C.STATUS_TERMINATED || !tones || position >= tones.length) {
-        // Stop sending DTMF
-        self.tones = null;
-        return;
-      }
-
-      tone = tones[position];
-      position += 1;
-
-      if (tone === ',') {
-        timeout = 2000;
-      } else {
-        var dtmf = self.getDTMF();
-        dtmf.on('failed', function(){self.tones = null;});
-        dtmf.send(tone, options);
-        timeout = duration + interToneGap;
-      }
-
-      // Set timeout for the next tone
-      window.setTimeout(sendDTMF, timeout);
-    };
-
-    // Send the first tone
-    sendDTMF();
+    var dtmf = self.getDTMF();
+    dtmf.send(tones, options);
   },
 
   /**

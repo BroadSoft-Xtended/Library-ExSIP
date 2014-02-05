@@ -12,10 +12,17 @@ module( "sendDTMF", {
 });
 
 test('dtmf sent', function() {
-  var onNewDTMFEventReceived = false;
-  session.on('newDTMF', function(e){ onNewDTMFEventReceived = true; });
+  var toneSent = '';
+  session.rtcMediaHandler.getDTMF().dtmfSender.insertDTMF = function(tone) { toneSent = tone;}
   session.sendDTMF('1', {duration: 100, interToneGap: 100});
-  ok(onNewDTMFEventReceived);
+  strictEqual(toneSent, '1');
+});
+
+test('dtmf sent with multiple tones', function() {
+  var toneSent = '';
+  session.rtcMediaHandler.getDTMF().dtmfSender.insertDTMF = function(tone) { toneSent = tone;}
+  session.sendDTMF(',,0430813#', {duration: 100, interToneGap: 100});
+  strictEqual(toneSent, ',,0430813#');
 });
 
 test('dtmf sent after reinvite', function() {
