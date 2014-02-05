@@ -145,7 +145,7 @@ module.exports = function(grunt) {
     watch: {
       develop: {
         files: ['test/*.js', 'test/includes/*.js', 'src/*.js', 'src/RTCSession/*.js'],
-        tasks: ['build','copy:deploy_devel','copy:deploy_min','test', 'bump'],
+        tasks: ['bump', 'build','copy:deploy_devel','copy:deploy_min','test'],
         options: {
           spawn: true,
           verbose: true
