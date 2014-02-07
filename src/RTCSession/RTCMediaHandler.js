@@ -37,7 +37,7 @@ RTCMediaHandler.prototype = {
       self.session.failed('local', null, ExSIP.C.causes.WEBRTC_ERROR);
     };
 
-    var description = new ExSIP.WebRTC.RTCSessionDescription({type: "offer", sdp: rtcMediaHandler.peerConnection.localDescription.sdp});
+    var description = new ExSIP.WebRTC.RTCSessionDescription({type: this.getSetLocalDescriptionType(), sdp: rtcMediaHandler.peerConnection.localDescription.sdp});
     this.setLocalDescription(description);
 
     this.addStream(rtcMediaHandler.localMedia, streamAdditionSucceeded, streamAdditionFailed);
@@ -46,7 +46,7 @@ RTCMediaHandler.prototype = {
   connect: function(stream, connectSucceeded, connectFailed, options) {
     var self = this;
     options = options || {};
-    logger.log('connect with isAnswer : '+options.isAnswer+" and remoteSdp : "+options.remoteSdp, self.session.ua);
+    logger.log('connect with remoteSdp : '+options.remoteSdp, self.session.ua);
 
     var setLocalDescription = function() {
       self.setLocalDescription(options.localDescription, connectSucceeded, connectFailed);
@@ -54,7 +54,6 @@ RTCMediaHandler.prototype = {
 
     var setRemoteDescription = function(successCallback) {
       self.onMessage(
-        options.isAnswer ? 'offer' : 'answer',
         options.remoteSdp,
         successCallback, function(e){
           logger.error("setRemoteDescription failed");
@@ -79,15 +78,12 @@ RTCMediaHandler.prototype = {
     };
 
     var streamAdditionSucceeded = function() {
-      var isSdp = options.remoteSdp && options.remoteSdp.length > 0;
-      var isRemote = options.isAnswer && isSdp;
-      logger.log("isRemote : "+isRemote+", isAnswer : "+options.isAnswer+", isSdp :"+isSdp, self.session.ua);
-      if(isRemote) {
-        if(options.localDescription) {
-          setRemoteDescription(setLocalDescription);
-        } else {
-          setRemoteDescription(createAnswer);
-        }
+      var hasRemoteSdp = options.remoteSdp && options.remoteSdp.length > 0;
+      logger.log("hasRemoteSdp : "+hasRemoteSdp, self.session.ua);
+      if(hasRemoteSdp && options.localDescription) {
+        setRemoteDescription(setLocalDescription);
+      } else if(hasRemoteSdp){
+        setRemoteDescription(createAnswer);
       } else {
         createOffer();
       }
@@ -188,6 +184,7 @@ RTCMediaHandler.prototype = {
 
   setLocalDescription: function(sessionDescription, onSuccess, onFailure) {
     var self = this;
+    sessionDescription.type = this.getSetLocalDescriptionType();
     logger.log('peerConnection.setLocalDescription with type '+sessionDescription.type +' : '+sessionDescription.sdp, this.session.ua);
     this.peerConnection.setLocalDescription(
       sessionDescription,
@@ -287,8 +284,8 @@ RTCMediaHandler.prototype = {
       logger.log('onnegotiationneeded : '+ e.type, self.session.ua);
     };
 
-    this.peerConnection.onsignalingstatechange = function(e) {
-      logger.log('onsignalingstatechange : '+ e.signalingState, self.session.ua);
+    this.peerConnection.onsignalingstatechange = function() {
+      logger.log('onsignalingstatechange : '+ this.signalingState, self.session.ua);
     };
 
     this.peerConnection.ondatachannel = function(e) {
@@ -313,6 +310,30 @@ RTCMediaHandler.prototype = {
     this.peerConnection.onstatechange = function() {
       logger.log('PeerConnection state changed to "'+ this.readyState +'"', self.session.ua);
     };
+  },
+
+  getSetLocalDescriptionType: function(){
+    var state = this.peerConnection.signalingState;
+    if(state === 'stable' || state === 'have-local-offer') {
+      return "offer";
+    } else if(state === 'have-remote-offer' || state === 'have-local-pr-answer'){
+      return "answer";
+    } else {
+      logger.error("state "+state +" not implemented - returning offer");
+      return "offer";
+    }
+  },
+
+  getSetRemoteLocationType: function(){
+    var state = this.peerConnection.signalingState;
+    if(state === 'stable' || state === 'have-remote-offer') {
+      return "offer";
+    } else if(state === 'have-local-offer' || state === 'have-remote-pr-answer'){
+      return "answer";
+    } else {
+      logger.error("state "+state +" not implemented - returning offer");
+      return "offer";
+    }
   },
 
   setOnIceCandidateCallback: function(){
@@ -446,8 +467,8 @@ RTCMediaHandler.prototype = {
   * @param {Function} onSuccess
   * @param {Function} onFailure
   */
-  onMessage: function(type, body, onSuccess, onFailure) {
-    var description = new ExSIP.WebRTC.RTCSessionDescription({type: type, sdp:body});
+  onMessage: function(body, onSuccess, onFailure) {
+    var description = new ExSIP.WebRTC.RTCSessionDescription({type: this.getSetRemoteLocationType(), sdp:body});
     if(this.session.ua.rtcMediaHandlerOptions["videoBandwidth"]) {
       description.setVideoBandwidth(this.session.ua.rtcMediaHandlerOptions["videoBandwidth"]);
       logger.log("Modifying SDP with videoBandwidth : "+this.session.ua.rtcMediaHandlerOptions["videoBandwidth"], this.session.ua);
@@ -470,7 +491,7 @@ RTCMediaHandler.prototype = {
 //    "a=candidate:0 1 udp 2113929216 204.117.64.113 44476 typ host\r\n";
 //
     if(this.peerConnection) {
-      logger.log('peerConnection.setRemoteDescription for type '+type+' : '+description.sdp, this.session.ua);
+      logger.log('peerConnection.setRemoteDescription for type '+description.type+' : '+description.sdp, this.session.ua);
       this.peerConnection.setRemoteDescription(
         description,
         onSuccess,

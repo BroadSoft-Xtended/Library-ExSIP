@@ -278,7 +278,7 @@
     window.clearTimeout(this.timers.userNoAnswerTimer);
 
     logger.log('answer : getUserMedia', self.ua);
-    this.getUserMedia(mediaConstraints, answerCreationSucceeded, answerCreationFailed, {isAnswer: true, remoteSdp: request.body});
+    this.getUserMedia(mediaConstraints, answerCreationSucceeded, answerCreationFailed, {remoteSdp: request.body});
   };
 
   /**
@@ -382,8 +382,8 @@
     };
 
     this.initialRemoteSdp = this.initialRemoteSdp || self.rtcMediaHandler.peerConnection.remoteDescription.sdp;
-    var sdp = this.request.body || this.initialRemoteSdp;
-    this.reconnectRtcMediaHandler(connectSuccess, connectFailed, {isAnswer: true, remoteSdp: sdp, isReconnect: true});
+    var sdp = this.request.body;
+    this.reconnectRtcMediaHandler(connectSuccess, connectFailed, {remoteSdp: sdp, isReconnect: true});
   };
 
   RTCSession.prototype.reconnectRtcMediaHandler = function(connectSuccess, connectFailed, options) {
@@ -498,7 +498,6 @@
     //Initialize Media Session
     this.initRtcMediaHandler();
     this.rtcMediaHandler.onMessage(
-      'offer',
       request.body,
       /*
        * onSuccess
@@ -735,13 +734,13 @@
             this.status = C.STATUS_CONFIRMED;
             if(request.body.length > 0) {
               logger.log("reconnecting with ACK sdp and current local description", this.ua);
-              var localDescription = this.rtcMediaHandler.peerConnection.localDescription;
-              logger.log(localDescription, this.ua);
+//              var localDescription = this.rtcMediaHandler.peerConnection.localDescription;
+//              logger.log(localDescription, this.ua);
               this.reconnectRtcMediaHandler(function(){
                 logger.log("reconnect success", self.ua);
               }, function(){
                 logger.log("reconnect failure", self.ua);
-              }, {isAnswer: true, remoteSdp: request.body, isReconnect: true, localDescription: localDescription});
+              }, {remoteSdp: request.body, isReconnect: true});
             }
           }
           break;
@@ -827,7 +826,7 @@
     var userMediaSucceeded = function(stream) {
       self.ua.localMedia = stream;
       self.rtcMediaHandler.connect(stream, creationSucceeded, creationFailed, options);
-//      self.reconnectRtcMediaHandler(creationSucceeded, creationFailed, {localMedia: stream, isAnswer: isAnswer});
+//      self.reconnectRtcMediaHandler(creationSucceeded, creationFailed, {localMedia: stream});
     };
 
     var userMediaFailed = function() {
@@ -1043,7 +1042,6 @@
         }
 
         this.rtcMediaHandler.onMessage(
-          'answer',
           response.body,
           /*
            * onSuccess

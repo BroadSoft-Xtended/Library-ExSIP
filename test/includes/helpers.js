@@ -190,6 +190,7 @@ TestExSIP.Helpers = {
         addStream: function(){console.log("-- RTCPeerConnection.addStream()")},
         createOffer: function(success){
           console.log("-- RTCPeerConnection.createOffer()");
+          TestExSIP.Helpers.createOffer();
           success(TestExSIP.Helpers.createDescription(this.createDescriptionOptions()));
         },
         createAnswer: function(success, failure){
@@ -337,8 +338,10 @@ TestExSIP.Helpers = {
     return this.sipRequestMessage(options, sdp);
   },
 
-  createAnswer: function(localDescription){
+  createAnswer: function(){
+  },
 
+  createOffer: function(){
   },
 
   setLocalDescription: function(localDescription){
