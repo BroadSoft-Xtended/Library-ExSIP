@@ -49,7 +49,23 @@ RTCMediaHandler.prototype = {
     logger.log('connect with remoteSdp : '+options.remoteSdp, self.session.ua);
 
     var setLocalDescription = function() {
-      self.setLocalDescription(options.localDescription, connectSucceeded, connectFailed);
+      self.peerConnection.createAnswer(
+        function(sessionDescription){
+//          sessionDescription.setAudioPort(options.localDescription.audioPort());
+//          sessionDescription.setVideoPort(options.localDescription.videoPort());
+//          sessionDescription.setAudioConnection(options.localDescription.getAudioConnection());
+//          sessionDescription.setVideoConnection(options.localDescription.getVideoConnection());
+//          sessionDescription.setAudioRtcp(options.localDescription.getAudioRtcp());
+//          sessionDescription.setVideoRtcp(options.localDescription.getVideoRtcp());
+//          sessionDescription.setAudioCandidates(options.localDescription.getAudioCandidates());
+//          sessionDescription.setVideoCandidates(options.localDescription.getVideoCandidates());
+          self.setLocalDescription(sessionDescription, connectSucceeded, connectFailed);
+        },
+        function(e) {
+          logger.error('unable to create answer');
+          logger.error(e);
+          connectFailed();
+        });
     };
 
     var setRemoteDescription = function(successCallback) {
@@ -117,7 +133,7 @@ RTCMediaHandler.prototype = {
     };
 
     this.createOfferConstraints = options.createOfferConstraints;
-    logger.log("createOffer with createOfferConstraints : "+this.createOfferConstraints, this.session.ua);
+    logger.log("createOffer with createOfferConstraints : "+ExSIP.Utils.toString(this.createOfferConstraints), this.session.ua);
     this.peerConnection.createOffer(
       function(sessionDescription){
         if(options.videoMode) {
@@ -158,6 +174,7 @@ RTCMediaHandler.prototype = {
       onSuccess(self.peerConnection.localDescription.sdp);
     };
 
+    logger.log("createAnswer with constraints : "+constraints);
     this.peerConnection.createAnswer(
       function(sessionDescription){
         self.setLocalDescription(
@@ -266,6 +283,7 @@ RTCMediaHandler.prototype = {
       });
     }
 
+    logger.log("servers : "+ExSIP.Utils.toString(servers));
     this.peerConnection = new ExSIP.WebRTC.RTCPeerConnection({'iceServers': servers}, constraints);
 
     this.peerConnection.onaddstream = function(e) {

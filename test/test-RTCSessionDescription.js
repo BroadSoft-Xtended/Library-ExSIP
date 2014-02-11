@@ -100,6 +100,28 @@ test('getConnections without audio and video connection', function() {
   strictEqual(description.getVideoConnection(), "IN IP4 10.48.1.13");
 });
 
+test('setConnections', function() {
+  description.setAudioConnection("IN IP4 10.48.1.43");
+  description.setVideoConnection("IN IP4 10.48.1.53");
+  strictEqual(description.getConnection(), "IN IP4 10.48.1.13");
+  strictEqual(description.getAudioConnection(), "IN IP4 10.48.1.43");
+  strictEqual(description.getVideoConnection(), "IN IP4 10.48.1.53");
+});
+
+test('setRtcp', function() {
+  strictEqual(description.getAudioRtcp(), "55761 IN IP4 181.189.138.18");
+  strictEqual(description.getVideoRtcp(), "55762 IN IP4 181.189.138.18");
+  description.setAudioRtcp("12345 IN IP4 10.0.1.2");
+  description.setVideoRtcp("23456 IN IP4 11.1.2.3");
+  strictEqual(description.getAudioRtcp(), "12345 IN IP4 10.0.1.2");
+  strictEqual(description.getVideoRtcp(), "23456 IN IP4 11.1.2.3");
+});
+
+test('getCandidates', function() {
+  deepEqual(description.getAudioCandidates(), ["3355351182 1 udp 2113937151 10.0.2.1 59436 typ host generation 0",
+                                               "3355351182 2 udp 2113937151 10.0.2.1 59436 typ host generation 0"]);
+});
+
 test('hasActiveVideo', function() {
   ok(description.hasActiveVideo());
 });
@@ -239,6 +261,26 @@ test('setAudioMode without audio mode and withoutAudioConnection', function() {
   description.setAudioMode(ExSIP.C.INACTIVE);
   strictEqual(description.getAudioMode(), ExSIP.C.INACTIVE);
   strictEqual(description.getVideoMode(), ExSIP.C.SENDRECV);
+});
+
+test('getAudioFingerprint', function() {
+  strictEqual(description.getAudioFingerprint(), "sha-256 B1:1D:38:90:8F:72:85:60:AD:10:9F:BB:F5:78:47:AB:A8:DF:01:FA:50:D3:73:C9:20:3D:B4:C0:36:C2:08:29");
+});
+test('getVideoFingerprint', function() {
+  strictEqual(description.getVideoFingerprint(), "sha-256 B1:1D:38:90:8F:72:85:60:AD:10:9F:BB:F5:78:47:AB:A8:DF:01:FA:50:D3:73:C9:20:3D:B4:C0:36:C2:08:30");
+});
+
+test('removeVideoFingerprint', function() {
+  description.removeVideoFingerprint();
+  strictEqual(description.getAudioFingerprint(), "sha-256 B1:1D:38:90:8F:72:85:60:AD:10:9F:BB:F5:78:47:AB:A8:DF:01:FA:50:D3:73:C9:20:3D:B4:C0:36:C2:08:29");
+  strictEqual(description.getVideoFingerprint(), null);
+  strictEqual(description.sdp.indexOf('\r\n\r\n'), -1, "should not generate empty sdp lines");
+});
+test('removeAudioFingerprint', function() {
+  description.removeAudioFingerprint();
+  strictEqual(description.getAudioFingerprint(), null);
+  strictEqual(description.getVideoFingerprint(), "sha-256 B1:1D:38:90:8F:72:85:60:AD:10:9F:BB:F5:78:47:AB:A8:DF:01:FA:50:D3:73:C9:20:3D:B4:C0:36:C2:08:30");
+  strictEqual(description.sdp.indexOf('\r\n\r\n'), -1, "should not generate empty sdp lines");
 });
 
 test('mediaChanges with same sdp', function() {

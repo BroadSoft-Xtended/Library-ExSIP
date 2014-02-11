@@ -383,6 +383,9 @@
 
     this.initialRemoteSdp = this.initialRemoteSdp || self.rtcMediaHandler.peerConnection.remoteDescription.sdp;
     var sdp = this.request.body;
+    if(sdp.length === 0) {
+      logger.log("empty sdp");
+    }
     this.reconnectRtcMediaHandler(connectSuccess, connectFailed, {remoteSdp: sdp, isReconnect: true});
   };
 
@@ -734,13 +737,13 @@
             this.status = C.STATUS_CONFIRMED;
             if(request.body.length > 0) {
               logger.log("reconnecting with ACK sdp and current local description", this.ua);
-//              var localDescription = this.rtcMediaHandler.peerConnection.localDescription;
-//              logger.log(localDescription, this.ua);
+              var localDescription = this.rtcMediaHandler.peerConnection.localDescription;
+              logger.log(localDescription.sdp, this.ua);
               this.reconnectRtcMediaHandler(function(){
                 logger.log("reconnect success", self.ua);
               }, function(){
                 logger.log("reconnect failure", self.ua);
-              }, {remoteSdp: request.body, isReconnect: true});
+              }, {remoteSdp: request.body, isReconnect: true, localDescription: localDescription});
             }
           }
           break;

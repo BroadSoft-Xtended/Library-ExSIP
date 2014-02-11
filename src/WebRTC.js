@@ -73,8 +73,34 @@ WebRTC.RTCSessionDescription.prototype.getVideoIceUfrag = function(){
   var match = this.sdp.match(/m=video(?:(?!m=)[\s\S])*a=ice-ufrag:(.*)/mi);
   return match != null ? match[match.length-1] : null;
 };
+WebRTC.RTCSessionDescription.prototype.getCandidates = function(media){
+  var regex = new RegExp("a=candidate:(.*)", "ig");
+  var matches;
+  var result = [];
+  while ((matches = regex.exec(media)) !== null)
+  {
+    result.push(matches[matches.length-1]);
+  }
+  return result;
+};
+WebRTC.RTCSessionDescription.prototype.getAudioCandidates = function(){
+  var audio = this.getAudio();
+  return audio ? this.getCandidates(audio) : null;
+};
+WebRTC.RTCSessionDescription.prototype.getVideoCandidates = function(){
+  var video = this.getVideo();
+  return video ? this.getCandidates(video) : null;
+};
 WebRTC.RTCSessionDescription.prototype.getConnection = function(){
   var match = this.sdp.match(/v=(?:(?!m=)[\s\S])*c=(.*)/mi);
+  return match != null ? match[match.length-1] : null;
+};
+WebRTC.RTCSessionDescription.prototype.getAudio = function(){
+  var match = this.sdp.match(/m=audio(?:(?!m=)[\s\S])*/mi);
+  return match != null ? match[match.length-1] : null;
+};
+WebRTC.RTCSessionDescription.prototype.getVideo = function(){
+  var match = this.sdp.match(/m=video(?:(?!m=)[\s\S])*/mi);
   return match != null ? match[match.length-1] : null;
 };
 WebRTC.RTCSessionDescription.prototype.getAudioConnection = function(){
@@ -142,6 +168,32 @@ WebRTC.RTCSessionDescription.prototype.getVideoCodecFmtp = function(codec){
   var match = this.sdp.match(regex);
   return match != null ? match[match.length-1].trim() : null;
 };
+WebRTC.RTCSessionDescription.prototype.getAudioFingerprint = function(){
+  var match = this.sdp.match(/m=audio(?:(?!m=)[\s\S])*a=fingerprint:(.*)/mi);
+  return match != null ? match[match.length-1] : null;
+};
+WebRTC.RTCSessionDescription.prototype.getVideoFingerprint = function(){
+  var match = this.sdp.match(/m=video(?:(?!m=)[\s\S])*a=fingerprint:(.*)/mi);
+  return match != null ? match[match.length-1] : null;
+};
+WebRTC.RTCSessionDescription.prototype.getAudioRtcp = function(){
+  var match = this.sdp.match(/m=audio(?:(?!m=)[\s\S])*a=rtcp:(.*)/mi);
+  return match != null ? match[match.length-1] : null;
+};
+WebRTC.RTCSessionDescription.prototype.getVideoRtcp = function(){
+  var match = this.sdp.match(/m=video(?:(?!m=)[\s\S])*a=rtcp:(.*)/mi);
+  return match != null ? match[match.length-1] : null;
+};
+WebRTC.RTCSessionDescription.prototype.removeVideoFingerprint = function(){
+  if(this.getVideoFingerprint()) {
+    this.sdp = this.sdp.replace(/(m=video(?:(?!m=)[\s\S])*)(a=fingerprint:.*\r\n)/mi, "$1");
+  }
+};
+WebRTC.RTCSessionDescription.prototype.removeAudioFingerprint = function(){
+  if(this.getAudioFingerprint()) {
+    this.sdp = this.sdp.replace(/(m=audio(?:(?!m=)[\s\S])*)(a=fingerprint:.*\r\n)/mi, "$1");
+  }
+};
 WebRTC.RTCSessionDescription.prototype.hasActiveVideo = function(){
   var videoPort = this.videoPort() || 0;
   var videoConnection = this.getVideoConnection() || "";
@@ -186,6 +238,34 @@ WebRTC.RTCSessionDescription.prototype.setAudioMode = function(mode){
 };
 WebRTC.RTCSessionDescription.prototype.setAudioPort = function(port){
   this.sdp = this.sdp.replace(/(m=audio\s)(\d*)(\s)/i, "$1"+port+"$3");
+};
+WebRTC.RTCSessionDescription.prototype.setAudioConnection = function(audioConnection){
+  if(this.getAudioConnection()) {
+    this.sdp = this.sdp.replace(/(m=audio(?:(?!m=)[\s\S])*)(c=.*)/mi, "$1c=" + audioConnection);
+  } else {
+    this.sdp = this.sdp.replace(/(m=audio.*((?!m=)[\s\S]*c=IN\s+IP4.*)?)/, "$1\r\nc=" + audioConnection);
+  }
+};
+WebRTC.RTCSessionDescription.prototype.setVideoConnection = function(videoConnection){
+  if(this.getVideoConnection()) {
+    this.sdp = this.sdp.replace(/(m=video(?:(?!m=)[\s\S])*)(c=.*)/mi, "$1c=" + videoConnection);
+  } else {
+    this.sdp = this.sdp.replace(/(m=video.*((?!m=)[\s\S]*c=IN\s+IP4.*)?)/, "$1\r\nc=" + videoConnection);
+  }
+};
+WebRTC.RTCSessionDescription.prototype.setAudioRtcp = function(audioRtcp){
+  if(this.getAudioRtcp()) {
+    this.sdp = this.sdp.replace(/(m=audio(?:(?!m=)[\s\S])*)(a=rtcp:.*)/mi, "$1a=rtcp:" + audioRtcp);
+  } else {
+    this.sdp = this.sdp.replace(/(m=audio.*((?!m=)[\s\S]*c=IN\s+IP4.*)?)/, "$1\r\na=rtcp:" + audioRtcp);
+  }
+};
+WebRTC.RTCSessionDescription.prototype.setVideoRtcp = function(videoRtcp){
+  if(this.getVideoRtcp()) {
+    this.sdp = this.sdp.replace(/(m=video(?:(?!m=)[\s\S])*)(a=rtcp:.*)/mi, "$1a=rtcp:" + videoRtcp);
+  } else {
+    this.sdp = this.sdp.replace(/(m=video.*((?!m=)[\s\S]*c=IN\s+IP4.*)?)/, "$1\r\na=rtcp:" + videoRtcp);
+  }
 };
 WebRTC.RTCSessionDescription.prototype.getAudioMode = function(){
   var match = this.sdp.match(/m=audio(?:(?!m=)[\s\S])*a=(sendrecv|sendonly|recvonly|inactive)/mi);

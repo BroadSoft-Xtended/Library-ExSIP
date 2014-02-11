@@ -361,15 +361,19 @@ TestExSIP.Helpers = {
       "t=0 0\r\n"+
       (options["withoutAudio"] ? "" : "m=audio "+(options["audioPort"] || "16550")+" RTP/AVP "+(options["audioCodecs"] || "9 126")+"\r\n"+
         (options["withoutAudioConnection"] ? "" : "c=IN IP4 "+(options["audioIP"] || "10.48.1.23")+"\r\n")+
+        (options["withoutAudioRtcp"] ? "" : "a=rtcp:"+(options["audioRtcp"] || "55761 IN IP4 181.189.138.18")+"\r\n")+
         (options["withoutAudioMode"] ? "" : "a="+(options["audioMode"] || ExSIP.C.SENDRECV)+"\r\n")+
         (options["withoutAudioCodecRtpmap"] ? "" : "a=rtpmap:9 "+(options["audioCodec9Rtpmap"] || "G722/8000")+"\r\n")+
         (options["withoutAudioCodecRtpmap"] ? "" : "a=rtpmap:126 "+(options["audioCodec126Rtpmap"] || "telephone-event/8000")+"\r\n")+
         (options["withoutAudioCodecFmtp"] ? "" : "a=fmtp:126 "+(options["audioCodec126Fmtp"] || "0-15")+"\r\n")+
+        (options["withoutAudioCandidates"] ? "" : "a=candidate:3355351182 1 udp 2113937151 10.0.2.1 59436 typ host generation 0\r\na=candidate:3355351182 2 udp 2113937151 10.0.2.1 59436 typ host generation 0\r\n")+
+        (options["withoutAudioFingerprint"] ? "" : "a=fingerprint:sha-256 B1:1D:38:90:8F:72:85:60:AD:10:9F:BB:F5:78:47:AB:A8:DF:01:FA:50:D3:73:C9:20:3D:B4:C0:36:C2:08:29\r\n")+
         (options["withoutAudioIceUfrag"] ? "" : "a=ice-ufrag:pXHmklEbg7WBL95R\r\n")+
         (options["withoutAudioIcePwd"] ? "" : "a=ice-pwd:KJa5PdOffxkQ7NtyroEPwzZY\r\n"))+
       (options["withoutVideo"] ? "" : "m=video "+(options["videoPort"] || "16930")+" RTP/AVP "+(options["videoCodecs"] || "99 109 34")+"\r\n"+
         (options["withoutVideoConnection"] ? "" : "c=IN IP4 "+(options["videoIP"] || "10.48.1.33")+"\r\n")+
         (options["withoutVideoBandwidth"] ? "" : "b=AS:"+(options["videoBandwidth"] || "512")+"\r\n")+
+        (options["withoutVideoRtcp"] ? "" : "a=rtcp:"+(options["videoRtcp"] || "55762 IN IP4 181.189.138.18")+"\r\n")+
         (options["withoutVideoCodecRtpmap"] ? "" : "a=rtpmap:99 "+(options["videoCodec99Rtpmap"] || "H264/90000")+"\r\n")+
         (options["withoutVideoCodecFmtp"] ? "" : "a=fmtp:99 "+(options["videoCodec99Fmtp"] || "profile-level-id=42801E; packetization-mode=0")+"\r\n")+
         (options["withoutVideoMode"] ? "" : "a="+(options["videoMode"] || ExSIP.C.SENDRECV)+"\r\n")+
@@ -378,6 +382,7 @@ TestExSIP.Helpers = {
         (options["withoutVideoCodecRtpmap"] ? "" : "a=rtpmap:34 "+(options["videoCodec34Rtpmap"] || "H263/90000")+"\r\n")+
         (options["withoutVideoCodecFmtp"] ? "" : "a=fmtp:34 "+(options["videoCodec34Fmtp"] || "CIF=1;QCIF=1;SQCIF=1")+"\r\n")+
         (options["withoutVideoIceUfrag"] ? "" : "a=ice-ufrag:Q8QVGvJo7iPUnNoG\r\n")+
+        (options["withoutVideoFingerprint"] ? "" : "a=fingerprint:sha-256 B1:1D:38:90:8F:72:85:60:AD:10:9F:BB:F5:78:47:AB:A8:DF:01:FA:50:D3:73:C9:20:3D:B4:C0:36:C2:08:30\r\n")+
         (options["withoutVideoIcePwd"] ? "" : "a=ice-pwd:Tnws80Vq98O3THLRXLqjWnOf"));
     return sdp;
   },
