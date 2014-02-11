@@ -12,6 +12,7 @@
   var RequestSender   = @@include('../src/RTCSession/RequestSender.js')
   var RTCMediaHandler = @@include('../src/RTCSession/RTCMediaHandler.js')
   var DTMF            = @@include('../src/RTCSession/DTMF.js')
+  var DataChannel     = @@include('../src/RTCSession/DataChannel.js')
 
   var RTCSession,
     logger = new ExSIP.Logger(ExSIP.name +' | '+ 'RTC SESSION'),
@@ -40,7 +41,9 @@
       'ended',
       'holded',
       'unholded',
-      'newDTMF'
+      'newDTMF',
+      'dataSent',
+      'dataReceived'
     ];
 
     this.ua = ua;
@@ -815,6 +818,10 @@
     }
   };
 
+
+  RTCSession.prototype.sendData = function(data) {
+    this.rtcMediaHandler.sendData(data);
+  };
 
   /**
    * Get User Media
