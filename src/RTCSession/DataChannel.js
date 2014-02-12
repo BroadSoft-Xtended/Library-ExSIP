@@ -27,14 +27,20 @@ DataChannel = function(session, peerConnection) {
 
   this.initEvents(events);
 
+  var self = this;
   try {
     // Data Channel api supported from Chrome M25.
     // You might need to start chrome with  --enable-data-channels flag.
     this.sendChannel = peerConnection.createDataChannel("sendDataChannel", null);
     logger.log('Created send data channel', session.ua);
 
-    this.sendChannel.onopen = this.onSendChannelStateChange;
-    this.sendChannel.onclose = this.onSendChannelStateChange;
+    var onSendChannelStateChange = function() {
+      var readyState = self.sendChannel.readyState;
+      logger.log('Send channel state is: ' + readyState, self.session.ua);
+    };
+
+    this.sendChannel.onopen = onSendChannelStateChange;
+    this.sendChannel.onclose = onSendChannelStateChange;
 
     this.peerConnection.ondatachannel = this.receiveChannelCallback;
   } catch (e) {
@@ -76,33 +82,30 @@ DataChannel.prototype.sendInChunks = function(data) {
 };
 
 DataChannel.prototype.receiveChannelCallback = function(event) {
+  var self = this;
   logger.log('Receive Channel Callback', this.session.ua);
   this.receiveChannel = event.channel;
-  this.receiveChannel.onmessage = this.onReceiveMessageCallback;
-  this.receiveChannel.onopen = this.onReceiveChannelStateChange;
-  this.receiveChannel.onclose = this.onReceiveChannelStateChange;
-};
 
-DataChannel.prototype.onReceiveMessageCallback = function(event) {
-  logger.log('Received Message : '+event.data, this.session.ua);
+  var onReceiveChannelStateChange = function() {
+    var readyState = self.receiveChannel.readyState;
+    logger.log('Receive channel state is: ' + readyState, self.session.ua);
+  };
 
-  if(event.data.contains('\n')) {
-    this.dataReceived.push(event.data.replace('\n', ''));
-    var data = this.dataReceived.join('');
-    this.session.emit('dataReceived', this, { data: data });
-  } else {
-    this.dataReceived.push(event.data);
-  }
-};
+  var onReceiveMessageCallback = function(event) {
+    logger.log('Received Message : '+event.data, self.session.ua);
 
-DataChannel.prototype.onReceiveChannelStateChange = function() {
-  var readyState = this.receiveChannel.readyState;
-  logger.log('Receive channel state is: ' + readyState, this.session.ua);
-};
+    if(event.data.contains('\n')) {
+      self.dataReceived.push(event.data.replace('\n', ''));
+      var data = self.dataReceived.join('');
+      self.session.emit('dataReceived', self, { data: data });
+    } else {
+      self.dataReceived.push(event.data);
+    }
+  };
 
-DataChannel.prototype.onSendChannelStateChange = function() {
-  var readyState = this.sendChannel.readyState;
-  logger.log('Send channel state is: ' + readyState, this.session.ua);
+  this.receiveChannel.onmessage = onReceiveMessageCallback;
+  this.receiveChannel.onopen = onReceiveChannelStateChange;
+  this.receiveChannel.onclose = onReceiveChannelStateChange;
 };
 
   return DataChannel;
