@@ -267,6 +267,7 @@ RTCMediaHandler.prototype = {
       });
     }
 
+    logger.log("new ExSIP.RTCPeerConnection with constraints : "+ExSIP.Utils.toString(constraints));
     this.peerConnection = new ExSIP.WebRTC.RTCPeerConnection({'iceServers': servers}, constraints);
 
     this.peerConnection.onaddstream = function(e) {

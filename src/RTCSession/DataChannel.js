@@ -22,38 +22,26 @@ DataChannel = function(session, peerConnection) {
   this.peerConnection = peerConnection;
   this.sendChannel = null;
   this.receiveChannel = null;
-  this.chunkLength = 1000;
+  this.chunkLength = 60000;
   this.dataReceived = [];
 
   this.initEvents(events);
 
-  var self = this;
-  try {
-    // Data Channel api supported from Chrome M25.
-    // You might need to start chrome with  --enable-data-channels flag.
-    this.sendChannel = peerConnection.createDataChannel("sendDataChannel", null);
-    logger.log('Created send data channel', session.ua);
-
-    var onSendChannelStateChange = function() {
-      var readyState = self.sendChannel.readyState;
-      logger.log('Send channel state is: ' + readyState, self.session.ua);
-    };
-
-    this.sendChannel.onopen = onSendChannelStateChange;
-    this.sendChannel.onclose = onSendChannelStateChange;
-
-    this.peerConnection.ondatachannel = this.receiveChannelCallback;
-  } catch (e) {
-    this.emit('failed', this, {
-      cause: 'Failed to create data channel'
-    });
-    logger.error('Create Data channel failed with exception: ' + e.message);
-  }
+  this.initSendChannel();
 };
 DataChannel.prototype = new ExSIP.EventEmitter();
 
 DataChannel.prototype.isDebug = function() {
   return this.session.ua.isDebug();
+};
+
+DataChannel.prototype.close = function() {
+  if(this.sendChannel) {
+    this.sendChannel.close();
+  }
+  if(this.receiveChannel) {
+    this.receiveChannel.close();
+  }
 };
 
 DataChannel.prototype.send = function(data) {
@@ -81,31 +69,56 @@ DataChannel.prototype.sendInChunks = function(data) {
   }
 };
 
-DataChannel.prototype.receiveChannelCallback = function(event) {
-  var self = this;
-  logger.log('Receive Channel Callback', this.session.ua);
-  this.receiveChannel = event.channel;
+DataChannel.prototype.initSendChannel = function() {
+  try {
+    var self = this;
+    // Data Channel api supported from Chrome M25.
+    // You might need to start chrome with  --enable-data-channels flag.
+    this.sendChannel = this.peerConnection.createDataChannel("sendDataChannel", null);
+    logger.log('Created send data channel', this.session.ua);
 
-  var onReceiveChannelStateChange = function() {
-    var readyState = self.receiveChannel.readyState;
-    logger.log('Receive channel state is: ' + readyState, self.session.ua);
-  };
+    var onSendChannelStateChange = function() {
+      var readyState = self.sendChannel.readyState;
+      logger.log('Send channel state is: ' + readyState, self.session.ua);
+    };
 
-  var onReceiveMessageCallback = function(event) {
-    logger.log('Received Message : '+event.data, self.session.ua);
+    this.sendChannel.onopen = onSendChannelStateChange;
+    this.sendChannel.onclose = onSendChannelStateChange;
 
-    if(event.data.contains('\n')) {
-      self.dataReceived.push(event.data.replace('\n', ''));
-      var data = self.dataReceived.join('');
-      self.session.emit('dataReceived', self, { data: data });
-    } else {
-      self.dataReceived.push(event.data);
-    }
-  };
+    var receiveChannelCallback = function(event) {
+      logger.log('Receive Channel Callback', self.session.ua);
+      self.receiveChannel = event.channel;
 
-  this.receiveChannel.onmessage = onReceiveMessageCallback;
-  this.receiveChannel.onopen = onReceiveChannelStateChange;
-  this.receiveChannel.onclose = onReceiveChannelStateChange;
+      var onReceiveChannelStateChange = function() {
+        var readyState = self.receiveChannel.readyState;
+        logger.log('Receive channel state is: ' + readyState, self.session.ua);
+      };
+
+      var onReceiveMessageCallback = function(event) {
+        logger.log('Received Message : '+event.data, self.session.ua);
+
+        if(event.data.indexOf('\n') !== -1) {
+          self.dataReceived.push(event.data.replace('\n', ''));
+          var data = self.dataReceived.join('');
+          self.dataReceived = [];
+          self.session.emit('dataReceived', self, { data: data });
+        } else {
+          self.dataReceived.push(event.data);
+        }
+      };
+
+      self.receiveChannel.onmessage = onReceiveMessageCallback;
+      self.receiveChannel.onopen = onReceiveChannelStateChange;
+      self.receiveChannel.onclose = onReceiveChannelStateChange;
+    };
+
+    this.peerConnection.ondatachannel = receiveChannelCallback;
+  } catch (e) {
+    this.emit('failed', this, {
+      cause: 'Failed to create data channel'
+    });
+    logger.error('Create Data channel failed with exception: ' + e.message);
+  }
 };
 
   return DataChannel;
