@@ -890,6 +890,7 @@
                 trace_sip: false,
 
                 // Hacks
+                enable_ims: false,
                 hack_via_tcp: false,
                 hack_ip_in_contact: false
             };
@@ -1066,6 +1067,7 @@
                 "max_transport_recovery_attempts",
                 "display_name",
                 "hack_via_tcp", // false.
+                "enable_ims", // false.
                 "hack_ip_in_contact", //false
                 "no_answer_timeout", // 30 seconds.
                 "password",
@@ -1235,6 +1237,12 @@
             hack_via_tcp: function(hack_via_tcp) {
                 if (typeof hack_via_tcp === 'boolean') {
                     return hack_via_tcp;
+                }
+            },
+
+            enable_ims: function(enable_ims) {
+                if (typeof enable_ims === 'boolean') {
+                    return enable_ims;
                 }
             },
 

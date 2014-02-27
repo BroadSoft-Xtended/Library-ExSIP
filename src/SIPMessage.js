@@ -185,7 +185,7 @@ OutgoingRequest = function(method, ruri, ua, params, extraHeaders, body) {
   SIPMessage.call(this);
   var
     to,
-    from,
+    from, fromName, fromTag,
     call_id,
     cseq;
 
@@ -226,14 +226,15 @@ OutgoingRequest = function(method, ruri, ua, params, extraHeaders, body) {
 
   // From
   if (params.from_display_name || params.from_display_name === 0) {
-    from = '"' + params.from_display_name + '" ';
+    fromName = '"' + params.from_display_name + '" ';
   } else if (ua.configuration.display_name) {
-    from = '"' + ua.configuration.display_name + '" ';
+    fromName = '"' + ua.configuration.display_name + '" ';
   } else {
-    from = '';
+    fromName = '';
   }
-  from += '<' + (params.from_uri || ua.configuration.uri) + '>;tag=';
-  from += params.from_tag || ExSIP.Utils.newTag();
+  fromName += '<' + (params.from_uri || ua.configuration.uri) + '>';
+  fromTag = ';tag=' + (params.from_tag || ExSIP.Utils.newTag());
+  from = fromName + fromTag;
   this.from = new ExSIP.NameAddrHeader.parse(from);
   this.setHeader('from', from);
 
@@ -246,6 +247,11 @@ OutgoingRequest = function(method, ruri, ua, params, extraHeaders, body) {
   cseq = params.cseq || Math.floor(Math.random() * 10000);
   this.cseq = cseq;
   this.setHeader('cseq', cseq + ' ' + method);
+
+  // P-Preferred-Identity
+  if(ua.configuration.enable_ims) {
+    this.setHeader('P-Preferred-Identity', fromName);
+  }
 };
 
 OutgoingRequest.prototype = new SIPMessage();

@@ -107,6 +107,14 @@ TestExSIP.Helpers = {
     return ua;
   },
 
+  createUAAndCall: function(configuration) {
+    ua = this.createFakeUA(configuration);
+    ua.on('newRTCSession', function(e){ session = e.data.session; });
+    this.mockWebRTC();
+    this.startAndConnect(ua);
+    return ua;
+  },
+
   createSIPMessage: function(ua, sip, options) {
     options = options || {};
     var transactions = Object.keys(ua.transactions.ict).length > 0 ? ua.transactions.ict : ua.transactions.ist;
