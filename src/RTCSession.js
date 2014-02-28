@@ -148,6 +148,11 @@
 
       // - UAS -
       case C.STATUS_WAITING_FOR_ANSWER:
+        logger.log('canceling RTCSession', this.ua);
+
+        this.request.cancel();
+        this.failed('local', null, ExSIP.C.causes.CANCELED);
+        break;
       case C.STATUS_ANSWERED:
         logger.log('rejecting RTCSession', this.ua);
 

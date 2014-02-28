@@ -420,6 +420,31 @@ var InviteServerTransactionPrototype = function() {
     }
   };
 
+  this.cancel_request = function(tr, reason) {
+    var request = tr.request;
+
+    this.cancel = ExSIP.C.CANCEL + ' ' + request.ruri + ' SIP/2.0\r\n';
+    this.cancel += 'Via: ' + request.getHeader('Via').toString() + '\r\n';
+
+    if(this.request.getHeader('Route')) {
+      this.cancel += 'Route: ' + request.getHeader('Route').toString() + '\r\n';
+    }
+
+    this.cancel += 'To: ' + request.getHeader('To').toString() + '\r\n';
+    this.cancel += 'From: ' + request.getHeader('From').toString() + '\r\n';
+    this.cancel += 'Call-ID: ' + request.getHeader('Call-ID').toString() + '\r\n';
+    this.cancel += 'CSeq: ' + request.getHeader('CSeq').toString().split(' ')[0] +
+      ' CANCEL\r\n';
+
+    if(reason) {
+      this.cancel += 'Reason: ' + reason + '\r\n';
+    }
+
+    this.cancel += 'Content-Length: 0\r\n\r\n';
+
+    this.transport.send(this.cancel);
+  };
+
   // INVITE Server Transaction RFC 3261 17.2.1
   this.receiveResponse = function(status_code, response, onSuccess, onFailure) {
     var tr = this;
@@ -560,12 +585,19 @@ Transactions.NonInviteServerTransaction.prototype = new NonInviteServerTransacti
 * @param {ExSIP.UA} ua
 */
 Transactions.InviteServerTransaction = function(request, ua) {
+  var tr = this;
   this.init(request, ua);
   this.state = C.STATUS_PROCEEDING;
 
   ua.transactions.ist[this.id] = this;
 
   this.resendProvisionalTimer = null;
+
+  // Add the cancel property to the request.
+  //Will be called from the request instance, not the transaction itself.
+  request.cancel = function(reason) {
+    tr.cancel_request(tr, reason);
+  };
 
   request.reply(100);
 };
