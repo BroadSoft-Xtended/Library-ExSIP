@@ -430,8 +430,8 @@ var InviteServerTransactionPrototype = function() {
       this.cancel += 'Route: ' + request.getHeader('Route').toString() + '\r\n';
     }
 
-    this.cancel += 'To: ' + request.getHeader('To').toString() + '\r\n';
-    this.cancel += 'From: ' + request.getHeader('From').toString() + '\r\n';
+    this.cancel += 'To: ' + request.getHeader('From').toString() + '\r\n';
+    this.cancel += 'From: ' + request.getHeader('To').toString() + '\r\n';
     this.cancel += 'Call-ID: ' + request.getHeader('Call-ID').toString() + '\r\n';
     this.cancel += 'CSeq: ' + request.getHeader('CSeq').toString().split(' ')[0] +
       ' CANCEL\r\n';
