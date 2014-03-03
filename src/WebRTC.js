@@ -28,6 +28,13 @@ else if (window.mozRTCPeerConnection) {
 else if (window.RTCPeerConnection) {
   WebRTC.RTCPeerConnection = window.RTCPeerConnection;
 }
+else {
+  console.log("WebRTC.RTCPeerConnection undefined");
+  WebRTC.RTCPeerConnection = function(options, constraints){
+    this.options = options;
+    this.constraints = constraints;
+  };
+}
 
 // RTCIceCandidate
 if (window.RTCIceCandidate) {
@@ -343,6 +350,15 @@ if (WebRTC.RTCPeerConnection && WebRTC.RTCPeerConnection.prototype) {
       return this.remoteStreams;
     };
   }
+  WebRTC.RTCPeerConnection.prototype.isIceCandidateReady = function(candidate) {
+    if(window.mozRTCPeerConnection && !candidate) {
+      return true;
+    }
+    if(!window.mozRTCPeerConnection && candidate) {
+      return true;
+    }
+    return false;
+  };
 }
 
 // isSupported attribute.

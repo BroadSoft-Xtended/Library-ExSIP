@@ -51,21 +51,13 @@ TestExSIP.Helpers = {
     return options;
   },
 
-  answer: function() {
-    var options = this.getMediaOptions();
-    var allow = "INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY";
-    options["extraHeaders"] = ["Allow: "+allow];
-    session.answer(options);
-    this.triggerOnIceCandidate(session);
-    answerMsg = this.popMessageSentAndClear(ua);
-    strictEqual(answerMsg.status_code, 200);
-    strictEqual(answerMsg.getHeader("Allow"), allow);
-  },
-
   receiveInviteAndAnswer: function(inviteOptions){
     ua.transport.onMessage({data: this.initialInviteRequest(ua, inviteOptions)});
 
-    this.answer();
+    this.answer(session);
+
+    var answerMsg = this.popMessageSentAndClear(ua);
+    strictEqual(answerMsg.status_code, 200);
 
     this.responseFor(answerMsg, {method: ExSIP.C.ACK});
   },
@@ -135,6 +127,14 @@ TestExSIP.Helpers = {
     ua.transport.onOpen();
   },
 
+  answer: function(session) {
+    var options = this.getMediaOptions();
+    var allow = "INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY";
+    options["extraHeaders"] = ["Allow: "+allow];
+    session.answer(options);
+    this.triggerOnIceCandidate(session);
+  },
+
   start: function(ua) {
     var self = this;
     ua.start();
@@ -149,10 +149,15 @@ TestExSIP.Helpers = {
     this.triggerOnIceCandidate(session);
   },
 
-  triggerOnIceCandidate: function(session){
-    session.rtcMediaHandler.peerConnection.onicecandidate({srcElement:{iceGatheringState:"complete"},
-      candidate:{sdpMLineIndex:0,sdpMid:"audio",
-        candidate:"a=candidate:23847997 1 udp 2113937151 169.254.193.143 49229 typ host generation 0"}});
+  triggerOnIceCandidate: function(session, options){
+    options = options || {};
+    var event = {
+      srcElement:{iceGatheringState:"complete"},
+      candidate:(options["withoutCandidate"] ? undefined : {sdpMLineIndex:0,sdpMid:"audio",
+        candidate:"a=candidate:23847997 1 udp 2113937151 169.254.193.143 49229 typ host generation 0"})
+    };
+
+    session.rtcMediaHandler.peerConnection.onicecandidate(event);
 //    session.rtcMediaHandler.peerConnection.onicecandidate({srcElement:{iceGatheringState:"complete"},
 //      candidate:null});
   },
@@ -188,6 +193,7 @@ TestExSIP.Helpers = {
   },
 
   mockWebRTC: function(){
+    TestExSIP.Helpers.isIceCandidateReadyFunction = TestExSIP.Helpers.isIceCandidateReadyFunction || ExSIP.WebRTC.RTCPeerConnection.prototype.isIceCandidateReady;
     ExSIP.WebRTC.RTCPeerConnection = function(){
       console.log('-- RTCPeerConnection.new()');
       return {
@@ -199,10 +205,12 @@ TestExSIP.Helpers = {
         createOffer: function(success){
           console.log("-- RTCPeerConnection.createOffer()");
           TestExSIP.Helpers.createOffer();
+          this.signalingState = 'have-local-offer';
           success(TestExSIP.Helpers.createDescription(this.createDescriptionOptions()));
         },
         createAnswer: function(success, failure){
           console.log("-- RTCPeerConnection.createAnswer()");
+          this.signalingState = 'have-remote-offer';
           TestExSIP.Helpers.createAnswer();
           if(!this.remoteDescription) {
             throw new Error("CreateAnswer can't be called before SetRemoteDescription");
@@ -225,6 +233,9 @@ TestExSIP.Helpers = {
         },
         createDescriptionOptions: function(options){
           return options;
+        },
+        isIceCandidateReady: function(candidate) {
+          return TestExSIP.Helpers.isIceCandidateReadyFunction(candidate);
         }
       }
     };

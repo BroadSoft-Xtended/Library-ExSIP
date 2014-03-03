@@ -26,11 +26,12 @@ test('reinvite with no sdp after audio only reinvite', function() {
   strictEqual(new ExSIP.WebRTC.RTCSessionDescription({type: 'offer', sdp: answerMsg.body}).hasVideo(), false);
   ua.transport.onMessage({data: TestExSIP.Helpers.ackResponse(ua)});
 
-  // receiving empty reinvite
+  // receiving empty reinvite - should use initial remote description with video
   var createOfferCalled = true;
   TestExSIP.Helpers.createOffer = function(){createOfferCalled = true};
   ua.transport.onMessage({data: TestExSIP.Helpers.inviteRequest(ua, {noSdp: true, branch: "z9hG4bK-524287-1"})});
   TestExSIP.Helpers.triggerOnIceCandidate(session);
+  strictEqual(session.rtcMediaHandler.peerConnection.remoteDescription.hasVideo(), true);
   strictEqual(createOfferCalled, true, "should call createOffer");
 });
 test('reinvite with no sdp and ACK with sdp', function() {
@@ -45,16 +46,21 @@ test('reinvite with no sdp and ACK with sdp', function() {
   strictEqual(answerMsg.body.length > 0, true);
   ok(!onReInviteEventReceived);
 
-  var localDescriptionSet = false, started = false;
+  var answerCreated = false, localDescriptionSet = false, started = false;
   session.on('started', function(e) {
     started = true;
   });
-  TestExSIP.Helpers.setLocalDescription = function(description){localDescriptionSet = true};
+  TestExSIP.Helpers.setLocalDescription = function(description){
+      localDescriptionSet = true
+  };
+  TestExSIP.Helpers.createAnswer = function(){
+      answerCreated = true;
+  };
   var formerRtcMediaHandler = session.rtcMediaHandler;
   ua.transport.onMessage({data: TestExSIP.Helpers.inviteRequest(ua, {method: ExSIP.C.ACK})});
-  TestExSIP.Helpers.triggerOnIceCandidate(session);
   strictEqual(session.status, ExSIP.RTCSession.C.STATUS_CONFIRMED);
   strictEqual(session.rtcMediaHandler !== formerRtcMediaHandler, true, "should reconnect after ACK with sdp");
+  strictEqual(answerCreated, true, "should not have called createAnswer");
   strictEqual(localDescriptionSet, true, "should have called setLocalDescription");
   strictEqual(started, true, "should trigger started in order to update video streams");
 });

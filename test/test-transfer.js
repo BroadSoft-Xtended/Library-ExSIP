@@ -1,7 +1,10 @@
 module( "transfer", {
   setup: function() {
     ua = TestExSIP.Helpers.createFakeUA({trace_sip: true, use_preloaded_route: false});
-    ua.on('newRTCSession', function(e){ session = e.data.session; });
+    ua.on('newRTCSession', function(e){
+      session = e.data.session;
+
+    });
     transferTarget = "transfertarget@chicago.example.com";
     targetContact = "482n4z24kdg@chicago.example.com;gr=8594958";
     TestExSIP.Helpers.mockWebRTC();

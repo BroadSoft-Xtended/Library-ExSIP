@@ -46,7 +46,7 @@ RTCMediaHandler.prototype = {
   connect: function(stream, connectSucceeded, connectFailed, options) {
     var self = this;
     options = options || {};
-    logger.log('connect with remoteSdp : '+options.remoteSdp, self.session.ua);
+    logger.log('connect with isAnswer : '+options.isAnswer+" and remoteSdp : "+options.remoteSdp, self.session.ua);
 
     var setLocalDescription = function() {
       self.peerConnection.createAnswer(
@@ -73,7 +73,7 @@ RTCMediaHandler.prototype = {
         options.remoteSdp,
         successCallback, function(e){
           logger.error("setRemoteDescription failed");
-          logger.error(e);
+          logger.error(ExSIP.Utils.toString(e));
           connectFailed();
         }
       );
@@ -95,11 +95,14 @@ RTCMediaHandler.prototype = {
 
     var streamAdditionSucceeded = function() {
       var hasRemoteSdp = options.remoteSdp && options.remoteSdp.length > 0;
-      logger.log("hasRemoteSdp : "+hasRemoteSdp, self.session.ua);
-      if(hasRemoteSdp && options.localDescription) {
-        setRemoteDescription(setLocalDescription);
-      } else if(hasRemoteSdp){
-        setRemoteDescription(createAnswer);
+      var isRemote = options.isAnswer && hasRemoteSdp;
+      logger.log("isRemote : "+isRemote+", isAnswer : "+options.isAnswer+", hasRemoteSdp :"+hasRemoteSdp, self.session.ua);
+      if(isRemote) {
+        if(options.localDescription) {
+          setRemoteDescription(setLocalDescription);
+        } else {
+          setRemoteDescription(createAnswer);
+        }
       } else {
         createOffer();
       }
@@ -365,8 +368,8 @@ RTCMediaHandler.prototype = {
 //        }
         logger.log('onIceCompleted with sent : '+ sent+" and candidate : "+ExSIP.Utils.toString(e.candidate), self.session.ua);
 //        if(!sent && e.srcElement.iceGatheringState === 'complete') {
-        // only trigger if e.candidate is not null
-        if(!sent && e.candidate) {
+        // trigger if e.candidate is not null or in FF is null
+        if(!sent && self.peerConnection.isIceCandidateReady(e.candidate)) {
           sent = true;
           self.onIceCompleted();
         }
@@ -509,11 +512,19 @@ RTCMediaHandler.prototype = {
 //    "a=candidate:0 1 udp 2113929216 204.117.64.113 44476 typ host\r\n";
 //
     if(this.peerConnection) {
+      if(this.peerConnection.remoteDescription) {
+        logger.log('remote description already exists');
+        onSuccess();
+        return;
+      }
       logger.log('peerConnection.setRemoteDescription for type '+description.type+' : '+description.sdp, this.session.ua);
       this.peerConnection.setRemoteDescription(
         description,
         onSuccess,
-        onFailure
+        function(){
+          console.log("----------setRemoteDescription with error");
+          onFailure();
+        }
       );
     }
   }

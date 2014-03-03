@@ -283,7 +283,7 @@
     window.clearTimeout(this.timers.userNoAnswerTimer);
 
     logger.log('answer : getUserMedia', self.ua);
-    this.getUserMedia(mediaConstraints, answerCreationSucceeded, answerCreationFailed, {remoteSdp: request.body});
+    this.getUserMedia(mediaConstraints, answerCreationSucceeded, answerCreationFailed, {isAnswer: true, remoteSdp: request.body});
   };
 
   /**
@@ -387,11 +387,11 @@
     };
 
     this.initialRemoteSdp = this.initialRemoteSdp || self.rtcMediaHandler.peerConnection.remoteDescription.sdp;
-    var sdp = this.request.body;
+    var sdp = this.request.body || this.initialRemoteSdp;
     if(sdp.length === 0) {
       logger.log("empty sdp");
     }
-    this.reconnectRtcMediaHandler(connectSuccess, connectFailed, {remoteSdp: sdp, isReconnect: true});
+    this.reconnectRtcMediaHandler(connectSuccess, connectFailed, {isAnswer: true, remoteSdp: sdp, isReconnect: true});
   };
 
   RTCSession.prototype.reconnectRtcMediaHandler = function(connectSuccess, connectFailed, options) {
@@ -748,7 +748,7 @@
                 logger.log("reconnect success", self.ua);
               }, function(){
                 logger.log("reconnect failure", self.ua);
-              }, {remoteSdp: request.body, isReconnect: true, localDescription: localDescription});
+              }, {isAnswer: true, remoteSdp: request.body, isReconnect: true, localDescription: localDescription});
             }
           }
           break;
@@ -831,6 +831,7 @@
   RTCSession.prototype.getUserMedia = function(constraints, creationSucceeded, creationFailed, options) {
     var self = this;
 
+    console.log(options);
     var userMediaSucceeded = function(stream) {
       self.ua.localMedia = stream;
       self.rtcMediaHandler.connect(stream, creationSucceeded, creationFailed, options);
