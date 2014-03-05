@@ -49,23 +49,7 @@ RTCMediaHandler.prototype = {
     logger.log('connect with isAnswer : '+options.isAnswer+" and remoteSdp : "+options.remoteSdp, self.session.ua);
 
     var setLocalDescription = function() {
-      self.peerConnection.createAnswer(
-        function(sessionDescription){
-//          sessionDescription.setAudioPort(options.localDescription.audioPort());
-//          sessionDescription.setVideoPort(options.localDescription.videoPort());
-//          sessionDescription.setAudioConnection(options.localDescription.getAudioConnection());
-//          sessionDescription.setVideoConnection(options.localDescription.getVideoConnection());
-//          sessionDescription.setAudioRtcp(options.localDescription.getAudioRtcp());
-//          sessionDescription.setVideoRtcp(options.localDescription.getVideoRtcp());
-//          sessionDescription.setAudioCandidates(options.localDescription.getAudioCandidates());
-//          sessionDescription.setVideoCandidates(options.localDescription.getVideoCandidates());
-          self.setLocalDescription(sessionDescription, connectSucceeded, connectFailed);
-        },
-        function(e) {
-          logger.error('unable to create answer');
-          logger.error(e);
-          connectFailed();
-        });
+      self.setLocalDescription(options.localDescription, connectSucceeded, connectFailed);
     };
 
     var setRemoteDescription = function(successCallback) {

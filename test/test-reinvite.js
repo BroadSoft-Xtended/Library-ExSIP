@@ -60,7 +60,7 @@ test('reinvite with no sdp and ACK with sdp', function() {
   ua.transport.onMessage({data: TestExSIP.Helpers.inviteRequest(ua, {method: ExSIP.C.ACK})});
   strictEqual(session.status, ExSIP.RTCSession.C.STATUS_CONFIRMED);
   strictEqual(session.rtcMediaHandler !== formerRtcMediaHandler, true, "should reconnect after ACK with sdp");
-  strictEqual(answerCreated, true, "should not have called createAnswer");
+  strictEqual(answerCreated, false, "should not have called createAnswer");
   strictEqual(localDescriptionSet, true, "should have called setLocalDescription");
   strictEqual(started, true, "should trigger started in order to update video streams");
 });
