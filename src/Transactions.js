@@ -260,7 +260,11 @@ var InviteClientTransactionPrototype = function() {
         case C.STATUS_PROCEEDING:
           this.state = C.STATUS_COMPLETED;
           this.sendACK(response);
-          this.request_sender.receiveResponse(response);
+          if(status_code === 503) {
+            this.request_sender.ua.onTransportError();
+          } else {
+            this.request_sender.receiveResponse(response);
+          }
           break;
         case C.STATUS_COMPLETED:
           this.sendACK(response);

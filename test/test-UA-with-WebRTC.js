@@ -14,6 +14,14 @@ module( "ws_servers", {
   }, teardown: function() {
   }
 });
+test('on 503 response', function() {
+  var onTransportErrorCalled = false;
+  ua.onTransportError = function(){onTransportErrorCalled = true};
+  TestExSIP.Helpers.startAndConnect(ua);
+
+  ua.transport.onMessage({data: TestExSIP.Helpers.inviteResponse(ua, {status_code: "503 Service Unavailable"})});
+  strictEqual(onTransportErrorCalled, true);
+});
 test('getNextWsServer', function() {
   var firstServer = ua.transport.server.ws_uri;
   var servers = ua.configuration.ws_servers.map(function(server){return server.ws_uri;});
