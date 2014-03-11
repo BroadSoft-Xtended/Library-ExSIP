@@ -355,7 +355,7 @@
         function(e) {
           logger.error('unable to get user media');
           logger.error(e);
-          failure();
+          failure(e);
         }
       );
     };
