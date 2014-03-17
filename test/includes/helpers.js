@@ -103,7 +103,7 @@ TestExSIP.Helpers = {
     ua = this.createFakeUA(configuration);
     ua.on('newRTCSession', function(e){ session = e.data.session; });
     this.mockWebRTC();
-    this.startAndConnect(ua);
+    this.startAndConnect(ua, configuration);
     return ua;
   },
 
@@ -118,9 +118,9 @@ TestExSIP.Helpers = {
     return sip.replace(/<via_host>/g, ua.configuration.via_host).replace(/<branch>/g, branch).replace(/<from_tag>/g, fromTag).replace(/<call_id>/g, callId);
   },
 
-  startAndConnect: function(ua) {
-    this.start(ua);
-    this.connect(ua);
+  startAndConnect: function(ua, options) {
+    this.start(ua, options);
+    this.connect(ua, options);
   },
 
   onOpen: function(ua) {
@@ -135,7 +135,7 @@ TestExSIP.Helpers = {
     this.triggerOnIceCandidate(session);
   },
 
-  start: function(ua) {
+  start: function(ua, options) {
     var self = this;
     ua.start();
     ua.transport.send = function(msg){
@@ -143,9 +143,10 @@ TestExSIP.Helpers = {
     };
   },
 
-  connect: function(ua) {
+  connect: function(ua, configuration) {
+    configuration = configuration || {};
     var options = this.getMediaOptions();
-    var session = ua.call("sip:fakeUA@exsip.net", options);
+    var session = ua.call(configuration["destination"] || "sip:fakeUA@exsip.net", options);
     this.triggerOnIceCandidate(session);
   },
 

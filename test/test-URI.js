@@ -13,6 +13,7 @@ test('ExSIP.URI', function() {
   strictEqual(uri.user, 'alice');
   strictEqual(uri.host, 'exsip.net');
   strictEqual(uri.port, 6060);
+  strictEqual(uri.isPhoneNumber(), false);
   deepEqual(uri.parameters, {});
   deepEqual(uri.headers, {});
   strictEqual(uri.toString(), 'sip:alice@exsip.net:6060');
@@ -29,9 +30,11 @@ test('ExSIP.URI', function() {
   strictEqual(uri.user, 'Iñaki ðđ');
   strictEqual(uri.toString(), 'sip:I%C3%B1aki%20%C3%B0%C4%91@exsip.net:6060');
   strictEqual(uri.toAor(), 'sip:I%C3%B1aki%20%C3%B0%C4%91@exsip.net');
+  strictEqual(uri.isPhoneNumber(), false);
 
   uri.user = '%61lice';
   strictEqual(uri.toAor(), 'sip:alice@exsip.net');
+  strictEqual(uri.isPhoneNumber(), false);
 
   uri.user = null;
   strictEqual(uri.user, null);
@@ -117,5 +120,14 @@ test('ExSIP.URI', function() {
   uri2.user = 'popo';
   strictEqual(uri2.user, 'popo');
   strictEqual(uri.user, 'alice');
+
+  uri2.user = '1111111111';
+  strictEqual(uri2.isPhoneNumber(), true);
+
+  uri2.user = '+1111111111';
+  strictEqual(uri2.isPhoneNumber(), true);
+
+  uri2.user = '+user1234';
+  strictEqual(uri2.isPhoneNumber(), false);
 });
 

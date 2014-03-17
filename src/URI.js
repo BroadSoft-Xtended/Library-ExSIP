@@ -131,6 +131,10 @@ URI.prototype = {
     this.headers = {};
   },
 
+  isPhoneNumber: function() {
+    return this.user && this.user.match(/^\+?\d+$/) !== null;
+  },
+
   clone: function() {
     return new URI(
       this.scheme,
