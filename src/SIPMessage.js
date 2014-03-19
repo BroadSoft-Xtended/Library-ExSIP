@@ -196,6 +196,7 @@ OutgoingRequest = function(method, ruri, ua, params, extraHeaders, body) {
     return null;
   }
 
+  this.ua = ua;
   this.method = method;
   this.ruri = ruri;
   this.body = body;
@@ -220,7 +221,7 @@ OutgoingRequest = function(method, ruri, ua, params, extraHeaders, body) {
   // To
   to = (params.to_display_name || params.to_display_name === 0) ? '"' + params.to_display_name + '" ' : '';
   var toUri = (params.to_uri || ruri);
-  to += '<' + (toUri.isPhoneNumber() ? toUri +";user=phone" : toUri) + '>';
+  to += '<' + (ua.configuration.enable_ims && toUri.isPhoneNumber() ? toUri +";user=phone" : toUri) + '>';
   to += params.to_tag ? ';tag=' + params.to_tag : '';
   this.to = new ExSIP.NameAddrHeader.parse(to);
   this.setHeader('to', to);
@@ -234,7 +235,7 @@ OutgoingRequest = function(method, ruri, ua, params, extraHeaders, body) {
     fromName = '';
   }
   var fromUri = (params.from_uri || ua.configuration.uri);
-  fromName += '<' + (fromUri.isPhoneNumber() ? fromUri +";user=phone" : fromUri) + '>';
+  fromName += '<' + (ua.configuration.enable_ims && fromUri.isPhoneNumber() ? fromUri +";user=phone" : fromUri) + '>';
   fromTag = ';tag=' + (params.from_tag || ExSIP.Utils.newTag());
   from = fromName + fromTag;
   this.from = new ExSIP.NameAddrHeader.parse(from);
@@ -261,7 +262,7 @@ OutgoingRequest.prototype = new SIPMessage();
 OutgoingRequest.prototype.toString = function() {
   var msg = '', header, length, idx;
 
-  msg += this.method + ' ' + (this.ruri.isPhoneNumber() ? this.ruri + ";user=phone" : this.ruri) + ' SIP/2.0\r\n';
+  msg += this.method + ' ' + (this.ua.configuration.enable_ims && this.ruri.isPhoneNumber() ? this.ruri + ";user=phone" : this.ruri) + ' SIP/2.0\r\n';
 
   for (header in this.headers) {
     length = this.headers[header].length;
