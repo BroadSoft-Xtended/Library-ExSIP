@@ -410,8 +410,9 @@
         }
 
         this.status = C.STATUS_USER_CLOSED;
+        var transport = ua.transport;
         this.shutdownGraceTimer = window.setTimeout(
-            function() { ua.transport.disconnect(); },
+            function() { transport.disconnect(); },
             '5000'
         );
     };
@@ -512,6 +513,10 @@
      */
     UA.prototype.onTransportError = function(transport) {
         var server;
+
+        if(this.status === C.STATUS_USER_CLOSED){
+          return;
+        }
 
         logger.log('transport ' + transport.server.ws_uri + ' failed | connection state set to '+ ExSIP.Transport.C.STATUS_ERROR, this);
 

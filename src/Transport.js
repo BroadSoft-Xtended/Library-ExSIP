@@ -96,6 +96,10 @@ Transport.prototype = {
 
     this.ws.onclose = function(e) {
       transport.onClose(e);
+      this.onopen = null;
+      this.onclose = null;
+      this.onmessage = null;
+      this.onerror = null;
     };
 
     this.ws.onmessage = function(e) {
