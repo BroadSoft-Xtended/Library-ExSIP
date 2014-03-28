@@ -251,9 +251,9 @@ OutgoingRequest = function(method, ruri, ua, params, extraHeaders, body) {
   this.cseq = cseq;
   this.setHeader('cseq', cseq + ' ' + method);
 
-  // P-Preferred-Identity
+  // P-Asserted-Identity
   if(ua.configuration.enable_ims) {
-    this.setHeader('P-Preferred-Identity', fromName);
+    this.setHeader('P-Asserted-Identity', fromName);
   }
 };
 
