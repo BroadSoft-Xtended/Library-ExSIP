@@ -221,7 +221,7 @@ OutgoingRequest = function(method, ruri, ua, params, extraHeaders, body) {
   // To
   to = (params.to_display_name || params.to_display_name === 0) ? '"' + params.to_display_name + '" ' : '';
   var toUri = (params.to_uri || ruri);
-  to += '<' + (ua.configuration.enable_ims && toUri.isPhoneNumber() ? toUri +";user=phone" : toUri) + '>';
+  to += '<' + (ua.configuration.enable_ims && toUri.isPhoneNumber() && toUri.toString().indexOf(';user=phone') === -1 ? toUri +";user=phone" : toUri) + '>';
   to += params.to_tag ? ';tag=' + params.to_tag : '';
   this.to = new ExSIP.NameAddrHeader.parse(to);
   this.setHeader('to', to);
@@ -235,7 +235,7 @@ OutgoingRequest = function(method, ruri, ua, params, extraHeaders, body) {
     fromName = '';
   }
   var fromUri = (params.from_uri || ua.configuration.uri);
-  fromName += '<' + (ua.configuration.enable_ims && fromUri.isPhoneNumber() ? fromUri +";user=phone" : fromUri) + '>';
+  fromName += '<' + (ua.configuration.enable_ims && fromUri.isPhoneNumber() && fromUri.toString().indexOf(';user=phone') === -1 ? fromUri +";user=phone" : fromUri) + '>';
   fromTag = ';tag=' + (params.from_tag || ExSIP.Utils.newTag());
   from = fromName + fromTag;
   this.from = new ExSIP.NameAddrHeader.parse(from);

@@ -22,6 +22,18 @@ test('enable_ims with phone number', function() {
   notStrictEqual(inviteRequest.data.indexOf('INVITE sip:+1222222222@exsip.net;user=phone SIP/2.0'), -1);
 });
 
+test('enable_ims with phone number and ack', function() {
+  var ua = TestExSIP.Helpers.createUAAndCall({enable_ims: true, uri: 'sip:+111111111@exsip.net', destination: "+1222222222@exsip.net"});
+  var inviteRequest = TestExSIP.Helpers.popMessageSent(ua);
+
+  TestExSIP.Helpers.responseFor(inviteRequest);
+
+  var ackMsg = TestExSIP.Helpers.popMessageSent(ua);
+  strictEqual(ackMsg.method, ExSIP.C.ACK);
+  notStrictEqual(ackMsg.getHeader('From').indexOf('"Fake UA ð→€ł !!!" <sip:+111111111@exsip.net;user=phone>;tag='), -1, "Should contain the user=phone in From header : "+ackMsg.getHeader('From'));
+  notStrictEqual(ackMsg.getHeader('To').indexOf("<sip:+1222222222@exsip.net;user=phone>;tag="), -1, "Should contain the user=phone in To header : "+ackMsg.getHeader('To'));
+});
+
 test('enable_ims = false and with phone number', function() {
   var ua = TestExSIP.Helpers.createUAAndCall({enable_ims: false, uri: 'sip:+111111111@exsip.net', destination: "+1222222222@exsip.net"});
   var inviteRequest = TestExSIP.Helpers.popMessageSent(ua);
