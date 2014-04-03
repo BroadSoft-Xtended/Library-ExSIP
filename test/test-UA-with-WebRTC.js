@@ -15,13 +15,20 @@ module( "ws_servers", {
   }
 });
 test('on 503 response', function() {
-  var onTransportErrorCalled = false;
-  ua.onTransportError = function(){onTransportErrorCalled = true};
+  var disconnectedEvent;
+  var retryTimeInMs = 0;
+  ua.on('disconnected', function(e){ disconnectedEvent = e; });
+  ua.retry = function(timeInMs, server, count){retryTimeInMs = timeInMs;}
   TestExSIP.Helpers.startAndConnect(ua);
 
-  ua.transport.onMessage({data: TestExSIP.Helpers.inviteResponse(ua, {status_code: "503 Service Unavailable"})});
-  strictEqual(onTransportErrorCalled, true);
+  ua.transport.onMessage({data: TestExSIP.Helpers.inviteResponse(ua, {status_code: "503 Service Unavailable", retryAfter: 30})});
+  strictEqual(disconnectedEvent.data.transport !== undefined, true, "Should trigger disconnected event with transport specified");
+  strictEqual(disconnectedEvent.data.retryAfter, 30, "Should trigger disconnected event with retryAfter specified");
+  strictEqual(disconnectedEvent.data.reason, 'Service Unavailable', "Should trigger disconnected event with reason specified");
+  strictEqual(disconnectedEvent.data.code, 503, "Should trigger disconnected event with code specified");
+  strictEqual(retryTimeInMs, 30, "Should call retry with parameter from Retry-After header");
 });
+
 test('getNextWsServer', function() {
   var firstServer = ua.transport.server.ws_uri;
   var servers = ua.configuration.ws_servers.map(function(server){return server.ws_uri;});

@@ -291,6 +291,7 @@ TestExSIP.Helpers = {
       (options["supported"] ? ("Supported: "+options["supported"]+"\r\n") : "")+
       (options["event"] ? ("Event: "+options["event"]+"\r\n") : "")+
       (options["www_authenticate"] ? ("WWW-Authenticate: "+options["www_authenticate"]+"\r\n") : "")+
+      (options["retryAfter"] ? ("Retry-After: "+options["retryAfter"]+"\r\n") : "")+
       "Content-Length: "+sdp.length+"\r\n"+
       "\r\n"+
       sdp;

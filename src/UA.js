@@ -511,9 +511,10 @@
      * @event
      * @param {ExSIP.Transport} transport.
      */
-    UA.prototype.onTransportError = function(transport) {
+    UA.prototype.onTransportError = function(transport, options) {
         var server;
 
+        options = options || {};
         if(this.status === C.STATUS_USER_CLOSED){
           return;
         }
@@ -524,15 +525,16 @@
         //Mark this transport as 'down' and try the next one
         transport.server.status = ExSIP.Transport.C.STATUS_ERROR;
 
-        this.emit('disconnected', this, {
-            transport: transport,
-            code: transport.lastTransportError.code,
-            reason: transport.lastTransportError.reason
-        });
+        var data = ExSIP.Utils.merge_options({
+          transport: transport,
+          code: transport.lastTransportError.code,
+          reason: transport.lastTransportError.reason
+        }, options);
+        this.emit('disconnected', this, data);
 
         server = this.getNextWsServer();
 
-        if(server) {
+        if(server && !options.retryAfter) {
             new ExSIP.Transport(this, server);
         }else {
             this.closeSessionsOnTransportError();
@@ -541,7 +543,7 @@
                 this.error = C.NETWORK_ERROR;
             }
             // Transport Recovery process
-            this.recoverTransport();
+            this.recoverTransport(options);
         }
     };
 
@@ -812,45 +814,54 @@
         }
     };
 
-    UA.prototype.recoverTransport = function(ua) {
+    UA.prototype.retry = function(nextRetry, server, count) {
+      var self = this;
+      var retryCallback = function(){
+        self.transportRecoverAttempts = count + 1;
+        new ExSIP.Transport(self, server);
+      };
+
+      if(nextRetry === 0) {
+        retryCallback();
+      } else {
+        window.setTimeout(retryCallback, nextRetry * 1000);
+      }
+    };
+
+    UA.prototype.recoverTransport = function(options) {
         var idx, length, k, nextRetry, count, server;
 
-        ua = ua || this;
-        count = ua.transportRecoverAttempts;
+        options = options || {};
+        count = this.transportRecoverAttempts;
 
-        length = ua.configuration.ws_servers.length;
+        length = this.configuration.ws_servers.length;
         for (idx = 0; idx < length; idx++) {
-            ua.configuration.ws_servers[idx].status = 0;
+          this.configuration.ws_servers[idx].status = 0;
         }
 
-        server = ua.getNextWsServer();
+        server = this.getNextWsServer();
 
-        k = Math.floor((Math.random() * Math.pow(2,count)) +1);
-        nextRetry = k * ua.configuration.connection_recovery_min_interval;
+        if(options.retryAfter){
+          nextRetry = options.retryAfter;
+        } else {
+          k = Math.floor((Math.random() * Math.pow(2,count)) +1);
+          nextRetry = k * this.configuration.connection_recovery_min_interval;
 
-        if (nextRetry > ua.configuration.connection_recovery_max_interval) {
+          if (nextRetry > this.configuration.connection_recovery_max_interval) {
             logger.log('time for next connection attempt exceeds connection_recovery_max_interval, resetting counter', this);
-            nextRetry = ua.configuration.connection_recovery_min_interval;
+            nextRetry = this.configuration.connection_recovery_min_interval;
             count = 0;
+          }
         }
 
         logger.log('next connection attempt in '+ nextRetry +' seconds', this);
 
-        var maxTransportRecoveryAttempts = ua.configuration.max_transport_recovery_attempts;
+        var maxTransportRecoveryAttempts = this.configuration.max_transport_recovery_attempts;
         if(typeof(maxTransportRecoveryAttempts) !== "undefined" && count >= parseInt(maxTransportRecoveryAttempts, 10)) {
           return;
         }
 
-        var retry = function(){
-          ua.transportRecoverAttempts = count + 1;
-          new ExSIP.Transport(ua, server);
-        };
-
-        if(nextRetry === 0) {
-          retry();
-        } else {
-          window.setTimeout(retry, nextRetry * 1000);
-        }
+        this.retry(nextRetry, server, count);
     };
 
     /**
