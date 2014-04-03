@@ -525,13 +525,6 @@
         //Mark this transport as 'down' and try the next one
         transport.server.status = ExSIP.Transport.C.STATUS_ERROR;
 
-        var data = ExSIP.Utils.merge_options({
-          transport: transport,
-          code: transport.lastTransportError.code,
-          reason: transport.lastTransportError.reason
-        }, options);
-        this.emit('disconnected', this, data);
-
         server = this.getNextWsServer();
 
         if(server && !options.retryAfter) {
@@ -545,6 +538,13 @@
             // Transport Recovery process
             this.recoverTransport(options);
         }
+
+        var data = ExSIP.Utils.merge_options({
+          transport: transport,
+          code: transport.lastTransportError.code,
+          reason: transport.lastTransportError.reason
+        }, options);
+        this.emit('disconnected', this, data);
     };
 
     /**
