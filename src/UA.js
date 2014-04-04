@@ -840,6 +840,11 @@
         }
 
         server = this.getNextWsServer();
+        if(options.code === 503 && this.configuration.ws_servers.length === 1) {
+          delete options.retryAfter;
+          logger.log('only one server configured on 503 error - skipping recoverTransport', this);
+          return;
+        }
 
         if(options.retryAfter){
           nextRetry = options.retryAfter;
