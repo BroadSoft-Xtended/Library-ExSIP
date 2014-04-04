@@ -428,7 +428,7 @@
         logger.log('user requested startup...', this);
 
         if (this.status === C.STATUS_INIT) {
-            server = this.getNextWsServer();
+            server = this.getNextWsServer({force: true});
             new ExSIP.Transport(this, server);
         } else if(this.status === C.STATUS_USER_CLOSED) {
             logger.log('resuming', this);
@@ -512,8 +512,6 @@
      * @param {ExSIP.Transport} transport.
      */
     UA.prototype.onTransportError = function(transport, options) {
-        var server;
-
         options = options || {};
         if(this.status === C.STATUS_USER_CLOSED){
           return;
@@ -525,19 +523,13 @@
         //Mark this transport as 'down' and try the next one
         transport.server.status = ExSIP.Transport.C.STATUS_ERROR;
 
-        server = this.getNextWsServer();
-
-        if(server && !options.retryAfter) {
-            new ExSIP.Transport(this, server);
-        }else {
-            this.closeSessionsOnTransportError();
-            if (!this.error || this.error !== C.NETWORK_ERROR) {
-                this.status = C.STATUS_NOT_READY;
-                this.error = C.NETWORK_ERROR;
-            }
-            // Transport Recovery process
-            this.recoverTransport(options);
+        this.closeSessionsOnTransportError();
+        if (!this.error || this.error !== C.NETWORK_ERROR) {
+          this.status = C.STATUS_NOT_READY;
+          this.error = C.NETWORK_ERROR;
         }
+        // Transport Recovery process
+        this.recoverTransport(options);
 
         var data = ExSIP.Utils.merge_options({
           transport: transport,
@@ -770,7 +762,7 @@
       options = options || {};
 
       // reset if all servers have been used
-      if(this.usedServers.length === this.configuration.ws_servers.length) {
+      if(options.force && this.usedServers.length === this.configuration.ws_servers.length) {
         this.usedServers = [];
       }
 
@@ -829,7 +821,7 @@
     };
 
     UA.prototype.recoverTransport = function(options) {
-        var idx, length, k, nextRetry, count, server;
+        var idx, length, nextRetry = 0, count, server;
 
         options = options || {};
         count = this.transportRecoverAttempts;
@@ -840,31 +832,12 @@
         }
 
         server = this.getNextWsServer();
-        if(options.code === 503 && this.configuration.ws_servers.length === 1) {
-          delete options.retryAfter;
-          logger.log('only one server configured on 503 error - skipping recoverTransport', this);
+        if(!server) {
+          logger.log('no next server found - skipping recoverTransport', this);
           return;
-        }
-
-        if(options.retryAfter){
-          nextRetry = options.retryAfter;
-        } else {
-          k = Math.floor((Math.random() * Math.pow(2,count)) +1);
-          nextRetry = k * this.configuration.connection_recovery_min_interval;
-
-          if (nextRetry > this.configuration.connection_recovery_max_interval) {
-            logger.log('time for next connection attempt exceeds connection_recovery_max_interval, resetting counter', this);
-            nextRetry = this.configuration.connection_recovery_min_interval;
-            count = 0;
-          }
         }
 
         logger.log('next connection attempt in '+ nextRetry +' seconds', this);
-
-        var maxTransportRecoveryAttempts = this.configuration.max_transport_recovery_attempts;
-        if(typeof(maxTransportRecoveryAttempts) !== "undefined" && count >= parseInt(maxTransportRecoveryAttempts, 10)) {
-          return;
-        }
 
         this.retry(nextRetry, server, count);
     };

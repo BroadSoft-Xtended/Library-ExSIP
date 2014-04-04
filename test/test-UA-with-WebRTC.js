@@ -25,7 +25,7 @@ test('WEBRTC-48 : on 503 response with only one server', function() {
   TestExSIP.Helpers.startAndConnect(ua);
 
   var disconnectedEvent;
-  var retryTimeInMs = 0;
+  var retryTimeInMs = '';
   ua.on('disconnected', function(e){ disconnectedEvent = e; });
   ua.retry = function(timeInMs, server, count){retryTimeInMs = timeInMs;}
   TestExSIP.Helpers.startAndConnect(ua);
@@ -35,22 +35,22 @@ test('WEBRTC-48 : on 503 response with only one server', function() {
   strictEqual(disconnectedEvent.data.retryAfter, undefined, "Should trigger disconnected event without retryAfter specified");
   strictEqual(disconnectedEvent.data.reason, 'Service Unavailable', "Should trigger disconnected event with reason specified");
   strictEqual(disconnectedEvent.data.code, 503, "Should trigger disconnected event with code specified");
-  strictEqual(retryTimeInMs, 0, "Should NOT call retry");
+  strictEqual(retryTimeInMs, '', "Should NOT call retry");
 });
 
 test('WEBRTC-48 : on 503 response with multiple servers', function() {
   var disconnectedEvent;
-  var retryTimeInMs = 0;
+  var retryTimeInMs = '';
   ua.on('disconnected', function(e){ disconnectedEvent = e; });
   ua.retry = function(timeInMs, server, count){retryTimeInMs = timeInMs;}
   TestExSIP.Helpers.startAndConnect(ua);
 
   ua.transport.onMessage({data: TestExSIP.Helpers.inviteResponse(ua, {status_code: "503 Service Unavailable", retryAfter: 30})});
   strictEqual(disconnectedEvent.data.transport !== undefined, true, "Should trigger disconnected event with transport specified");
-  strictEqual(disconnectedEvent.data.retryAfter, 30, "Should trigger disconnected event with retryAfter specified");
+  strictEqual(disconnectedEvent.data.retryAfter, undefined, "Should trigger disconnected event without retryAfter specified");
   strictEqual(disconnectedEvent.data.reason, 'Service Unavailable', "Should trigger disconnected event with reason specified");
   strictEqual(disconnectedEvent.data.code, 503, "Should trigger disconnected event with code specified");
-  strictEqual(retryTimeInMs, 30, "Should call retry");
+  strictEqual(retryTimeInMs, 0, "Should call retry");
 });
 
 test('getNextWsServer', function() {
@@ -73,11 +73,11 @@ test('getNextWsServer', function() {
   strictEqual(servers.length, 1);
   strictEqual(ua.usedServers.length, 3);
 
-  // should reset the used servers and start over again with configuration ws_servers
+  // should NOT reset the used servers
   ua.onTransportError(ua.transport);
   var servers = ua.configuration.ws_servers.map(function(server){return server.ws_uri;});
   notStrictEqual(servers.indexOf(ua.transport.server.ws_uri), -1);
-  strictEqual(ua.usedServers.length, 1);
+  strictEqual(ua.usedServers.length, 3);
 });
 
 module( "setRtcMediaHandlerOptions", {
