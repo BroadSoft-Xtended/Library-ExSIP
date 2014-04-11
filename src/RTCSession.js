@@ -38,8 +38,8 @@
       'failed',
       'started',
       'ended',
-      'holded',
-      'unholded',
+      'held',
+      'resumed',
       'newDTMF'
     ];
 
@@ -366,13 +366,6 @@
 //    var previousRemoteDescription = self.rtcMediaHandler.peerConnection.remoteDescription;
     var connectSuccess = function() {
       logger.log("onMessage success", self.ua);
-//      var remoteDescription = self.rtcMediaHandler.peerConnection.remoteDescription;
-//      if(previousRemoteDescription.getVideoMode() === ExSIP.C.SENDRECV && remoteDescription.getVideoMode() === ExSIP.C.INACTIVE) {
-//        self.holded();
-//      }
-//      if(previousRemoteDescription.getVideoMode() === ExSIP.C.INACTIVE && remoteDescription.getVideoMode() === ExSIP.C.SENDRECV) {
-//        self.unholded();
-//      }
       self.request.reply(200, null, extraHeaders,
         self.rtcMediaHandler.peerConnection.localDescription.sdp,
         replySucceeded,
@@ -813,9 +806,9 @@
               logger.log('terminate transferred session : ' + this.sessionToTransfer.id, this.ua);
               this.sessionToTransfer.terminate();
             } else if(status >= 400 && status <= 699) {
-              logger.warn('unholding session : ' + this.sessionToTransfer.id, this.ua);
+              logger.warn('resuming session : ' + this.sessionToTransfer.id, this.ua);
               this.sessionToTransfer.unhold(function(){
-                logger.log('unholded session : ' + self.sessionToTransfer.id, self.ua);
+                logger.log('resumed session : ' + self.sessionToTransfer.id, self.ua);
               });
             }
           }
@@ -953,7 +946,7 @@
   RTCSession.prototype.hold = function(inviteSuccessCallback, inviteFailureCallback) {
     var self = this;
     this.changeSession({audioMode: ExSIP.C.INACTIVE, audioPort: "0", videoMode: ExSIP.C.INACTIVE, videoPort: "0"}, function(){
-        self.holded();
+        self.held();
         if(inviteSuccessCallback) {
           inviteSuccessCallback();
         }
@@ -964,7 +957,7 @@
   RTCSession.prototype.unhold = function(inviteSuccessCallback, inviteFailureCallback) {
     var self = this;
     this.changeSession({audioMode: ExSIP.C.SENDRECV, videoMode: ExSIP.C.SENDRECV}, function(){
-        self.unholded();
+        self.resumed();
         if(inviteSuccessCallback) {
           inviteSuccessCallback();
         }
@@ -1277,14 +1270,14 @@
     });
   };
 
-  RTCSession.prototype.holded = function() {
+  RTCSession.prototype.held = function() {
     this.isOnHold = true;
-    this.emit('holded', this);
+    this.emit('held', this);
   };
 
-  RTCSession.prototype.unholded = function() {
+  RTCSession.prototype.resumed = function() {
     this.isOnHold = false;
-    this.emit('unholded', this);
+    this.emit('resumed', this);
   };
 
   /**
