@@ -24,6 +24,8 @@ DTMF = function(session, localMedia, peerConnection) {
   'failed'
   ];
 
+  this.sendIntervalId = null;
+  this.queuedDTMFs = [];
   this.session = session;
   this.direction = null;
   this.tone = null;
@@ -81,8 +83,40 @@ DTMF.prototype.send = function(tone, options) {
     this.on(event, eventHandlers[event]);
   }
 
-  logger.log("sending DTMF with tone "+this.tone+", duration "+options.duration+", gap "+options.interToneGap, this.session.ua);
-  this.dtmfSender.insertDTMF(this.tone, options.duration, options.interToneGap);
+  this.queueTone(this.tone, options.duration, options.interToneGap);
+};
+
+DTMF.prototype.processQueuedDTMFs = function() {
+  if(this.queuedDTMFs.length === 0) {
+    logger.log("No tones to process - clear process DTMF queue interval", this.session.ua);
+    window.clearInterval(this.sendIntervalId);
+    return;
+  }
+  var tones = "";
+  var durationSum = 0;
+  var interToneGapSum = 0;
+  for(var i=0; i < this.queuedDTMFs.length; i++) {
+    var dtmf = this.queuedDTMFs[i];
+    tones += dtmf.tone;
+    durationSum += dtmf.duration;
+    interToneGapSum += dtmf.interToneGap;
+  }
+  var duration = durationSum / this.queuedDTMFs.length;
+  var interToneGap = interToneGapSum / this.queuedDTMFs.length;
+  this.queuedDTMFs = [];
+
+  logger.log("sending DTMF with tones "+tones+", duration "+duration+", gap "+interToneGap, this.session.ua);
+  this.dtmfSender.insertDTMF(tones, duration, interToneGap);
+};
+
+DTMF.prototype.queueTone = function(tone, duration, interToneGap) {
+  logger.log("Queue tone : "+tone, this.session.ua);
+  window.clearInterval(this.sendIntervalId);
+  this.queuedDTMFs.push({tone: tone, duration: duration, interToneGap: interToneGap});
+  var self = this;
+  this.sendIntervalId = window.setInterval(function(){
+    self.processQueuedDTMFs();
+  }, 2 * duration);
 };
 
 DTMF.prototype.enableDtmfSender = function(localstream, peerConnection) {

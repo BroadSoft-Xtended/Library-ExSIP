@@ -15,13 +15,20 @@ test('dtmf sent', function() {
   var toneSent = '';
   session.rtcMediaHandler.getDTMF().dtmfSender.insertDTMF = function(tone) { toneSent = tone;}
   session.sendDTMF('1', {duration: 100, interToneGap: 100});
-  strictEqual(toneSent, '1');
+  strictEqual(toneSent, '');
+  session.sendDTMF('2', {duration: 100, interToneGap: 100});
+  strictEqual(toneSent, '');
+  session.sendDTMF('3', {duration: 100, interToneGap: 100});
+  strictEqual(toneSent, '');
+  session.rtcMediaHandler.getDTMF().processQueuedDTMFs();
+  strictEqual(toneSent, '123');
 });
 
 test('dtmf sent with multiple tones', function() {
   var toneSent = '';
   session.rtcMediaHandler.getDTMF().dtmfSender.insertDTMF = function(tone) { toneSent = tone;}
   session.sendDTMF(',,0430813#', {duration: 100, interToneGap: 100});
+  session.rtcMediaHandler.getDTMF().processQueuedDTMFs();
   strictEqual(toneSent, ',,0430813#');
 });
 
