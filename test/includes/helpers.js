@@ -247,7 +247,8 @@ TestExSIP.Helpers = {
     ExSIP.WebRTC.RTCDTMFSender = function(){
       console.log('-- RTCDTMFSender.new() ');
       return {
-        insertDTMF: function(tone, duration, gap){console.log("-- RTCDTMFSender.insertDTMF()")}
+        insertDTMF: function(tone, duration, gap){console.log("-- RTCDTMFSender.insertDTMF()")},
+        canInsertDTMF: true
       };
     };
     ExSIP.WebRTC.MediaStreamTrack = function(){

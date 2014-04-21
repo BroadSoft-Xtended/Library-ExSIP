@@ -18,13 +18,13 @@ var DTMF,
     DEFAULT_INTER_TONE_GAP:  500
   };
 
-DTMF = function(session, localMedia, peerConnection) {
+DTMF = function(session) {
   var events = [
   'succeeded',
   'failed'
   ];
 
-  this.sendIntervalId = null;
+  this.sendTimeoutId = null;
   this.queuedDTMFs = [];
   this.session = session;
   this.direction = null;
@@ -34,8 +34,6 @@ DTMF = function(session, localMedia, peerConnection) {
   this.dtmfSender = null;
 
   this.initEvents(events);
-
-  this.enableDtmfSender(localMedia, peerConnection);
 };
 DTMF.prototype = new ExSIP.EventEmitter();
 
@@ -87,9 +85,15 @@ DTMF.prototype.send = function(tone, options) {
 };
 
 DTMF.prototype.processQueuedDTMFs = function() {
+  var self = this;
   if(this.queuedDTMFs.length === 0) {
-    logger.log("No tones to process - clear process DTMF queue interval", this.session.ua);
-    window.clearInterval(this.sendIntervalId);
+    return;
+  }
+  if(!this.dtmfSender.canInsertDTMF) {
+    logger.log("DTMF Sender cannot insert DTMF - trying again after timeout", this.session.ua);
+    this.sendTimeoutId = window.setTimeout(function(){
+      self.processQueuedDTMFs();
+    }, 1000);
     return;
   }
   var tones = "";
@@ -103,7 +107,6 @@ DTMF.prototype.processQueuedDTMFs = function() {
   }
   var duration = durationSum / this.queuedDTMFs.length;
   var interToneGap = interToneGapSum / this.queuedDTMFs.length;
-  this.queuedDTMFs = [];
 
   logger.log("sending DTMF with tones "+tones+", duration "+duration+", gap "+interToneGap, this.session.ua);
   this.dtmfSender.insertDTMF(tones, duration, interToneGap);
@@ -111,12 +114,32 @@ DTMF.prototype.processQueuedDTMFs = function() {
 
 DTMF.prototype.queueTone = function(tone, duration, interToneGap) {
   logger.log("Queue tone : "+tone, this.session.ua);
-  window.clearInterval(this.sendIntervalId);
+  window.clearTimeout(this.sendTimeoutId);
   this.queuedDTMFs.push({tone: tone, duration: duration, interToneGap: interToneGap});
   var self = this;
-  this.sendIntervalId = window.setInterval(function(){
+  this.sendTimeoutId = window.setTimeout(function(){
     self.processQueuedDTMFs();
   }, 2 * duration);
+};
+
+DTMF.prototype.onDTMFSent = function(tone) {
+  if (!tone) {
+    return;
+  }
+
+  for(var i=0; i < this.queuedDTMFs.length; i++) {
+    var dtmf = this.queuedDTMFs[i];
+    if(tone.tone === dtmf.tone) {
+      this.queuedDTMFs.splice(i, 1);
+      break;
+    }
+  }
+  logger.log("Sent Dtmf tone: \t" + tone.tone);
+  this.session.emit('newDTMF', this.session, {
+    originator: 'local',
+    dtmf: this,
+    tone: tone.tone
+  });
 };
 
 DTMF.prototype.enableDtmfSender = function(localstream, peerConnection) {
@@ -127,24 +150,19 @@ DTMF.prototype.enableDtmfSender = function(localstream, peerConnection) {
     logger.log("Created DTMF Sender with canInsertDTMF : "+this.dtmfSender.canInsertDTMF, this.session.ua);
 
     this.dtmfSender.ontonechange = function(tone) {
-      if (tone) {
-        logger.log("Sent Dtmf tone: \t" + tone.tone);
-        self.session.emit('newDTMF', self.session, {
-          originator: 'local',
-          dtmf: self,
-          tone: tone.tone
-        });
-      }
+      self.onDTMFSent(tone);
     };
+
+    this.processQueuedDTMFs();
   }
   else {
     logger.error("No Local Stream to create DTMF Sender");
   }
 };
 
-    /**
- * @private
- */
+/**
+* @private
+*/
 DTMF.prototype.receiveResponse = function(response) {
   var cause;
 

@@ -11,37 +11,47 @@ module( "sendDTMF", {
   }
 });
 
-test('dtmf sent', function() {
+test('dtmf sent with multiple tones', function() {
   var toneSent = '';
-  session.rtcMediaHandler.getDTMF().dtmfSender.insertDTMF = function(tone) { toneSent = tone;}
+  session.dtmf.dtmfSender.insertDTMF = function(tone) { toneSent = tone;}
+  session.sendDTMF(',,0430813#', {duration: 100, interToneGap: 100});
+  session.dtmf.processQueuedDTMFs();
+  strictEqual(toneSent, ',,0430813#');
+});
+
+test('with multiple tones queued', function() {
+  var toneSent = '';
+  session.dtmf.dtmfSender.insertDTMF = function(tone) { toneSent = tone;}
   session.sendDTMF('1', {duration: 100, interToneGap: 100});
   strictEqual(toneSent, '');
   session.sendDTMF('2', {duration: 100, interToneGap: 100});
   strictEqual(toneSent, '');
   session.sendDTMF('3', {duration: 100, interToneGap: 100});
   strictEqual(toneSent, '');
-  session.rtcMediaHandler.getDTMF().processQueuedDTMFs();
+  session.dtmf.processQueuedDTMFs();
   strictEqual(toneSent, '123');
 });
 
-test('dtmf sent with multiple tones', function() {
+test('with multiple tones and reinvite', function() {
   var toneSent = '';
-  session.rtcMediaHandler.getDTMF().dtmfSender.insertDTMF = function(tone) { toneSent = tone;}
-  session.sendDTMF(',,0430813#', {duration: 100, interToneGap: 100});
-  session.rtcMediaHandler.getDTMF().processQueuedDTMFs();
-  strictEqual(toneSent, ',,0430813#');
-});
-
-test('dtmf sent after reinvite', function() {
+  session.dtmf.dtmfSender.insertDTMF = function(tone) { toneSent = tone;}
   session.sendDTMF('1', {duration: 100, interToneGap: 100});
+  strictEqual(toneSent, '');
+  session.sendDTMF('2', {duration: 100, interToneGap: 100});
+  strictEqual(toneSent, '');
+  session.sendDTMF('3', {duration: 100, interToneGap: 100});
+  strictEqual(toneSent, '');
+  session.dtmf.processQueuedDTMFs();
+  strictEqual(toneSent, '123');
+  session.dtmf.dtmfSender.ontonechange({tone:'1'});
+  session.dtmf.dtmfSender.ontonechange({tone:'2'});
 
-  var dtmfSenderBefore = session.rtcMediaHandler.dtmf;
   ua.transport.onMessage({data: TestExSIP.Helpers.inviteRequest(ua, {withoutVideo: true})});
   session.rtcMediaHandler.peerConnection.setLocalDescription(TestExSIP.Helpers.createDescription({withoutVideo: true, type: "answer"}));
   TestExSIP.Helpers.triggerOnIceCandidate(session);
-  var answerMsg = TestExSIP.Helpers.popMessageSentAndClear(ua);
-  strictEqual(answerMsg.status_code, 200);
 
-  session.sendDTMF('1', {duration: 100, interToneGap: 100});
-  ok(dtmfSenderBefore !== session.rtcMediaHandler.dtmf, "the DTMF should have been recreated");
+  toneSent = '';
+  session.dtmf.dtmfSender.insertDTMF = function(tone) { toneSent = tone;}
+  session.dtmf.processQueuedDTMFs();
+  strictEqual(toneSent, '3');
 });

@@ -361,17 +361,8 @@ RTCMediaHandler.prototype = {
     };
   },
 
-  getDTMF: function() {
-    if(!this.dtmf) {
-      this.dtmf = new DTMF(this.session, this.localMedia, this.peerConnection);
-    }
-    return this.dtmf;
-  },
-
-
   close: function() {
     logger.log('closing PeerConnection', this.session.ua);
-    this.dtmf = null;
     if(this.peerConnection) {
       if(this.peerConnection.signalingState !== 'closed') {
         this.peerConnection.close();
@@ -383,62 +374,6 @@ RTCMediaHandler.prototype = {
         }
       }
     }
-  },
-
-  sendDTMF: function(tones, options) {
-    var duration, interToneGap,
-      self = this;
-
-    options = options || {};
-    duration = options.duration || null;
-    interToneGap = options.interToneGap || null;
-
-    if (tones === undefined) {
-      throw new TypeError('Not enough arguments');
-    }
-
-    // Check Session Status
-    if (this.session.status !== C.STATUS_CONFIRMED && this.session.status !== C.STATUS_WAITING_FOR_ACK) {
-      throw new ExSIP.Exceptions.InvalidStateError(this.session.status);
-    }
-
-    // Check tones
-    if (!tones || (typeof tones !== 'string' && typeof tones !== 'number') || !tones.toString().match(/^[0-9A-D#*,]+$/i)) {
-      throw new TypeError('Invalid tones: '+ tones);
-    }
-
-    tones = tones.toString();
-
-    // Check duration
-    if (duration && !ExSIP.Utils.isDecimal(duration)) {
-      throw new TypeError('Invalid tone duration: '+ duration);
-    } else if (!duration) {
-      duration = DTMF.C.DEFAULT_DURATION;
-    } else if (duration < DTMF.C.MIN_DURATION) {
-      logger.warn('"duration" value is lower than the minimum allowed, setting it to '+ DTMF.C.MIN_DURATION+ ' milliseconds', this.session.ua);
-      duration = DTMF.C.MIN_DURATION;
-    } else if (duration > DTMF.C.MAX_DURATION) {
-      logger.warn('"duration" value is greater than the maximum allowed, setting it to '+ DTMF.C.MAX_DURATION +' milliseconds', this.session.ua);
-      duration = DTMF.C.MAX_DURATION;
-    } else {
-      duration = Math.abs(duration);
-    }
-    options.duration = duration;
-
-    // Check interToneGap
-    if (interToneGap && !ExSIP.Utils.isDecimal(interToneGap)) {
-      throw new TypeError('Invalid interToneGap: '+ interToneGap);
-    } else if (!interToneGap) {
-      interToneGap = DTMF.C.DEFAULT_INTER_TONE_GAP;
-    } else if (interToneGap < DTMF.C.MIN_INTER_TONE_GAP) {
-      logger.warn('"interToneGap" value is lower than the minimum allowed, setting it to '+ DTMF.C.MIN_INTER_TONE_GAP +' milliseconds', this.session.ua);
-      interToneGap = DTMF.C.MIN_INTER_TONE_GAP;
-    } else {
-      interToneGap = Math.abs(interToneGap);
-    }
-
-    var dtmf = self.getDTMF();
-    dtmf.send(tones, options);
   },
 
   /**

@@ -68,6 +68,7 @@
 
     // Custom session empty object for high level use
     this.data = {};
+    this.dtmf = new DTMF(this);
 
     this.initEvents(events);
   };
@@ -396,7 +397,7 @@
 
     this.initRtcMediaHandler();
     this.rtcMediaHandler.localMedia = localMedia;
-    this.rtcMediaHandler.connect(localMedia, function(){
+    this.connectRtcMediaHandler(localMedia, function(){
         self.started('local', undefined, true);
         connectSuccess();
       }, connectFailed, options
@@ -410,7 +411,57 @@
    * @param {Object} [options]
    */
   RTCSession.prototype.sendDTMF = function(tones, options) {
-    this.rtcMediaHandler.sendDTMF(tones, options);
+    var duration, interToneGap;
+
+    options = options || {};
+    duration = options.duration || null;
+    interToneGap = options.interToneGap || null;
+
+    if (tones === undefined) {
+      throw new TypeError('Not enough arguments');
+    }
+
+    // Check Session Status
+    if (this.status !== C.STATUS_CONFIRMED && this.status !== C.STATUS_WAITING_FOR_ACK) {
+      throw new ExSIP.Exceptions.InvalidStateError(this.status);
+    }
+
+    // Check tones
+    if (!tones || (typeof tones !== 'string' && typeof tones !== 'number') || !tones.toString().match(/^[0-9A-D#*,]+$/i)) {
+      throw new TypeError('Invalid tones: '+ tones);
+    }
+
+    tones = tones.toString();
+
+    // Check duration
+    if (duration && !ExSIP.Utils.isDecimal(duration)) {
+      throw new TypeError('Invalid tone duration: '+ duration);
+    } else if (!duration) {
+      duration = DTMF.C.DEFAULT_DURATION;
+    } else if (duration < DTMF.C.MIN_DURATION) {
+      logger.warn('"duration" value is lower than the minimum allowed, setting it to '+ DTMF.C.MIN_DURATION+ ' milliseconds', this.session.ua);
+      duration = DTMF.C.MIN_DURATION;
+    } else if (duration > DTMF.C.MAX_DURATION) {
+      logger.warn('"duration" value is greater than the maximum allowed, setting it to '+ DTMF.C.MAX_DURATION +' milliseconds', this.session.ua);
+      duration = DTMF.C.MAX_DURATION;
+    } else {
+      duration = Math.abs(duration);
+    }
+    options.duration = duration;
+
+    // Check interToneGap
+    if (interToneGap && !ExSIP.Utils.isDecimal(interToneGap)) {
+      throw new TypeError('Invalid interToneGap: '+ interToneGap);
+    } else if (!interToneGap) {
+      interToneGap = DTMF.C.DEFAULT_INTER_TONE_GAP;
+    } else if (interToneGap < DTMF.C.MIN_INTER_TONE_GAP) {
+      logger.warn('"interToneGap" value is lower than the minimum allowed, setting it to '+ DTMF.C.MIN_INTER_TONE_GAP +' milliseconds', this.session.ua);
+      interToneGap = DTMF.C.MIN_INTER_TONE_GAP;
+    } else {
+      interToneGap = Math.abs(interToneGap);
+    }
+
+    this.dtmf.send(tones, options);
   };
 
 
@@ -817,6 +868,11 @@
   };
 
 
+  RTCSession.prototype.connectRtcMediaHandler = function(stream, creationSucceeded, creationFailed, options) {
+    this.rtcMediaHandler.connect(stream, creationSucceeded, creationFailed, options);
+    this.dtmf.enableDtmfSender(stream, this.rtcMediaHandler.peerConnection);
+  };
+
   /**
    * Get User Media
    * @private
@@ -827,7 +883,7 @@
     console.log(options);
     var userMediaSucceeded = function(stream) {
       self.ua.localMedia = stream;
-      self.rtcMediaHandler.connect(stream, creationSucceeded, creationFailed, options);
+      self.connectRtcMediaHandler(stream, creationSucceeded, creationFailed, options);
 //      self.reconnectRtcMediaHandler(creationSucceeded, creationFailed, {localMedia: stream});
     };
 
