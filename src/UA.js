@@ -806,10 +806,9 @@
         }
     };
 
-    UA.prototype.retry = function(nextRetry, server, count) {
+    UA.prototype.retry = function(nextRetry, server) {
       var self = this;
       var retryCallback = function(){
-        self.transportRecoverAttempts = count + 1;
         new ExSIP.Transport(self, server);
       };
 
@@ -821,7 +820,7 @@
     };
 
     UA.prototype.recoverTransport = function(options) {
-        var idx, length, nextRetry = 0, count, server;
+        var idx, length, k, nextRetry, count, server;
 
         options = options || {};
         count = this.transportRecoverAttempts;
@@ -832,13 +831,41 @@
         }
 
         server = this.getNextWsServer();
-        if(!server) {
-          logger.log('no next server found - skipping recoverTransport', this);
+        if(options.code === 503 && !server) {
+          delete options.retryAfter;
+          logger.log('non-failover on 503 error - skipping recoverTransport', this);
           return;
         }
 
-        logger.log('next connection attempt in '+ nextRetry +' seconds', this);
+        var maxTransportRecoveryAttempts = this.configuration.max_transport_recovery_attempts;
+        if(typeof(maxTransportRecoveryAttempts) !== "undefined" && count >= parseInt(maxTransportRecoveryAttempts, 10)) {
+          delete options.retryAfter;
+          logger.log('recover attempts '+count+" exceed max transport recovery attempts "+maxTransportRecoveryAttempts+" - skipping recoverTransport");
+          return;
+        }
 
+        if(server) {
+          logger.log('failover - new connection attempt with '+server.ws_uri);
+          this.retry(0, server);
+          return;
+        }
+
+        if(options.retryAfter){
+          nextRetry = options.retryAfter;
+        } else {
+          k = Math.floor((Math.random() * Math.pow(2,count)) +1);
+          nextRetry = k * this.configuration.connection_recovery_min_interval;
+
+          if (nextRetry > this.configuration.connection_recovery_max_interval) {
+            logger.log('time for next connection attempt exceeds connection_recovery_max_interval, resetting counter', this);
+            nextRetry = this.configuration.connection_recovery_min_interval;
+            count = 0;
+          }
+        }
+
+        logger.log('resetting ws server list - next connection attempt in '+ nextRetry +' seconds', this);
+        server = this.getNextWsServer({force: true});
+        this.transportRecoverAttempts = count + 1;
         this.retry(nextRetry, server, count);
     };
 

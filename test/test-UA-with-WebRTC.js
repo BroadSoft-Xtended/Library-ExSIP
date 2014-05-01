@@ -5,7 +5,7 @@ module( "ws_servers", {
       {'ws_uri':'ws://localhost:23456', 'weight':5},
       {'ws_uri':'ws://localhost:34567', 'weight':10}
     ], max_transport_recovery_attempts: "1",
-      connection_recovery_min_interval: "0"});
+      connection_recovery_min_interval: "2"});
     ua.on('newRTCSession', function(e){ session = e.data.session; });
     TestExSIP.Helpers.mockWebRTC();
 
@@ -17,7 +17,7 @@ module( "ws_servers", {
 test('WEBRTC-48 : on 503 response with only one server', function() {
   ua = TestExSIP.Helpers.createFakeUA({ws_servers: [
     {'ws_uri':'ws://localhost:12345', 'weight':5}
-  ], max_transport_recovery_attempts: "1",
+  ], max_transport_recovery_attempts: "10",
     connection_recovery_min_interval: "0"});
   ua.on('newRTCSession', function(e){ session = e.data.session; });
   TestExSIP.Helpers.mockWebRTC();
@@ -54,30 +54,40 @@ test('WEBRTC-48 : on 503 response with multiple servers', function() {
 });
 
 test('getNextWsServer', function() {
+  var nextRetryIn = '';
+  ua.retry = function(retry, server){nextRetryIn = retry; new ExSIP.Transport(ua, server);}
   var firstServer = ua.transport.server.ws_uri;
-  var servers = ua.configuration.ws_servers.map(function(server){return server.ws_uri;});
-  notStrictEqual(servers.indexOf(firstServer), -1);
-  strictEqual(ua.usedServers.length, 1);
+  strictEqual(ua.usedServers.length, 1, "should have used one server");
 
   ua.onTransportError(ua.transport);
-  servers.splice(servers.indexOf(firstServer), 1);
   var secondServer = ua.transport.server.ws_uri;
-  notStrictEqual(servers.indexOf(secondServer), -1);
-  strictEqual(servers.length, 2);
-  strictEqual(ua.usedServers.length, 2);
+  notStrictEqual(secondServer, firstServer, "should not match first server used");
+  strictEqual(nextRetryIn, 0, "should retry instantly");
+  strictEqual(ua.usedServers.length, 2, "should have used two servers");
+  strictEqual(ua.transportRecoverAttempts, 0, "should NOT count as transport recover attempt");
+  nextRetryIn = '';
 
   ua.onTransportError(ua.transport);
-  servers.splice(servers.indexOf(secondServer), 1);
-  var thirdServer = ua.transport.server.ws_uri
-  notStrictEqual(servers.indexOf(thirdServer), -1);
-  strictEqual(servers.length, 1);
-  strictEqual(ua.usedServers.length, 3);
+  var thirdServer = ua.transport.server.ws_uri;
+  notStrictEqual(thirdServer, firstServer, "should not match first server used");
+  notStrictEqual(thirdServer, secondServer, "should not match second server used");
+  strictEqual(nextRetryIn, 0, "should retry instantly");
+  strictEqual(ua.usedServers.length, 3, "should have used three servers");
+  nextRetryIn = '';
 
-  // should NOT reset the used servers
+  // should reset the used servers
   ua.onTransportError(ua.transport);
-  var servers = ua.configuration.ws_servers.map(function(server){return server.ws_uri;});
-  notStrictEqual(servers.indexOf(ua.transport.server.ws_uri), -1);
-  strictEqual(ua.usedServers.length, 3);
+  strictEqual(nextRetryIn, 2, "should retry in 2 seconds");
+  strictEqual(ua.usedServers.length, 1, "should have reset used servers to one");
+  strictEqual(ua.transportRecoverAttempts, 1, "should count as transport recover attempt");
+
+  ua.onTransportError(ua.transport);
+  ua.onTransportError(ua.transport);
+
+  nextRetryIn = '';
+  ua.onTransportError(ua.transport);
+  strictEqual(nextRetryIn, '', "should NOT call retry as transportRecoverAttempts >= max_transport_recovery_attempts");
+
 });
 
 module( "setRtcMediaHandlerOptions", {
