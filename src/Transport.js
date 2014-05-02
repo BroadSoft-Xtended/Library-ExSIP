@@ -43,7 +43,7 @@ Transport.prototype = {
   send: function(msg) {
     var message = msg.toString();
 
-    if(this.ws && this.ws.readyState === WebSocket.OPEN) {
+    if(this.ws && this.readyState() === WebSocket.OPEN) {
       logger.debug('sending WebSocket message:\n\n' + message + '\n', this.ua);
       this.ws.send(message);
       return true;
@@ -51,6 +51,10 @@ Transport.prototype = {
       logger.warn('unable to send message, WebSocket is not open', this.ua);
       return false;
     }
+  },
+
+  readyState: function() {
+    return this.ws.readyState;
   },
 
   /**
@@ -70,7 +74,7 @@ Transport.prototype = {
   connect: function() {
     var transport = this;
 
-    if(this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+    if(this.ws && (this.readyState() === WebSocket.OPEN || this.readyState() === WebSocket.CONNECTING)) {
       logger.log('WebSocket ' + this.server.ws_uri + ' is already connected', this.ua);
       return false;
     }
@@ -268,8 +272,12 @@ Transport.prototype = {
     } else {
       logger.log('trying to reconnect to WebSocket ' + this.server.ws_uri + ' (reconnection attempt ' + this.reconnection_attempts + ')', this.ua);
 
-      this.reconnectTimer = window.setTimeout(function() {
-        transport.connect();}, this.ua.configuration.ws_server_reconnection_timeout * 1000);
+      if(this.ua.configuration.ws_server_reconnection_timeout === 0) {
+        transport.connect();
+      } else {
+        this.reconnectTimer = window.setTimeout(function() {
+          transport.connect();}, this.ua.configuration.ws_server_reconnection_timeout * 1000);
+      }
     }
   }
 };

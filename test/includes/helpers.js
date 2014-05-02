@@ -17,7 +17,7 @@ TestExSIP.Helpers = {
     use_preloaded_route: true,
     no_answer_timeout: 60000,
     stun_servers: ['stun:stun.l.google.com:19302'],
-    trace_sip: false,
+    trace_sip: true,
     hack_via_tcp: false,
     hack_ip_in_contact: false,
     uri: 'sip:fakeUA@exsip.net',
@@ -34,7 +34,8 @@ TestExSIP.Helpers = {
     register: false,
     use_preloaded_route: true,
     registrar_server: 'registrar.exsip.NET:6060;TRansport=TCP',
-    max_transport_recovery_attempts: "0"
+    max_transport_recovery_attempts: "0",
+    trace_sip: true
   },
 
   sendMsgs: [],
@@ -148,6 +149,7 @@ TestExSIP.Helpers = {
     var options = this.getMediaOptions();
     var session = ua.call(configuration["destination"] || "sip:fakeUA@exsip.net", options);
     this.triggerOnIceCandidate(session);
+    ua.transport.onOpen();
   },
 
   triggerOnIceCandidate: function(session, options){

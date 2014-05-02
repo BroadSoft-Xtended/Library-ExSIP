@@ -1075,7 +1075,6 @@
                 "exsip_id",
                 "register_min_expires",
                 "ws_server_max_reconnection",
-                "ws_server_reconnection_timeout",
                 "hostport_params",
 
                 // Mandatory user configurable parameters
@@ -1084,6 +1083,7 @@
 
                 // Optional user configurable parameters
                 "authorization_user",
+                "ws_server_reconnection_timeout",
                 "connection_recovery_max_interval",
                 "connection_recovery_min_interval",
                 "max_transport_recovery_attempts",
@@ -1232,6 +1232,16 @@
                 var value;
                 if(ExSIP.Utils.isDecimal(connection_recovery_min_interval)) {
                     value = window.Number(connection_recovery_min_interval);
+                    if(value >= 0) {
+                        return value;
+                    }
+                }
+            },
+
+            ws_server_reconnection_timeout: function(ws_server_reconnection_timeout) {
+                var value;
+                if(ExSIP.Utils.isDecimal(ws_server_reconnection_timeout)) {
+                    value = window.Number(ws_server_reconnection_timeout);
                     if(value >= 0) {
                         return value;
                     }
