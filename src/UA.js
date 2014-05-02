@@ -762,7 +762,7 @@
       options = options || {};
 
       // reset if all servers have been used
-      if(options.force && this.usedServers.length === this.configuration.ws_servers.length) {
+      if(options.force && this.usedServers.length >= this.configuration.ws_servers.length) {
         this.usedServers = [];
       }
 
@@ -786,7 +786,8 @@
       }
 
       var randomNumber = Math.floor(Math.random() * totalWeight);
-      return weightedServers[randomNumber];
+      var index = Math.min(randomNumber, weightedServers.length-1);
+      return weightedServers[index];
     };
 
     /**
@@ -827,7 +828,7 @@
 
         length = this.configuration.ws_servers.length;
         for (idx = 0; idx < length; idx++) {
-          this.configuration.ws_servers[idx].status = 0;
+          this.configuration.ws_servers[idx].status = ExSIP.Transport.C.STATUS_READY;
         }
 
         server = this.getNextWsServer();
@@ -863,8 +864,8 @@
           }
         }
 
-        logger.log('resetting ws server list - next connection attempt in '+ nextRetry +' seconds', this);
         server = this.getNextWsServer({force: true});
+        logger.log('resetting ws server list - next connection attempt in '+ nextRetry +' seconds to '+server.ws_uri, this);
         this.transportRecoverAttempts = count + 1;
         this.retry(nextRetry, server, count);
     };
