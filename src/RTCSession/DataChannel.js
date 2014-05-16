@@ -59,13 +59,13 @@ DataChannel.prototype.sendInChunks = function(data) {
     last = true;
   }
 
-  this.sendChannel.send(data + (last ? "\n" : "")); // use JSON.stringify for chrome!
+  this.sendChannel.send(text + (last ? "\n" : "")); // use JSON.stringify for chrome!
 
   if (!last) {
     var remainingDataURL = data.slice(text.length);
     window.setTimeout(function () {
       self.sendInChunks(remainingDataURL); // continue transmitting
-    }, 500);
+    }, 50);
   }
 };
 
