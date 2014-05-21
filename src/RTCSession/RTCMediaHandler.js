@@ -13,6 +13,7 @@
 
 var RTCMediaHandler = function(session, constraints) {
   constraints = constraints || {};
+  logger.log('constraints : '+ExSIP.Utils.toString(constraints));
 
   this.session = session;
   this.localMedia = null;
