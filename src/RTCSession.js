@@ -134,6 +134,8 @@
               this.sendBye(options);
               this.ended('local', null, ExSIP.C.causes.BYE);
             } else {
+              this.isCanceled = true;
+              logger.log('terminate on 100 - setting isCanceled = true', this.ua);
               this.request.cancel(cancel_reason);
             }
           } else {
@@ -141,6 +143,8 @@
             this.cancelReason = cancel_reason;
           }
         } else if(this.status === C.STATUS_1XX_RECEIVED) {
+          this.isCanceled = true;
+          logger.log('terminate on 1xx - setting isCanceled = true', this.ua);
           this.request.cancel(cancel_reason);
         }
 
@@ -938,6 +942,8 @@
 
     // OutgoingSession specific parameters
     this.isCanceled = false;
+    logger.log('outgoing request - setting isCanceled = false', this.ua);
+
     this.received_100 = false;
 
     this.from_tag = this.from_tag || ExSIP.Utils.newTag();
@@ -1045,18 +1051,22 @@
       return;
     }
 
-    if(this.status !== C.STATUS_INVITE_SENT && this.status !== C.STATUS_1XX_RECEIVED) {
-      logger.warn('status ('+this.status+') not invite sent or 1xx received or terminated', this.ua);
-      return;
-    }
-
     // Proceed to cancellation if the user requested.
     if(this.isCanceled) {
       if(response.status_code >= 100 && response.status_code < 200) {
         this.request.cancel(this.cancelReason);
       } else if(response.status_code >= 200 && response.status_code < 299) {
         this.acceptAndTerminate(response);
+      } else {
+        if (this.dialog || this.createDialog(response, 'UAC')) {
+          this.sendACK();
+        }
       }
+      return;
+    }
+
+    if(this.status !== C.STATUS_INVITE_SENT && this.status !== C.STATUS_1XX_RECEIVED) {
+      logger.warn('status ('+this.status+') not invite sent or 1xx received or terminated', this.ua);
       return;
     }
 

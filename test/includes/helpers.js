@@ -173,7 +173,7 @@ TestExSIP.Helpers = {
 
   popMessageSent: function(ua){
     var data = this.sendMsgs.pop();
-    return this.parseMessage(ua, data);
+    return data ? this.parseMessage(ua, data) : null;
   },
 
   parseMessage: function(ua, data){
@@ -267,8 +267,9 @@ TestExSIP.Helpers = {
     ExSIP.WebRTC.isSupported = true;
   },
 
-  ringingResponse: function(ua) {
-    var sip = "SIP/2.0 180 Ringing\r\n"+
+  ringingResponse: function(ua, options) {
+    options = options || {};
+    var sip = "SIP/2.0 "+(options.status_code || "180 Ringing")+"\r\n"+
       "Via: SIP/2.0/WS <via_host>;branch=<branch>;received=200.49.190.72\r\n"+
       "Contact: <sip:1000@204.117.64.109:8060;transport=ws>\r\n"+
       "To: <sip:fakeUA@exsip.net>;tag=8c9b3674\r\n"+
