@@ -1058,7 +1058,7 @@
       } else if(response.status_code >= 200 && response.status_code < 299) {
         this.acceptAndTerminate(response);
       } else {
-        if (this.dialog || this.createDialog(response, 'UAC')) {
+        if (this.dialog || (response.hasHeader('contact') && this.createDialog(response, 'UAC'))) {
           this.sendACK();
         }
       }
