@@ -396,7 +396,7 @@
     var self = this;
     options = options || {};
     var localMedia = options.localMedia || this.rtcMediaHandler.localMedia;
-    options["createOfferConstraints"] = this.rtcMediaHandler.createOfferConstraints;
+    options["createOfferConstraints"] = options.createOfferConstraints || this.rtcMediaHandler.createOfferConstraints;
     this.rtcMediaHandler.close();
 
     this.initRtcMediaHandler();
