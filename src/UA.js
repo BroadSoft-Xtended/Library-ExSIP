@@ -445,6 +445,10 @@
         this.rtcMediaHandlerOptions = rtcMediaHandlerOptions;
     };
 
+    UA.prototype.rtcConstraints = function() {
+      return this.rtcMediaHandlerOptions ? this.rtcMediaHandlerOptions["RTCConstraints"] : false;
+    };
+
     UA.prototype.reuseLocalMedia = function() {
         return this.rtcMediaHandlerOptions ? this.rtcMediaHandlerOptions["reuseLocalMedia"] : false;
     };

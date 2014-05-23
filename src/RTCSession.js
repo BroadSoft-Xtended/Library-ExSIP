@@ -84,7 +84,7 @@
 
   RTCSession.prototype.initRtcMediaHandler = function(options) {
     options = options || {};
-    this.rtcMediaHandler = new RTCMediaHandler(this, options.RTCConstraints || {"optional": [{'DtlsSrtpKeyAgreement': 'true'}]});
+    this.rtcMediaHandler = new RTCMediaHandler(this, options.RTCConstraints || this.ua.rtcConstraints() || {"optional": [{'DtlsSrtpKeyAgreement': 'true'}]});
     if(options["copy"]) {
       this.rtcMediaHandler.copy(options["copy"]);
     }
@@ -399,7 +399,7 @@
     options["createOfferConstraints"] = options.createOfferConstraints || this.rtcMediaHandler.createOfferConstraints;
     this.rtcMediaHandler.close();
 
-    this.initRtcMediaHandler();
+    this.initRtcMediaHandler(options);
     this.rtcMediaHandler.localMedia = localMedia;
     this.connectRtcMediaHandler(localMedia, function(){
         self.started('local', undefined, true);
