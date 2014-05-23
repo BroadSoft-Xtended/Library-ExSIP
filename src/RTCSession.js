@@ -1109,6 +1109,7 @@
           }
         }
 
+        session.status = C.STATUS_CONFIRMED;
         this.rtcMediaHandler.onMessage(
           response.body,
           /*
@@ -1116,7 +1117,6 @@
            * SDP Answer fits with Offer. Media will start
            */
           function() {
-            session.status = C.STATUS_CONFIRMED;
             session.sendACK();
             session.started('remote', response);
             if(callbacks["inviteSuccess"]) {
