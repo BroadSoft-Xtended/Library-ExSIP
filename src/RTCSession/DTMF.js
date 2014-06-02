@@ -134,7 +134,7 @@ DTMF.prototype.onDTMFSent = function(tone) {
       break;
     }
   }
-  logger.log("Sent Dtmf tone: \t" + tone.tone);
+  logger.log("Sent Dtmf tone: \t" + tone.tone, this.session.ua);
   this.session.emit('newDTMF', this.session, {
     originator: 'local',
     dtmf: this,

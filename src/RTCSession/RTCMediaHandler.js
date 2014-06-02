@@ -13,7 +13,7 @@
 
 var RTCMediaHandler = function(session, constraints) {
   constraints = constraints || {};
-  logger.log('constraints : '+ExSIP.Utils.toString(constraints));
+  logger.log('constraints : '+ExSIP.Utils.toString(constraints), session.ua);
 
   this.session = session;
   this.localMedia = null;
@@ -162,7 +162,7 @@ RTCMediaHandler.prototype = {
       onSuccess(self.peerConnection.localDescription.sdp);
     };
 
-    logger.log("createAnswer with constraints : "+constraints);
+    logger.log("createAnswer with constraints : "+constraints, this.session.ua);
     this.peerConnection.createAnswer(
       function(sessionDescription){
         self.setLocalDescription(
@@ -271,7 +271,7 @@ RTCMediaHandler.prototype = {
       });
     }
 
-    logger.log("servers : "+ExSIP.Utils.toString(servers));
+    logger.log("servers : "+ExSIP.Utils.toString(servers), this.session.ua);
     this.peerConnection = new ExSIP.WebRTC.RTCPeerConnection({'iceServers': servers}, constraints);
 
     this.peerConnection.onaddstream = function(e) {
@@ -433,7 +433,7 @@ RTCMediaHandler.prototype = {
 //
     if(this.peerConnection) {
       if(this.peerConnection.remoteDescription) {
-        logger.log('remote description already exists');
+        logger.log('remote description already exists', this.session.ua);
         onSuccess();
         return;
       }
