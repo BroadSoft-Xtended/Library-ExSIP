@@ -127,14 +127,20 @@ DTMF.prototype.onDTMFSent = function(tone) {
     return;
   }
 
+  logger.log("Sent Dtmf tone: " + tone.tone, this.session.ua);
   for(var i=0; i < this.queuedDTMFs.length; i++) {
     var dtmf = this.queuedDTMFs[i];
     if(tone.tone === dtmf.tone) {
       this.queuedDTMFs.splice(i, 1);
+      logger.log("removing from queued tones - remaining queue: \t" + ExSIP.Utils.toString(this.queuedDTMFs), this.session.ua);
+      break;
+    } else if(dtmf.tone.indexOf(tone.tone) !== -1) {
+      dtmf.tone = dtmf.tone.replace(tone.tone, '');
+      this.queuedDTMFs[i] = dtmf;
+      logger.log("removing from queued tones as contained - remaining queue: \t" + ExSIP.Utils.toString(this.queuedDTMFs), this.session.ua);
       break;
     }
   }
-  logger.log("Sent Dtmf tone: \t" + tone.tone, this.session.ua);
   this.session.emit('newDTMF', this.session, {
     originator: 'local',
     dtmf: this,

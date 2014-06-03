@@ -55,3 +55,22 @@ test('with multiple tones and reinvite', function() {
   session.dtmf.processQueuedDTMFs();
   strictEqual(toneSent, '3');
 });
+test('with multiple tones as batch and reinvite', function() {
+  var toneSent = '';
+  session.dtmf.dtmfSender.insertDTMF = function(tone) { toneSent = tone;}
+  session.sendDTMF('123', {duration: 100, interToneGap: 100});
+  strictEqual(toneSent, '');
+  session.dtmf.processQueuedDTMFs();
+  strictEqual(toneSent, '123');
+  session.dtmf.dtmfSender.ontonechange({tone:'1'});
+  session.dtmf.dtmfSender.ontonechange({tone:'2'});
+
+  ua.transport.onMessage({data: TestExSIP.Helpers.inviteRequest(ua, {withoutVideo: true})});
+  session.rtcMediaHandler.peerConnection.setLocalDescription(TestExSIP.Helpers.createDescription({withoutVideo: true, type: "answer"}));
+  TestExSIP.Helpers.triggerOnIceCandidate(session);
+
+  toneSent = '';
+  session.dtmf.dtmfSender.insertDTMF = function(tone) { toneSent = tone;}
+  session.dtmf.processQueuedDTMFs();
+  strictEqual(toneSent, '3');
+});
