@@ -259,7 +259,7 @@ TestExSIP.Helpers = {
     ExSIP.WebRTC.MediaStream = function(){
       console.log('-- MediaStream.new()');
       return {
-        stop: function(){console.log("-- MediaStream.stop()")},
+        stop: function(){this.ended = true; console.log("-- MediaStream.stop()")},
         getAudioTracks: function(){console.log("-- MediaStream.getAudioTracks()"); return [new ExSIP.WebRTC.MediaStreamTrack()];}
       };
     }

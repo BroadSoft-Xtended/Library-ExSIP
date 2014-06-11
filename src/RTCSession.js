@@ -397,7 +397,7 @@
     options = options || {};
     var localMedia = options.localMedia || this.rtcMediaHandler.localMedia;
     options["createOfferConstraints"] = options.createOfferConstraints || this.rtcMediaHandler.createOfferConstraints;
-    this.rtcMediaHandler.close();
+    this.rtcMediaHandler.close(!!options.localMedia);
 
     this.initRtcMediaHandler(options);
     this.rtcMediaHandler.localMedia = localMedia;
@@ -668,7 +668,7 @@
 
     // 1st Step. Terminate media.
     if (this.rtcMediaHandler){
-      this.rtcMediaHandler.close();
+      this.rtcMediaHandler.close(!this.ua.reuseLocalMedia());
     }
 
     // 2nd Step. Terminate signaling.

@@ -362,15 +362,17 @@ RTCMediaHandler.prototype = {
     };
   },
 
-  close: function() {
-    logger.log('closing PeerConnection', this.session.ua);
+  close: function(stopLocalMedia) {
+    logger.log('close with stopLocalMedia '+stopLocalMedia, this.session.ua);
     if(this.peerConnection) {
       if(this.peerConnection.signalingState !== 'closed') {
+        logger.log('closing PeerConnection', this.session.ua);
         this.peerConnection.close();
       }
 
-      if(!this.session.ua.reuseLocalMedia()) {
+      if(stopLocalMedia) {
         if(this.localMedia) {
+          logger.log('stopping local media '+ExSIP.Utils.toString(this.localMedia), this.session.ua);
           this.localMedia.stop();
         }
       }

@@ -164,6 +164,7 @@ test('request received and accepting', function() {
   strictEqual(session.rtcMediaHandler.peerConnection.remoteDescription.getVideoBandwidth(), "1024")
   strictEqual(session.status, ExSIP.RTCSession.C.STATUS_WAITING_FOR_ACK);
   ok(session.rtcMediaHandler.localMedia);
+  ok(!session.rtcMediaHandler.localMedia.ended, "local media should not have been stopped");
 
   ua.transport.onMessage({data: TestExSIP.Helpers.ackResponse(ua)});
   strictEqual(session.status, ExSIP.RTCSession.C.STATUS_CONFIRMED);
