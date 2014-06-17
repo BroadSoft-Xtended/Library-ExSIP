@@ -443,6 +443,83 @@ test('same media in sdps', function() {
   deepEqual(sdp1.mediaChanges(sdp2), []);
 
 });
+test('remove unsupported media', function() {
+  var sdp = new ExSIP.WebRTC.RTCSessionDescription({type: "answer",
+    sdp: "v=0\r\n"+
+      "o=BroadWorks 1403000323 2 IN IP4 50.205.128.35\r\n"+
+  "s=3QZDfXi3npfdoo8JD5cK\r\n"+
+  "t=0 0\r\n"+
+  "a=fingerprint:sha-256 78:AB:95:B1:71:11:0D:F8:19:71:CD:A3:34:AC:1C:1C:04:EA:B0:75:F4:AA:D2:A7:13:46:37:18:E4:0F:82:20\r\n"+
+  "m=audio 20000 RTP/SAVPF 0 126\r\n"+
+  "c=IN IP4 50.205.128.35\r\n"+
+  "a=rtpmap:0 PCMU/8000\r\n"+
+  "a=rtpmap:126 telephone-event/8000\r\n"+
+  "a=fmtp:126 0-15\r\n"+
+  "a=rtcp-mux\r\n"+
+  "a=ice-ufrag:ooodxqdXNM4vpoHm\r\n"+
+  "a=ice-pwd:wdlhcIeZTxLcAXu8ECFhyYrv\r\n"+
+  "a=ssrc:4293493217 cname:kwDMSaVkunDgcnI7\r\n"+
+  "a=candidate:0 1 udp 2113929216 50.205.128.35 20000 typ host\r\n"+
+  "m=video 20002 RTP/SAVPF 100\r\n"+
+  "c=IN IP4 50.205.128.35\r\n"+
+  "b=AS:512\r\n"+
+  "a=rtpmap:100 VP8/90000\r\n"+
+  "a=rtcp-mux\r\n"+
+  "a=content:main\r\n"+
+  "a=rtcp-fb:100 ccm fir\r\n"+
+  "a=rtcp-fb:100 nack\r\n"+
+  "a=rtcp-fb:100 nack pli\r\n"+
+  "a=rtcp-fb:100 goog-remb\r\n"+
+  "a=ice-ufrag:sS1wdXoLV0Cza48E\r\n"+
+  "a=ice-pwd:6c8UAuWsUR9tY3l2Luz68F7T\r\n"+
+  "a=ssrc:11284924 cname:6DR4CBW98sFko1D2\r\n"+
+  "a=candidate:0 1 udp 2113929216 50.205.128.35 20002 typ host\r\n"+
+  "m=video 0 RTP/SAVPF 99\r\n"+
+  "a=rtpmap:99 H264/90000\r\n"+
+  "a=inactive\r\n"+
+  "a=content:slides\r\n"+
+  "a=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:Gi8HeSTpye8o7zuO9h8X9gXawqULMLewfxMO0S69\r\n"+
+  "m=application 0 RTP/SAVPF\r\n"+
+  "a=inactive\r\n"+
+  "a=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:Gi8HeSTpye8o7zuO9h8X9gXawqULMLewfxMO0S69\r\n"+
+  "m=application 0 RTP/SAVPF\r\n"+
+  "a=inactive\r\n"+
+  "a=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:Gi8HeSTpye8o7zuO9h8X9gXawqULMLewfxMO0S69"});
+
+  var expectedSdp = "v=0\r\n"+
+      "o=BroadWorks 1403000323 2 IN IP4 50.205.128.35\r\n"+
+      "s=3QZDfXi3npfdoo8JD5cK\r\n"+
+      "t=0 0\r\n"+
+      "a=fingerprint:sha-256 78:AB:95:B1:71:11:0D:F8:19:71:CD:A3:34:AC:1C:1C:04:EA:B0:75:F4:AA:D2:A7:13:46:37:18:E4:0F:82:20\r\n"+
+      "m=audio 20000 RTP/SAVPF 0 126\r\n"+
+      "c=IN IP4 50.205.128.35\r\n"+
+      "a=rtpmap:0 PCMU/8000\r\n"+
+      "a=rtpmap:126 telephone-event/8000\r\n"+
+      "a=fmtp:126 0-15\r\n"+
+      "a=rtcp-mux\r\n"+
+      "a=ice-ufrag:ooodxqdXNM4vpoHm\r\n"+
+      "a=ice-pwd:wdlhcIeZTxLcAXu8ECFhyYrv\r\n"+
+      "a=ssrc:4293493217 cname:kwDMSaVkunDgcnI7\r\n"+
+      "a=candidate:0 1 udp 2113929216 50.205.128.35 20000 typ host\r\n"+
+      "m=video 20002 RTP/SAVPF 100\r\n"+
+      "c=IN IP4 50.205.128.35\r\n"+
+      "b=AS:512\r\n"+
+      "a=rtpmap:100 VP8/90000\r\n"+
+      "a=rtcp-mux\r\n"+
+      "a=content:main\r\n"+
+      "a=rtcp-fb:100 ccm fir\r\n"+
+      "a=rtcp-fb:100 nack\r\n"+
+      "a=rtcp-fb:100 nack pli\r\n"+
+      "a=rtcp-fb:100 goog-remb\r\n"+
+      "a=ice-ufrag:sS1wdXoLV0Cza48E\r\n"+
+      "a=ice-pwd:6c8UAuWsUR9tY3l2Luz68F7T\r\n"+
+      "a=ssrc:11284924 cname:6DR4CBW98sFko1D2\r\n"+
+      "a=candidate:0 1 udp 2113929216 50.205.128.35 20002 typ host\r\n";
+
+  sdp.removeUnsupportedMedia();
+  strictEqual(sdp.sdp, expectedSdp);
+
+});
 
 function createDescription(options){
   description = TestExSIP.Helpers.createDescription(options);

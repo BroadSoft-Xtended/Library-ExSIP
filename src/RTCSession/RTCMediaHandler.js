@@ -439,6 +439,7 @@ RTCMediaHandler.prototype = {
         onSuccess();
         return;
       }
+      description.removeUnsupportedMedia();
       logger.log('peerConnection.setRemoteDescription for type '+description.type+' : '+description.sdp, this.session.ua);
       this.peerConnection.setRemoteDescription(
         description,

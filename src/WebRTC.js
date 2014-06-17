@@ -64,6 +64,41 @@ else {
   };
 }
 
+WebRTC.RTCSessionDescription.prototype.removeUnsupportedMedia = function(){
+  var slideMedias = this.getSlidesMedias();
+  var inaciveApplicationMedias = this.getApplicationMedias('0 RTP/SAVPF');
+  var unsupportedMedias = slideMedias.concat(inaciveApplicationMedias);
+  for(var i = 0; i < unsupportedMedias.length; i++) {
+    this.sdp = this.sdp.replace(unsupportedMedias[i], '');
+    console.warn('removing unsupported media from sdp : '+unsupportedMedias[i]);
+  }
+};
+WebRTC.RTCSessionDescription.prototype.getSlidesMedias = function(){
+  var slideMedia = this.getVideoMedias('a=content:slides');
+  return slideMedia;
+};
+WebRTC.RTCSessionDescription.prototype.getApplicationMedias = function(){
+  var slideMedia = this.getVideoMedias('a=content:slides');
+  return slideMedia.pop();
+};
+WebRTC.RTCSessionDescription.prototype.getVideoMedias = function(filter){
+  return this.getMedias('video', filter);
+};
+WebRTC.RTCSessionDescription.prototype.getApplicationMedias = function(filter){
+  return this.getMedias('application', filter);
+};
+WebRTC.RTCSessionDescription.prototype.getMedias = function(type, filter){
+  var regex = new RegExp("(m="+type+"(?:(?!m=)[\\s\\S])*)", "mig");
+  var match;
+  var results = [];
+  while((match = regex.exec(this.sdp)) != null) {
+    var media = match.pop();
+    if(!filter || media.indexOf(filter) !== -1) {
+      results.push(media);
+    }
+  }
+  return results;
+};
 WebRTC.RTCSessionDescription.prototype.getAudioIcePwd = function(){
   var match = this.sdp.match(/m=audio(?:(?!m=)[\s\S])*a=ice-pwd:(.*)/mi);
   return match != null ? match[match.length-1] : null;
