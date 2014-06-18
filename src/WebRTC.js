@@ -64,14 +64,27 @@ else {
   };
 }
 
-WebRTC.RTCSessionDescription.prototype.removeUnsupportedMedia = function(){
+WebRTC.RTCSessionDescription.prototype.getSdp = function(options){
+  options = options || {};
+  var sdp = this.sdp;
+  if(options.additionalSdp) {
+    sdp += options.additionalSdp;
+  }
+  return sdp;
+};
+WebRTC.RTCSessionDescription.prototype.getUnsupportedMedias = function(){
   var slideMedias = this.getSlidesMedias();
-  var inaciveApplicationMedias = this.getApplicationMedias('0 RTP/SAVPF');
-  var unsupportedMedias = slideMedias.concat(inaciveApplicationMedias);
+  var inactiveApplicationMedias = this.getApplicationMedias('0 RTP/SAVPF');
+  var unsupportedMedias = slideMedias.concat(inactiveApplicationMedias);
+  return unsupportedMedias;
+};
+WebRTC.RTCSessionDescription.prototype.removeUnsupportedMedia = function(){
+  var unsupportedMedias = this.getUnsupportedMedias();
   for(var i = 0; i < unsupportedMedias.length; i++) {
     this.sdp = this.sdp.replace(unsupportedMedias[i], '');
     console.warn('removing unsupported media from sdp : '+unsupportedMedias[i]);
   }
+  return unsupportedMedias.join('');
 };
 WebRTC.RTCSessionDescription.prototype.getSlidesMedias = function(){
   var slideMedia = this.getVideoMedias('a=content:slides');

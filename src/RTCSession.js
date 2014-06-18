@@ -372,7 +372,8 @@
     var connectSuccess = function() {
       logger.log("onMessage success", self.ua);
       self.request.reply(200, null, extraHeaders,
-        self.rtcMediaHandler.peerConnection.localDescription.sdp,
+        self.rtcMediaHandler.peerConnection.localDescription.getSdp(
+          {additionalSdp: self.rtcMediaHandler.peerConnection.remoteUnsupportedMedia}),
         replySucceeded,
         replyFailed
       );

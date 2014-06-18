@@ -408,7 +408,8 @@ TestExSIP.Helpers = {
         (options["withoutVideoCodecFmtp"] ? "" : "a=fmtp:34 "+(options["videoCodec34Fmtp"] || "CIF=1;QCIF=1;SQCIF=1")+"\r\n")+
         (options["withoutVideoIceUfrag"] ? "" : "a=ice-ufrag:Q8QVGvJo7iPUnNoG\r\n")+
         (options["withoutVideoFingerprint"] ? "" : "a=fingerprint:sha-256 B1:1D:38:90:8F:72:85:60:AD:10:9F:BB:F5:78:47:AB:A8:DF:01:FA:50:D3:73:C9:20:3D:B4:C0:36:C2:08:30\r\n")+
-        (options["withoutVideoIcePwd"] ? "" : "a=ice-pwd:Tnws80Vq98O3THLRXLqjWnOf"));
+        (options["withoutVideoIcePwd"] ? "" : "a=ice-pwd:Tnws80Vq98O3THLRXLqjWnOf\r\n"))+
+        (options["additionalSdp"] ? options["additionalSdp"] : "");
     return sdp;
   },
 

@@ -121,6 +121,64 @@ test('request received from hold from E20', function() {
   strictEqual(answerMsg.status_code, 200);
   TestExSIP.Helpers.createDescription = createDescriptionFunction;
 });
+test('reinvite with unsupported medias', function() {
+  var unsupportedSdp =     "m=video 0 RTP/SAVPF 99\r\n"+
+    "a=rtpmap:99 H264/90000\r\n"+
+    "a=inactive\r\n"+
+    "a=content:slides\r\n"+
+    "a=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:Gi8HeSTpye8o7zuO9h8X9gXawqULMLewfxMO0S69\r\n"+
+    "m=application 0 RTP/SAVPF\r\n"+
+    "a=inactive\r\n"+
+    "a=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:Gi8HeSTpye8o7zuO9h8X9gXawqULMLewfxMO0S69\r\n"+
+    "m=application 0 RTP/SAVPF\r\n"+
+    "a=inactive\r\n"+
+    "a=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:Gi8HeSTpye8o7zuO9h8X9gXawqULMLewfxMO0S69";
+
+  var expectedAnswerSdp = "v=0\r\n"+
+  "o=BroadWorks 728485 2 IN IP4 10.48.7.56\r\n"+
+  "s=-\r\n"+
+  "c=IN IP4 10.48.1.13\r\n"+
+  "t=0 0\r\n"+
+  "m=audio 16550 RTP/AVP 9 126\r\n"+
+  "c=IN IP4 10.48.1.23\r\n"+
+  "a=rtcp:55761 IN IP4 181.189.138.18\r\n"+
+  "a=sendrecv\r\n"+
+  "a=rtpmap:9 G722/8000\r\n"+
+  "a=rtpmap:126 telephone-event/8000\r\n"+
+  "a=fmtp:126 0-15\r\n"+
+  "a=candidate:3355351182 1 udp 2113937151 10.0.2.1 59436 typ host generation 0\r\n"+
+  "a=candidate:3355351182 2 udp 2113937151 10.0.2.1 59436 typ host generation 0\r\n"+
+  "a=fingerprint:sha-256 B1:1D:38:90:8F:72:85:60:AD:10:9F:BB:F5:78:47:AB:A8:DF:01:FA:50:D3:73:C9:20:3D:B4:C0:36:C2:08:29\r\n"+
+  "a=ice-ufrag:pXHmklEbg7WBL95R\r\n"+
+  "a=ice-pwd:KJa5PdOffxkQ7NtyroEPwzZY\r\n"+
+  "m=video 16930 RTP/AVP 99 109 34\r\n"+
+  "c=IN IP4 10.48.1.33\r\n"+
+  "b=AS:512\r\n"+
+  "a=rtcp:55762 IN IP4 181.189.138.18\r\n"+
+  "a=rtpmap:99 H264/90000\r\n"+
+  "a=fmtp:99 profile-level-id=42801E; packetization-mode=0\r\n"+
+  "a=sendrecv\r\n"+
+  "a=rtpmap:109 H264/90000\r\n"+
+  "a=fmtp:109 profile-level-id=42801E; packetization-mode=0\r\n"+
+  "a=rtpmap:34 H263/90000\r\n"+
+  "a=fmtp:34 CIF=1;QCIF=1;SQCIF=1\r\n"+
+  "a=ice-ufrag:Q8QVGvJo7iPUnNoG\r\n"+
+  "a=fingerprint:sha-256 B1:1D:38:90:8F:72:85:60:AD:10:9F:BB:F5:78:47:AB:A8:DF:01:FA:50:D3:73:C9:20:3D:B4:C0:36:C2:08:30\r\n"+
+  "a=ice-pwd:Tnws80Vq98O3THLRXLqjWnOf\r\n"+unsupportedSdp;
+
+  var session = null;
+  ua.on('onReInvite', function(e)
+  {
+    e.data.session.acceptReInvite();
+    session = e.data.session;
+  });
+
+  ua.transport.onMessage({data: TestExSIP.Helpers.inviteRequest(ua, {additionalSdp: unsupportedSdp})});
+  TestExSIP.Helpers.triggerOnIceCandidate(session);
+  var answerMsg = TestExSIP.Helpers.popMessageSentAndClear(ua);
+  strictEqual(answerMsg.status_code, 200);
+  strictEqual(answerMsg.body, expectedAnswerSdp);
+});
 test('request received from hold', function() {
   var sdp = "v=0\r\n"+
   "o=sipgw 1388756803 3 IN IP4 204.117.64.113\r\n"+
