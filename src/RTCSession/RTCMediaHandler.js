@@ -19,6 +19,7 @@ var RTCMediaHandler = function(session, constraints) {
   this.localMedia = null;
   this.peerConnection = null;
   this.createOfferConstraints = null;
+  this.dataChannel = null;
 
   this.init(constraints);
 };
@@ -294,10 +295,6 @@ RTCMediaHandler.prototype = {
       logger.log('onsignalingstatechange : '+ this.signalingState, self.session.ua);
     };
 
-    this.peerConnection.ondatachannel = function(e) {
-      logger.log('ondatachannel : '+ ExSIP.Utils.toString(e), self.session.ua);
-    };
-
     this.setOnIceCandidateCallback();
 
     // To be deprecated as per https://code.google.com/p/webrtc/issues/detail?id=1393
@@ -316,6 +313,8 @@ RTCMediaHandler.prototype = {
     this.peerConnection.onstatechange = function() {
       logger.log('PeerConnection state changed to "'+ this.readyState +'"', self.session.ua);
     };
+
+    this.dataChannel = new DataChannel(this.session, this.peerConnection);
   },
 
   getSetLocalDescriptionType: function(){
@@ -360,6 +359,10 @@ RTCMediaHandler.prototype = {
         }
       }
     };
+  },
+
+  sendData: function(data) {
+    this.dataChannel.send(data);
   },
 
   close: function(stopLocalMedia) {
