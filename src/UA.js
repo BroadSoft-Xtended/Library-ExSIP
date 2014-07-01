@@ -916,6 +916,7 @@
                 trace_sip: false,
 
                 // Hacks
+                enable_datachannel: false,
                 enable_ims: false,
                 hack_via_tcp: false,
                 hack_ip_in_contact: false
@@ -1094,6 +1095,7 @@
                 "display_name",
                 "hack_via_tcp", // false.
                 "enable_ims", // false.
+                "enable_datachannel", // false.
                 "hack_ip_in_contact", //false
                 "no_answer_timeout", // 30 seconds.
                 "password",
@@ -1279,6 +1281,12 @@
             enable_ims: function(enable_ims) {
                 if (typeof enable_ims === 'boolean') {
                     return enable_ims;
+                }
+            },
+
+            enable_datachannel: function(enable_datachannel) {
+                if (typeof enable_datachannel === 'boolean') {
+                    return enable_datachannel;
                 }
             },
 

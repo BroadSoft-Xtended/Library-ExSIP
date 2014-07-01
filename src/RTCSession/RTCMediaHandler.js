@@ -314,7 +314,9 @@ RTCMediaHandler.prototype = {
       logger.log('PeerConnection state changed to "'+ this.readyState +'"', self.session.ua);
     };
 
-    this.dataChannel = new DataChannel(this.session, this.peerConnection);
+    if(self.session.ua.configuration.enable_datachannel) {
+      this.dataChannel = new DataChannel(this.session, this.peerConnection);
+    }
   },
 
   getSetLocalDescriptionType: function(){
@@ -362,7 +364,11 @@ RTCMediaHandler.prototype = {
   },
 
   sendData: function(data) {
-    this.dataChannel.send(data);
+    if(this.dataChannel) {
+      this.dataChannel.send(data);
+    } else {
+      logger.error('datachannel is not enabled - see UA.configuration.enable_datachannel');
+    }
   },
 
   close: function(stopLocalMedia) {
