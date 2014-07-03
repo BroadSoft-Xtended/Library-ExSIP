@@ -283,8 +283,8 @@ RTCMediaHandler.prototype = {
       logger.log('stream removed: '+ e.stream.id, self.session.ua);
     };
 
-    this.peerConnection.oniceconnectionstatechange = function(e) {
-      logger.log('oniceconnectionstatechange : '+ e.iceConnectionState, self.session.ua);
+    this.peerConnection.oniceconnectionstatechange = function() {
+      logger.log('oniceconnectionstatechange : '+ this.iceConnectionState, self.session.ua);
     };
 
     this.peerConnection.onnegotiationneeded = function(e) {
