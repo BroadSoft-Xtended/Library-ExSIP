@@ -107,7 +107,7 @@ module( "setRtcMediaHandlerOptions", {
     ua.on('newRTCSession', function(e){ session = e.data.session; });
     TestExSIP.Helpers.mockWebRTC();
 
-    ua.setRtcMediaHandlerOptions({videoBandwidth: '512', disableICE: true});
+    ua.setRtcMediaHandlerOptions({videoBandwidth: '512'});
     TestExSIP.Helpers.startAndConnect(ua);
   }, teardown: function() {
   }

@@ -96,7 +96,6 @@ TestExSIP.Helpers = {
 
   createFakeUA: function(options) {
     var ua = new ExSIP.UA(ExSIP.Utils.merge_options(this.FAKE_UA_CONFIGURATION, options || {}));
-    ua.setRtcMediaHandlerOptions({disableICE: true});
     return ua;
   },
 

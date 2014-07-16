@@ -346,7 +346,7 @@ RTCMediaHandler.prototype = {
   setOnIceCandidateCallback: function(){
     var sent = false, self = this;
     this.peerConnection.onicecandidate = function(e) {
-      if (e.candidate && !self.session.ua.rtcMediaHandlerOptions["disableICE"]) {
+      if (e.candidate && self.session.ua.rtcMediaHandlerOptions["enableICE"]) {
         logger.log('ICE candidate received: '+ e.candidate.candidate, self.session.ua);
       } else if (self.onIceCompleted !== undefined) {
 //        if(e.candidate) {
