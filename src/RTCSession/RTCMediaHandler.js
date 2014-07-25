@@ -70,11 +70,11 @@ RTCMediaHandler.prototype = {
     };
 
     var createOffer = function(){
-      self.createOffer(function(){
+      self.createOffer(function(sdp){
         if(options.remoteSdp && options.remoteSdp !== "") {
           setRemoteDescription(connectSucceeded);
         } else {
-          connectSucceeded();
+          connectSucceeded(sdp);
         }
       }, connectFailed, options);
     };
@@ -448,6 +448,12 @@ RTCMediaHandler.prototype = {
         onSuccess();
         return;
       }
+      if(!description.sdp) {
+        logger.log('empty sdp on setRemoteDescription - calling success', this.session.ua);
+        onSuccess();
+        return;
+      }
+
       var unsupportedMedia = description.removeUnsupportedMedia();
       if(unsupportedMedia) {
         logger.log('removed unsupported media : '+unsupportedMedia);

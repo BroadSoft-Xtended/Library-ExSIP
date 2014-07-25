@@ -520,14 +520,14 @@
    */
   RTCSession.prototype.init_incoming = function(request) {
     var expires,
-      self = this,
-      contentType = request.getHeader('Content-Type');
+      self = this;
+//      contentType = request.getHeader('Content-Type');
 
-    // Check body and content type
-    if(!request.body || (contentType !== 'application/sdp')) {
-      request.reply(415);
-      return;
-    }
+//    // Check body and content type
+//    if(!request.body || (contentType !== 'application/sdp')) {
+//      request.reply(415);
+//      return;
+//    }
 
     // Session parameter initialization
     this.status = C.STATUS_INVITE_RECEIVED;

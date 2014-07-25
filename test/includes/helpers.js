@@ -414,7 +414,7 @@ TestExSIP.Helpers = {
 
   initialInviteRequest: function(ua, options) {
     options = options || {};
-    var sdp = this.createSdp(options);
+    var sdp = options["noSdp"] ? "" : this.createSdp(options);
 
     var sip = "INVITE sip:fakeUA@exsip.net SIP/2.0\r\n"+
       "Via: SIP/2.0/TLS 192.0.2.4;branch="+(options["branch"] || "z9hG4bKnas432")+"\r\n"+

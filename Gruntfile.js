@@ -12,6 +12,7 @@ module.exports = function(grunt) {
     'src/Transport.js',
     'src/Parser.js',
     'src/SIPMessage.js',
+    'src/Subscriber.js',
     'src/URI.js',
     'src/NameAddrHeader.js',
     'src/Transactions.js',

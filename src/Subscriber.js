@@ -18,6 +18,14 @@ ExSIP.Subscriber.prototype = {
     this.ua = ua;
     this.N = null;
     this.subscriptions = {};
+
+    // Call-ID and CSeq values RFC3261 10.2
+    this.call_id = ExSIP.Utils.createRandomToken(22);
+    this.cseq = 80;
+
+    // this.to_uri
+    this.to_uri = ua.configuration.uri;
+    this.contact = ua.contact.toString();
   },
 
   /**
@@ -62,6 +70,24 @@ ExSIP.Subscriber.prototype = {
     if (Object.keys(this.subscriptions).length === 0) {
       this.close();
     }
+  },
+
+  createSubscribeRequest: function(dialog, params) {
+    params = params || {};
+    params.to_uri = this.to_uri;
+    params.call_id = this.call_id;
+    params.cseq = this.cseq += 1;
+    var extraHeaders = [];
+    extraHeaders.push('Contact: '+ this.contact);
+    extraHeaders.push('Event: message-summary');
+    extraHeaders.push('Date: '+new Date());
+    extraHeaders.push('Accept: application/simple-message-summary');
+    extraHeaders.push('Allow: '+ ExSIP.Utils.getAllowedMethods(this.ua));
+
+    var request = new ExSIP.OutgoingRequest(ExSIP.C.SUBSCRIBE, this.ua.configuration.registrar_server, this.ua,
+      params, extraHeaders);
+
+    return request;
   },
 
   subscribe: function() {
