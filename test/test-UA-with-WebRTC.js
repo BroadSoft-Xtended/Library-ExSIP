@@ -15,7 +15,12 @@ test('WEBRTC-48 : on 503 response with multiple servers', function() {
   var disconnectedEvent;
   var retryTimeInMs = '';
   ua.on('disconnected', function(e){ disconnectedEvent = e; });
-  ua.retry = function(timeInMs, server, count){retryTimeInMs = timeInMs;}
+  ua.retry = function(timeInMs, server, callback){
+    retryTimeInMs = timeInMs;
+    var t = new ExSIP.Transport(ua, server);
+    callback(t);
+    t.onOpen();
+  }
 
   ua.transport.onMessage({data: TestExSIP.Helpers.inviteResponse(ua, {status_code: "503 Service Unavailable", retryAfter: 30})});
   strictEqual(disconnectedEvent.data.transport !== undefined, true, "Should trigger disconnected event with transport specified");
@@ -23,6 +28,9 @@ test('WEBRTC-48 : on 503 response with multiple servers', function() {
   strictEqual(disconnectedEvent.data.reason, 'Service Unavailable', "Should trigger disconnected event with reason specified");
   strictEqual(disconnectedEvent.data.code, 503, "Should trigger disconnected event with code specified");
   strictEqual(retryTimeInMs, 0, "Should call retry");
+
+  var inviteMsg = TestExSIP.Helpers.popMessageSentAndClear(ua);
+  strictEqual(inviteMsg.method, ExSIP.C.INVITE);
 });
 
 test('getNextWsServer', function() {

@@ -811,10 +811,13 @@
         }
     };
 
-    UA.prototype.retry = function(nextRetry, server) {
+    UA.prototype.retry = function(nextRetry, server, callback) {
       var self = this;
       var retryCallback = function(){
-        new ExSIP.Transport(self, server);
+        var transport = new ExSIP.Transport(self, server);
+        if(callback) {
+          callback(transport);
+        }
       };
 
       if(nextRetry === 0) {
@@ -851,7 +854,7 @@
 
         if(server) {
           logger.log('failover - new connection attempt with '+server.ws_uri);
-          this.retry(0, server);
+          this.retry(0, server, options.retryCallback);
           return;
         }
 
@@ -871,7 +874,7 @@
         server = this.getNextWsServer({force: true});
         logger.log('resetting ws server list - next connection attempt in '+ nextRetry +' seconds to '+server.ws_uri, this);
         this.transportRecoverAttempts = count + 1;
-        this.retry(nextRetry, server, count);
+        this.retry(nextRetry, server, options.retryCallback);
     };
 
     /**

@@ -261,7 +261,13 @@ var InviteClientTransactionPrototype = function() {
           this.state = C.STATUS_COMPLETED;
           this.sendACK(response);
           if(status_code === 503) {
-            var options = {code: 503, reason: 'Service Unavailable'};
+            var options = {code: 503, reason: 'Service Unavailable', retryCallback: function(transport){
+              transport.ua.once("connected", function(e){
+                if(transport === e.data.transport) {
+                  tr.send();
+                }
+              });
+            }};
             this.request_sender.ua.onTransportError(this.request_sender.ua.transport, options);
           } else {
             this.request_sender.receiveResponse(response);
