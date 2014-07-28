@@ -11,8 +11,8 @@ module( "incoming call", {
 test('terminate before answering', function() {
   ua.transport.onMessage({data: TestExSIP.Helpers.initialInviteRequest(ua, {})});
   session.terminate();
-  var cancelRequest = TestExSIP.Helpers.popMessageSent();
-  strictEqual(cancelRequest.method, ExSIP.C.CANCEL, "Should send a cancel request");
+  var answerMsg = TestExSIP.Helpers.popMessageSent();
+  strictEqual(answerMsg.status_code, 486, "Should send a 486 response");
 });
 test('with Firefox and null candidate', function() {
   ua.transport.onMessage({data: TestExSIP.Helpers.initialInviteRequest(ua, {})});

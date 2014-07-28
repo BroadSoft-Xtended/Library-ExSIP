@@ -156,10 +156,10 @@
 
       // - UAS -
       case C.STATUS_WAITING_FOR_ANSWER:
-        logger.log('canceling RTCSession', this.ua);
+        logger.log('rejecting RTCSession with 486 Busy Here', this.ua);
 
-        this.request.cancel();
-        this.failed('local', null, ExSIP.C.causes.CANCELED);
+        this.request.reply(486);
+        this.failed('local', null, ExSIP.C.causes.REJECTED);
         break;
       case C.STATUS_ANSWERED:
         logger.log('rejecting RTCSession', this.ua);
