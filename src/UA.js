@@ -922,7 +922,9 @@
                 enable_datachannel: false,
                 enable_ims: false,
                 hack_via_tcp: false,
-                hack_ip_in_contact: false
+                hack_ip_in_contact: false,
+                p_asserted_identity: null
+
             };
 
         // Pre-Configuration
@@ -1098,6 +1100,7 @@
                 "display_name",
                 "hack_via_tcp", // false.
                 "enable_ims", // false.
+                "p_asserted_identity", // false.
                 "enable_datachannel", // false.
                 "hack_ip_in_contact", //false
                 "no_answer_timeout", // 30 seconds.
@@ -1285,6 +1288,10 @@
                 if (typeof enable_ims === 'boolean') {
                     return enable_ims;
                 }
+            },
+
+            p_asserted_identity: function(p_asserted_identity) {
+              return String(p_asserted_identity);
             },
 
             enable_datachannel: function(enable_datachannel) {

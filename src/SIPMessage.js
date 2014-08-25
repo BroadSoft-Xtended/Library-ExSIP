@@ -254,6 +254,8 @@ OutgoingRequest = function(method, ruri, ua, params, extraHeaders, body) {
   // P-Asserted-Identity
   if(ua.configuration.enable_ims) {
     this.setHeader('P-Asserted-Identity', fromName);
+  } else if(ua.configuration.p_asserted_identity) {
+    this.setHeader('P-Asserted-Identity', ua.configuration.p_asserted_identity);
   }
 };
 

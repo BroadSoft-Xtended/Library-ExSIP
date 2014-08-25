@@ -4,6 +4,12 @@ module( "Configuration", {
   }
 });
 
+test('p_asserted_identity', function() {
+  var ua = TestExSIP.Helpers.createUAAndCall({p_asserted_identity: 'webrtc_rocks', destination: "other@exsip.net"});
+  var inviteRequest = TestExSIP.Helpers.popMessageSent(ua);
+  strictEqual(inviteRequest.getHeader('P-Asserted-Identity'), 'webrtc_rocks');
+});
+
 test('enable_ims', function() {
   var ua = TestExSIP.Helpers.createUAAndCall({enable_ims: true, destination: "other@exsip.net"});
   var inviteRequest = TestExSIP.Helpers.popMessageSent(ua);
