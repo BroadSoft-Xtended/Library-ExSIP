@@ -794,21 +794,13 @@
             window.clearTimeout(this.timers.invite2xxTimer);
             this.status = C.STATUS_CONFIRMED;
             if(request.body.length > 0) {
-              logger.log("reconnecting with ACK sdp and current local description", this.ua);
-              var localDescription = this.rtcMediaHandler.peerConnection.localDescription;
-              logger.log(localDescription.sdp, this.ua);
+              logger.log("set remoteDescription for late offer ACK", this.ua);
               this.rtcMediaHandler.onMessage(request.body, function(){
-                logger.log("reconnect success", self.ua);
+                logger.log("late offer remoteDescription success", self.ua);
                 self.started('local', undefined, true);
               }, function(){
-                logger.log("reconnect failure", self.ua);
+                logger.log("late offer remoteDescription failure", self.ua);
               });
-//              this.reconnectRtcMediaHandler(function(){
-//                logger.log("reconnect success", self.ua);
-//                self.started('local', undefined, true);
-//              }, function(){
-//                logger.log("reconnect failure", self.ua);
-//              }, {isAnswer: false, remoteSdp: request.body, isReconnect: true, localDescription: localDescription});
             }
           }
           break;

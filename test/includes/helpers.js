@@ -202,7 +202,12 @@ TestExSIP.Helpers = {
         localDescription: null,
         remoteDescription: null,
         close: function(){console.log("-- RTCPeerConnection.close()")},
-        setRemoteDescription: function(description, success, failure){console.log("-- RTCPeerConnection.setRemoteDescription() : "+ExSIP.Utils.toString(description));this.remoteDescription = description; if(success){success();}},
+        setRemoteDescription: function(description, success, failure){
+          console.log("-- RTCPeerConnection.setRemoteDescription() : "+ExSIP.Utils.toString(description));
+          this.remoteDescription = description;
+          TestExSIP.Helpers.setRemoteDescription(description);
+          if(success){success();
+        }},
         addStream: function(){console.log("-- RTCPeerConnection.addStream()")},
         createOffer: function(success, failure, options){
           console.log("-- RTCPeerConnection.createOffer() : ", JSON.stringify(options));
@@ -369,6 +374,9 @@ TestExSIP.Helpers = {
   },
 
   setLocalDescription: function(localDescription){
+  },
+
+  setRemoteDescription: function(localDescription){
   },
 
   createDescription: function(options){

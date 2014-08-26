@@ -54,12 +54,15 @@ test('reinvite with no sdp and ACK with sdp', function() {
   strictEqual(answerMsg.body.length > 0, true);
   ok(!onReInviteEventReceived);
 
-  var answerCreated = false, localDescriptionSet = false, started = false;
+  var answerCreated = false, localDescriptionSet = false, remoteDescriptionSet = false, started = false;
   session.on('started', function(e) {
     started = true;
   });
   TestExSIP.Helpers.setLocalDescription = function(description){
       localDescriptionSet = true
+  };
+  TestExSIP.Helpers.setRemoteDescription = function(description){
+    remoteDescriptionSet = true
   };
   TestExSIP.Helpers.createAnswer = function(){
       answerCreated = true;
@@ -68,9 +71,10 @@ test('reinvite with no sdp and ACK with sdp', function() {
   ua.transport.onMessage({data: TestExSIP.Helpers.inviteRequest(ua, {method: ExSIP.C.ACK})});
   TestExSIP.Helpers.triggerOnIceCandidate(session);
   strictEqual(session.status, ExSIP.RTCSession.C.STATUS_CONFIRMED);
-  strictEqual(session.rtcMediaHandler !== formerRtcMediaHandler, true, "should reconnect after ACK with sdp");
+  strictEqual(session.rtcMediaHandler === formerRtcMediaHandler, true, "should not reconnect after ACK with sdp");
   strictEqual(answerCreated, false, "should not have called createAnswer");
-  strictEqual(localDescriptionSet, true, "should have called setLocalDescription");
+  strictEqual(localDescriptionSet, false, "should not have called setLocalDescription");
+  strictEqual(remoteDescriptionSet, true, "should have called setRemoteDescription");
   strictEqual(started, true, "should trigger started in order to update video streams");
 });
 test('request received from hold from E20', function() {
