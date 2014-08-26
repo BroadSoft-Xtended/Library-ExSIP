@@ -66,6 +66,7 @@ test('reinvite with no sdp and ACK with sdp', function() {
   };
   var formerRtcMediaHandler = session.rtcMediaHandler;
   ua.transport.onMessage({data: TestExSIP.Helpers.inviteRequest(ua, {method: ExSIP.C.ACK})});
+  TestExSIP.Helpers.triggerOnIceCandidate(session);
   strictEqual(session.status, ExSIP.RTCSession.C.STATUS_CONFIRMED);
   strictEqual(session.rtcMediaHandler !== formerRtcMediaHandler, true, "should reconnect after ACK with sdp");
   strictEqual(answerCreated, false, "should not have called createAnswer");

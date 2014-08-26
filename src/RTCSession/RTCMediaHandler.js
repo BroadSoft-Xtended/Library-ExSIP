@@ -50,14 +50,14 @@ RTCMediaHandler.prototype = {
     options = options || {};
     logger.log('connect with isAnswer : '+options.isAnswer+" and remoteSdp : "+options.remoteSdp, self.session.ua);
 
-    var setLocalDescription = function() {
-      self.setLocalDescription(options.localDescription, connectSucceeded, connectFailed);
+    var setLocalDescription = function(callback) {
+      self.setLocalDescription(options.localDescription, callback || connectSucceeded, connectFailed);
     };
 
     var setRemoteDescription = function(successCallback) {
       self.onMessage(
         options.remoteSdp,
-        successCallback, function(e){
+        successCallback || connectSucceeded, function(e){
           logger.error("setRemoteDescription failed");
           logger.error(ExSIP.Utils.toString(e));
           connectFailed();
@@ -90,7 +90,11 @@ RTCMediaHandler.prototype = {
           setRemoteDescription(createAnswer);
         }
       } else {
-        createOffer();
+        if(options.remoteSdp) {
+          setLocalDescription(setRemoteDescription);
+        } else {
+          createOffer();
+        }
       }
     };
 
@@ -463,9 +467,9 @@ RTCMediaHandler.prototype = {
       this.peerConnection.setRemoteDescription(
         description,
         onSuccess,
-        function(){
-          console.log("----------setRemoteDescription with error");
-          onFailure();
+        function(e){
+          console.log("----------setRemoteDescription with error : "+e);
+          onFailure(e);
         }
       );
     }

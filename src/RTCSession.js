@@ -797,11 +797,18 @@
               logger.log("reconnecting with ACK sdp and current local description", this.ua);
               var localDescription = this.rtcMediaHandler.peerConnection.localDescription;
               logger.log(localDescription.sdp, this.ua);
-              this.reconnectRtcMediaHandler(function(){
+              this.rtcMediaHandler.onMessage(request.body, function(){
                 logger.log("reconnect success", self.ua);
+                self.started('local', undefined, true);
               }, function(){
                 logger.log("reconnect failure", self.ua);
-              }, {isAnswer: true, remoteSdp: request.body, isReconnect: true, localDescription: localDescription});
+              });
+//              this.reconnectRtcMediaHandler(function(){
+//                logger.log("reconnect success", self.ua);
+//                self.started('local', undefined, true);
+//              }, function(){
+//                logger.log("reconnect failure", self.ua);
+//              }, {isAnswer: false, remoteSdp: request.body, isReconnect: true, localDescription: localDescription});
             }
           }
           break;
