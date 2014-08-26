@@ -389,7 +389,7 @@
     };
 
     this.initialRemoteSdp = this.initialRemoteSdp || self.rtcMediaHandler.peerConnection.remoteDescription.sdp;
-    var sdp = this.request.body || this.initialRemoteSdp;
+    var sdp = this.request.body;
     if(sdp.length === 0) {
       logger.log("empty sdp");
     }
@@ -405,6 +405,7 @@
 
     this.initRtcMediaHandler(options);
     this.rtcMediaHandler.localMedia = localMedia;
+    this.rtcMediaHandler.createOfferConstraints = options["createOfferConstraints"];
     this.connectRtcMediaHandler(localMedia, function(){
         self.started('local', undefined, true);
         connectSuccess();

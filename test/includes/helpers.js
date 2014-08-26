@@ -204,9 +204,9 @@ TestExSIP.Helpers = {
         close: function(){console.log("-- RTCPeerConnection.close()")},
         setRemoteDescription: function(description, success, failure){console.log("-- RTCPeerConnection.setRemoteDescription() : "+ExSIP.Utils.toString(description));this.remoteDescription = description; if(success){success();}},
         addStream: function(){console.log("-- RTCPeerConnection.addStream()")},
-        createOffer: function(success){
-          console.log("-- RTCPeerConnection.createOffer()");
-          TestExSIP.Helpers.createOffer();
+        createOffer: function(success, failure, options){
+          console.log("-- RTCPeerConnection.createOffer() : ", JSON.stringify(options));
+          TestExSIP.Helpers.createOffer(options);
           this.signalingState = 'have-local-offer';
           success(TestExSIP.Helpers.createDescription(this.createDescriptionOptions()));
         },
@@ -365,7 +365,7 @@ TestExSIP.Helpers = {
   createAnswer: function(){
   },
 
-  createOffer: function(){
+  createOffer: function(options){
   },
 
   setLocalDescription: function(localDescription){

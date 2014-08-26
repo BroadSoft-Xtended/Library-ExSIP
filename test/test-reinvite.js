@@ -27,12 +27,20 @@ test('reinvite with no sdp after audio only reinvite', function() {
   ua.transport.onMessage({data: TestExSIP.Helpers.ackResponse(ua)});
 
   // receiving empty reinvite - should use initial remote description with video
-  var createOfferCalled = true;
-  TestExSIP.Helpers.createOffer = function(){createOfferCalled = true};
+  var createOfferCalled = true; var createOfferConstraints = null;
+  TestExSIP.Helpers.createOffer = function(options){
+    createOfferCalled = true;
+    createOfferConstraints = options
+  };
   ua.transport.onMessage({data: TestExSIP.Helpers.inviteRequest(ua, {noSdp: true, branch: "z9hG4bK-524287-1"})});
   TestExSIP.Helpers.triggerOnIceCandidate(session);
-  strictEqual(session.rtcMediaHandler.peerConnection.remoteDescription.hasVideo(), true);
   strictEqual(createOfferCalled, true, "should call createOffer");
+  deepEqual(createOfferConstraints, {
+    "mandatory": {
+      "OfferToReceiveAudio": true,
+      "OfferToReceiveVideo": true
+    }
+  }, 'should have video set but was '+JSON.stringify(createOfferConstraints));
 });
 test('reinvite with no sdp and ACK with sdp', function() {
   var onReInviteEventReceived = false;
