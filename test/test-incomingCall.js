@@ -31,3 +31,25 @@ test('initial invite without sdp', function() {
   strictEqual(answerMsg.status_code, 200);
   notStrictEqual(answerMsg.body, '', 'should have sdp');
 });
+test('INFO received after INVITE', function() {
+  var answerMsg = TestExSIP.Helpers.receiveInviteAndAnswer();
+  var started = false;
+  session.on('started', function(e) {
+    started = true;
+  });
+  var sdp = '<?xml version="1.0" encoding="utf-8"?>\r\n'+
+    '<media_control>\r\n'+
+    '<vc_primitive>\r\n'+
+    '<to_encoder>\r\n'+
+    '<picture_fast_update/>\r\n'+
+    '</to_encoder>\r\n'+
+    '</vc_primitive>\r\n'+
+    '</media_control>\r\n'+
+    '\r\n';
+  TestExSIP.Helpers.requestFor(answerMsg, {method: 'INFO',
+    content_type: 'application/media_control+xml', branch: 'z9hG4bK-524287-1---8b28117fe385ce21', sdp: sdp});
+
+  var infoAnswerMsg = TestExSIP.Helpers.popMessageSent(ua);
+  strictEqual(infoAnswerMsg.status_code, 200);
+  strictEqual(started, true, "should trigger started in order to update video streams");
+});

@@ -842,6 +842,10 @@
             if (contentType && (contentType.match(/^application\/dtmf-relay/i))) {
               new DTMF(this).init_incoming(request);
             }
+            else if (contentType && (contentType.match(/^application\/media_control\+xml/i))) {
+              request.reply(200);
+              self.started('local', undefined, true);
+            }
           }
           break;
         case ExSIP.C.REFER:

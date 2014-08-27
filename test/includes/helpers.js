@@ -45,6 +45,11 @@ TestExSIP.Helpers = {
     ua.transport.onMessage({data: this.inviteResponse(ua, options)});
   },
 
+  requestFor: function(request, options) {
+    options = TestExSIP.Helpers.mergeOptions(request, options);
+    ua.transport.onMessage({data: this.inviteRequest(ua, options)});
+  },
+
   mergeOptions: function(request, options) {
     options = options || {};
     options = this.merge(options,  {cseq: request.cseq, from_tag: request.from_tag, from: request.from.toString(),
@@ -61,6 +66,8 @@ TestExSIP.Helpers = {
     strictEqual(answerMsg.status_code, 200);
 
     this.responseFor(answerMsg, {method: ExSIP.C.ACK});
+
+    return answerMsg;
   },
 
   byeRequestFor: function(request, options) {
@@ -327,10 +334,22 @@ TestExSIP.Helpers = {
     return TestExSIP.Helpers.createSIPMessage(ua, sip);
   },
 
+  getSdp: function(options) {
+    var sdp = null;
+    if(options["noSdp"]) {
+      sdp = "";
+    } else if(options["sdp"]) {
+      sdp = options["sdp"];
+    } else {
+      sdp = this.createSdp(options);
+    }
+    return sdp;
+  },
+
   inviteResponse: function(ua, options) {
     options = options || {};
 
-    var sdp = options["noSdp"] ? "" : this.createSdp(options);
+    var sdp = this.getSdp(options);
 
     return this.sipResponseMessage(options, sdp);
   },
@@ -362,7 +381,8 @@ TestExSIP.Helpers = {
 
   inviteRequest: function(ua, options) {
     options = options || {};
-    var sdp = options["noSdp"] ? "" : this.createSdp(options);
+
+    var sdp = this.getSdp(options);
 
     return this.sipRequestMessage(options, sdp);
   },
