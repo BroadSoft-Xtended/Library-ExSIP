@@ -822,8 +822,8 @@
 
             var description = new ExSIP.WebRTC.RTCSessionDescription({type: "offer", sdp: request.body});
             var oldDescription = this.rtcMediaHandler.peerConnection.remoteDescription;
-            var audioAdd = description.hasActiveAudio() && !oldDescription.hasActiveAudio();
-            var videoAdd = description.hasActiveVideo() && !oldDescription.hasActiveVideo();
+            var audioAdd = description.hasActiveAudio() && (!oldDescription || !oldDescription.hasActiveAudio());
+            var videoAdd = description.hasActiveVideo() && (!oldDescription || !oldDescription.hasActiveVideo());
             if(audioAdd || videoAdd) {
               this.ua.emit("onReInvite", this.ua, {
                 session: this,
