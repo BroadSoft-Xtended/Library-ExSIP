@@ -136,22 +136,6 @@ test('basic as transferee', function() {
   receiveHold();
 
   receiveRefer();
-
-  inviteTargetSentAsTransferee();
-
-  notifySentAndReceivedBye();
-});
-
-test('basic as transferee and target does not answer', function() {
-  sendInviteAndReceiveAnswer();
-
-  receiveHold();
-
-  receiveRefer();
-
-  inviteTargetSentAsTransferee({inviteResponse: {status_code: "487 Request Cancelled"}});
-
-  notifySentAndReceivedBye({sdp: "SIP/2.0 487 Request Cancelled"});
 });
 
 test('attended as transferee', function() {
@@ -160,11 +144,6 @@ test('attended as transferee', function() {
   receiveHold();
 
   receiveRefer({referRequest: {referTo: "<sip:"+transferTarget+"?Replaces=592435881734450904%3Bto-tag%3D9m2n3wq%3Bfrom-tag%3D763231>"}});
-
-  inviteTargetSentAsTransferee();
-  strictEqual(inviteTargetMsg.getHeader("Replaces") || "", "592435881734450904;to-tag=9m2n3wq;from-tag=763231");
-
-  notifySentAndReceivedBye();
 });
 
 function receiveInviteAndAnswer(inviteOptions){
