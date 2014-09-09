@@ -269,16 +269,16 @@
     };
 
     UA.prototype.processRefer = function(sessionToTransfer, referRequest) {
-      var self = this;
+      // var self = this;
       referRequest.reply(202);
-      var inviteSuccess = function() {
-        sessionToTransfer.sendNotifyRequest({sdp: "SIP/2.0 200 OK", subscriptionState: "terminated;reason=noresource"});
-      };
-      var inviteFailure = function(response) {
-        var status = response.status_code + " " + response.reason_phrase;
-        logger.log("Invite failed : "+status);
-        sessionToTransfer.sendNotifyRequest({sdp: "SIP/2.0 "+status, subscriptionState: "terminated;reason=noresource"});
-      };
+      // var inviteSuccess = function() {
+      //   sessionToTransfer.sendNotifyRequest({sdp: "SIP/2.0 200 OK", subscriptionState: "terminated;reason=noresource"});
+      // };
+      // var inviteFailure = function(response) {
+      //   var status = response.status_code + " " + response.reason_phrase;
+      //   logger.log("Invite failed : "+status);
+      //   sessionToTransfer.sendNotifyRequest({sdp: "SIP/2.0 "+status, subscriptionState: "terminated;reason=noresource"});
+      // };
       var notifySuccess = function() {
         var referTo = referRequest.getHeader('Refer-To');
         referTo = ExSIP.Utils.stripSip(referTo);
@@ -289,8 +289,8 @@
         if(referToParts.length > 1) {
           options["extraHeaders"] = ExSIP.Utils.getHeadersFromQuery(referToParts[1]);
         }
-        var transferTargetSession = self.newSession({copy: sessionToTransfer.rtcMediaHandler});
-        transferTargetSession.sendInviteRequest(target, options, inviteSuccess, inviteFailure);
+        // var transferTargetSession = self.newSession({copy: sessionToTransfer.rtcMediaHandler});
+        // transferTargetSession.sendInviteRequest(target, options, inviteSuccess, inviteFailure);
       };
       var notifyFailure = function() {
         logger.log("Notify failed");

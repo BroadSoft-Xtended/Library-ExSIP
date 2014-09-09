@@ -90,10 +90,6 @@ WebRTC.RTCSessionDescription.prototype.getSlidesMedias = function(){
   var slideMedia = this.getVideoMedias('a=content:slides');
   return slideMedia;
 };
-WebRTC.RTCSessionDescription.prototype.getApplicationMedias = function(){
-  var slideMedia = this.getVideoMedias('a=content:slides');
-  return slideMedia.pop();
-};
 WebRTC.RTCSessionDescription.prototype.getVideoMedias = function(filter){
   return this.getMedias('video', filter);
 };
