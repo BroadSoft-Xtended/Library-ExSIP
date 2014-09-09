@@ -269,28 +269,9 @@
     };
 
     UA.prototype.processRefer = function(sessionToTransfer, referRequest) {
-      // var self = this;
       referRequest.reply(202);
-      // var inviteSuccess = function() {
-      //   sessionToTransfer.sendNotifyRequest({sdp: "SIP/2.0 200 OK", subscriptionState: "terminated;reason=noresource"});
-      // };
-      // var inviteFailure = function(response) {
-      //   var status = response.status_code + " " + response.reason_phrase;
-      //   logger.log("Invite failed : "+status);
-      //   sessionToTransfer.sendNotifyRequest({sdp: "SIP/2.0 "+status, subscriptionState: "terminated;reason=noresource"});
-      // };
       var notifySuccess = function() {
-        var referTo = referRequest.getHeader('Refer-To');
-        referTo = ExSIP.Utils.stripSip(referTo);
-        var referToParts = referTo.split("?");
-        var target = referToParts[0];
-        logger.log("Notify successful - sending INVITE to transfer target : "+target);
-        var options = {};
-        if(referToParts.length > 1) {
-          options["extraHeaders"] = ExSIP.Utils.getHeadersFromQuery(referToParts[1]);
-        }
-        // var transferTargetSession = self.newSession({copy: sessionToTransfer.rtcMediaHandler});
-        // transferTargetSession.sendInviteRequest(target, options, inviteSuccess, inviteFailure);
+        logger.log("Notify successful");
       };
       var notifyFailure = function() {
         logger.log("Notify failed");
