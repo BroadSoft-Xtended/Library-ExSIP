@@ -167,6 +167,7 @@ RTCMediaHandler.prototype = {
       onSuccess(self.peerConnection.localDescription.sdp);
     };
 
+    constraints = constraints ||  this.createOfferConstraints;
     logger.log("createAnswer with constraints : "+constraints, this.session.ua);
     this.peerConnection.createAnswer(
       function(sessionDescription){

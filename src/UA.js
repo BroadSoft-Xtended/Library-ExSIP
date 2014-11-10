@@ -398,6 +398,12 @@
         );
     };
 
+    UA.prototype.reconnect = function() {
+      this.stop();
+      this.status = C.STATUS_INIT;
+      this.start();
+    };
+
     /**
      * Connect to the WS server if status = STATUS_INIT.
      * Resume UA after being closed.

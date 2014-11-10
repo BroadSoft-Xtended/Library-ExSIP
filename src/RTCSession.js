@@ -1265,6 +1265,7 @@
       if (this.status === C.STATUS_CONFIRMED) {
         this.ended('system', null, ExSIP.C.causes.REQUEST_TIMEOUT);
       } else {
+        this.ua.reconnect();
         this.failed('system', null, ExSIP.C.causes.CONNECTION_ERROR);
       }
     }

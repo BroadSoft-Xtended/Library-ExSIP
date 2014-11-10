@@ -33,6 +33,22 @@ test('WEBRTC-48 : on 503 response with multiple servers', function() {
   strictEqual(inviteMsg.method, ExSIP.C.INVITE);
 });
 
+test('237388 : route-advance to next WRS when an INVITE is timed-out', function() {
+  var branch = Object.keys(ua.transactions.ict)[0];
+  var clientTransaction = ua.transactions.ict[branch];
+  var firstServer = ua.transport.server.ws_uri;
+
+  var retryTimeInMs = '', retryServer;
+  ua.retry = function(timeInMs, server, count){retryTimeInMs = timeInMs; retryServer = server;}
+  clientTransaction.timer_B();
+
+  // call again
+  TestExSIP.Helpers.connect(ua);
+  var secondServer = ua.transport.server.ws_uri;
+  notStrictEqual(secondServer, firstServer, "Should call again with other WRS server");
+  notStrictEqual(secondServer, '', "Should call again with non empty WRS server");
+});
+
 test('getNextWsServer', function() {
   var nextRetryIn = '';
   ua.retry = function(retry, server){nextRetryIn = retry; new ExSIP.Transport(ua, server);}
