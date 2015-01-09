@@ -254,7 +254,7 @@ Transport.prototype = {
   * @param {event} e
   */
   onError: function(e) {
-    logger.warn('WebSocket connection error: ' + e, this.ua);
+    logger.warn('WebSocket connection error: ' + JSON.stringify(e), this.ua);
   },
 
   /**

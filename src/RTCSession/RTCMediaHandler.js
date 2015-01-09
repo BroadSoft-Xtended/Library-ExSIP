@@ -144,7 +144,7 @@ RTCMediaHandler.prototype = {
         self.setLocalDescription(
           sessionDescription,
           function(){
-            if(!sessionDescription.isActive() || window.mozRTCPeerConnection) {
+            if(!sessionDescription.isActive()) {
               onSuccess(self.peerConnection.localDescription.sdp);
             }
           },
@@ -469,7 +469,7 @@ RTCMediaHandler.prototype = {
         description,
         onSuccess,
         function(e){
-          console.log("----------setRemoteDescription with error : "+e);
+          console.log("----------setRemoteDescription with error : "+JSON.stringify(e));
           onFailure(e);
         }
       );

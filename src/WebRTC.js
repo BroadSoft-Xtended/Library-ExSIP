@@ -395,13 +395,13 @@ if (WebRTC.RTCPeerConnection && WebRTC.RTCPeerConnection.prototype) {
     };
   }
   WebRTC.RTCPeerConnection.prototype.isIceCandidateReady = function(candidate) {
-    if(window.mozRTCPeerConnection && !candidate) {
-      return true;
-    }
-    if(!window.mozRTCPeerConnection && candidate) {
-      return true;
-    }
-    return false;
+    // if(window.mozRTCPeerConnection && !candidate) {
+    //   return true;
+    // }
+    // if(!window.mozRTCPeerConnection && candidate) {
+    //   return true;
+    // }
+    return candidate;
   };
 }
 

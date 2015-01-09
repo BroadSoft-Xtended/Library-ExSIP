@@ -14,11 +14,11 @@ test('terminate before answering', function() {
   var answerMsg = TestExSIP.Helpers.popMessageSent();
   strictEqual(answerMsg.status_code, 486, "Should send a 486 response");
 });
-test('with Firefox and null candidate', function() {
+test('with Firefox and not null candidate', function() {
   ua.transport.onMessage({data: TestExSIP.Helpers.initialInviteRequest(ua, {})});
   window.mozRTCPeerConnection = {};
   session.answer();
-  TestExSIP.Helpers.triggerOnIceCandidate(session, {withoutCandidate: true});
+  TestExSIP.Helpers.triggerOnIceCandidate(session);
   var answerMsg = TestExSIP.Helpers.popMessageSent(ua);
   strictEqual(answerMsg.status_code, 200);
   window.mozRTCPeerConnection = undefined;
