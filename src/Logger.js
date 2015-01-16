@@ -49,23 +49,23 @@ function Logger(logger, category, label) {
 }
 
 Logger.prototype.debug = function(content) {
-  this.logger.debug(this.category, this.label, this.formatMsg(content));
+  this.logger.debug(this.category, this.label, content);
 };
 
 Logger.prototype.log = function(content) {
-  this.logger.log(this.category, this.label, this.formatMsg(content));
+  this.logger.log(this.category, this.label, content);
 };
 
 Logger.prototype.warn = function(content) {
-  this.logger.warn(this.category, this.label, this.formatMsg(content));
+  this.logger.warn(this.category, this.label, content);
 };
 
 Logger.prototype.error = function(content) {
-  this.logger.error(this.category, this.label, this.formatMsg(content));
+  this.logger.error(this.category, this.label, content);
 };
 
 Logger.prototype.formatMsg = function(msg) {
-  return this.getTime()+' : '+this.prefix+' : '+msg;
+  return this.getTime()+' : '+msg;
 };
 Logger.prototype.getTime = function() {
   return this.getTimeFor(new Date());

@@ -52,7 +52,7 @@ Utils.merge_options = function(obj1,obj2){
 };
 
 Utils.str_utf8_length = function(string) {
-  return window.unescape(encodeURIComponent(string)).length;
+  return unescape(encodeURIComponent(string)).length;
 };
 
 Utils.toString = function(object) {

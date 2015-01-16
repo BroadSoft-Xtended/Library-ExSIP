@@ -233,6 +233,7 @@ Transport.prototype = {
 
     // WebSocket text message.
     else {
+      this.logger.log('onMessage : '+this.ua.configuration.trace_sip);
       if (this.ua.configuration.trace_sip === true) {
         this.logger.debug('received WebSocket text message:\n\n' + data + '\n');
       }

@@ -10,7 +10,7 @@ var Logger = require('./Logger');
 function LoggerFactory() {
   var logger,
     levels = { 'error': 0, 'warn': 1, 'log': 2, 'debug': 3 },
-    level = 2,
+    level = 3,
     builtinEnabled = true,
     connector = null;
 
@@ -85,7 +85,7 @@ LoggerFactory.prototype.print = function(target, category, label, content) {
 LoggerFactory.prototype.debug = function(category, label, content) {
   if (this.level === 3) {
     if (this.builtinEnabled) {
-      this.print(console.debug, category, label, content);
+      this.print(console.info, category, label, content);
     }
 
     if (this.connector) {

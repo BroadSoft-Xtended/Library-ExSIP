@@ -35,8 +35,8 @@ else {
 }
 
 // RTCIceCandidate
-if (window.RTCIceCandidate) {
-  WebRTC.RTCIceCandidate = window.RTCIceCandidate;
+if (typeof RTCIceCandidate !== 'undefined') {
+  WebRTC.RTCIceCandidate = RTCIceCandidate;
 }
 else {
   console.log("WebRTC.RTCIceCandidate undefined");
@@ -393,10 +393,10 @@ if (WebRTC.RTCPeerConnection && WebRTC.RTCPeerConnection.prototype) {
     };
   }
   WebRTC.RTCPeerConnection.prototype.isIceCandidateReady = function(candidate) {
-    // if(window.mozRTCPeerConnection && !candidate) {
+    // if(mozRTCPeerConnection && !candidate) {
     //   return true;
     // }
-    // if(!window.mozRTCPeerConnection && candidate) {
+    // if(!mozRTCPeerConnection && candidate) {
     //   return true;
     // }
     return candidate;

@@ -872,6 +872,11 @@ RTCSession.prototype.setACKTimer = function() {
     }
   };
 
+RTCSession.prototype.initRtcMediaHandler = function() {
+  this.rtcMediaHandler = new RTCSession_RTCMediaHandler(this, {
+    constraints: {"optional": [{'DtlsSrtpKeyAgreement': 'true'}]}
+  });
+};
   /**
    * Session Management
    */
@@ -951,9 +956,7 @@ RTCSession.prototype.init_incoming = function(request) {
   }
 
   //Initialize Media Session
-  this.rtcMediaHandler = new RTCSession_RTCMediaHandler(this, {
-    constraints: {"optional": [{'DtlsSrtpKeyAgreement': 'true'}]}
-    });
+  this.initRtcMediaHandler();
 
   if (request.body) {
     this.rtcMediaHandler.onMessage(
@@ -1640,6 +1643,7 @@ RTCSession.prototype.createDialog = function(message, type, early) {
 
     early_dialog = this.earlyDialogs[id];
 
+    console.log('----- createDialog : '+early+", "+early_dialog);
   // Early Dialog
   if (early) {
     if (early_dialog) {
@@ -2188,131 +2192,6 @@ RTCSession.prototype.sendReinvite = function(options) {
   );
 };
 
-
-/**
- * Reception of Response for Initial INVITE
- */
-RTCSession.prototype.receiveInviteResponse = function(response) {
-  var dialog,
-    session = this;
-
-  // Handle 2XX retransmissions and responses from forked requests
-  if (this.dialog && (response.status_code >=200 && response.status_code <=299)) {
-
-    /*
-     * If it is a retransmission from the endpoint that established
-     * the dialog, send an ACK
-     */
-    if (this.dialog.id.call_id === response.call_id &&
-        this.dialog.id.local_tag === response.from_tag &&
-        this.dialog.id.remote_tag === response.to_tag) {
-      this.sendRequest(ExSIP_C.ACK);
-      return;
-    }
-
-    // If not, send an ACK  and terminate
-    else  {
-      dialog = new Dialog(this, response, 'UAC');
-
-      if (dialog.error !== undefined) {
-        this.logger.error(dialog.error);
-        return;
-      }
-
-      dialog.sendRequest({
-          owner: {status: C.STATUS_TERMINATED},
-          onRequestTimeout: function(){},
-          onTransportError: function(){},
-          onDialogError: function(){},
-          receiveResponse: function(){}
-        }, ExSIP_C.ACK);
-
-      dialog.sendRequest({
-          owner: {status: C.STATUS_TERMINATED},
-          onRequestTimeout: function(){},
-          onTransportError: function(){},
-          onDialogError: function(){},
-          receiveResponse: function(){}
-        }, ExSIP_C.BYE);
-      return;
-    }
-
-  }
-
-  // Proceed to cancellation if the user requested.
-  if(this.isCanceled) {
-    // Remove the flag. We are done.
-    this.isCanceled = false;
-
-    if(response.status_code >= 100 && response.status_code < 200) {
-      this.request.cancel(this.cancelReason);
-    } else if(response.status_code >= 200 && response.status_code < 299) {
-      this.acceptAndTerminate(response);
-    }
-    return;
-  }
-
-  if(this.status !== C.STATUS_INVITE_SENT && this.status !== C.STATUS_1XX_RECEIVED) {
-    return;
-  }
-
-  switch(true) {
-    case /^100$/.test(response.status_code):
-      break;
-    case /^1[0-9]{2}$/.test(response.status_code):
-      if(this.status !== C.STATUS_INVITE_SENT && this.status !== C.STATUS_1XX_RECEIVED) {
-        break;
-      }
-
-      // Do nothing with 1xx responses without To tag.
-      if(!response.to_tag) {
-        this.logger.warn('1xx response received without to tag');
-        break;
-      }
-
-      // Create Early Dialog if 1XX comes with contact
-      if(response.hasHeader('contact')) {
-        // An error on dialog creation will fire 'failed' event
-        if(!this.createDialog(response, 'UAC', true)) {
-          break;
-        }
-      }
-
-      this.status = C.STATUS_1XX_RECEIVED;
-      this.progress('remote', response);
-
-      if (!response.body) {
-        break;
-      }
-
-      this.rtcMediaHandler.onMessage(
-        'pranswer',
-        response.body,
-        /*
-        * OnSuccess.
-        * SDP Answer fits with Offer.
-        */
-        function() { },
-        /*
-        * OnFailure.
-        * SDP Answer does not fit with Offer.
-        */
-        function(e) {
-          session.logger.warn(e);
-          session.earlyDialogs[response.call_id + response.from_tag + response.to_tag].terminate();
-        }
-      );
-      break;
-    case /^2[0-9]{2}$/.test(response.status_code):
-      this.status = C.STATUS_CONFIRMED;
-
-      if(!response.body) {
-        this.acceptAndTerminate(response, 400, ExSIP_C.causes.MISSING_SDP);
-        this.failed('remote', response, ExSIP_C.causes.BAD_MEDIA_DESCRIPTION);
-        break;
-      }
-    }
-  };
 
   /**
    * Callback to be called from UA instance when RequestTimeout occurs

@@ -1,49 +1,51 @@
 {
-    "name": "exsip",
-    "title": "ExSIP",
-    "description": "BroadSoft Javascript SIP library",
-    "version": "2.0.0",
-    "homepage": "http://www.broadsoft.com",
-    "author": "BroadSoft, Inc.",
-    "contributors": [
-        {
-            "url": ""
-        }
-    ],
-    "repository": {
-        "type": "git",
-        "url": ""
-    },
-    "keywords": [
-        "sip",
-        "websocket",
-        "webrtc",
-        "library"
-    ],
-	"dependencies": {
-		"sdp-transform": "~0.6.1",
-		"ws": "~0.4.32"
-	},
-	"devDependencies": {
-		"grunt": "~0.4.5",
-		"grunt-contrib-jshint": "~0.10.0",
-		"grunt-contrib-concat": "~0.5.0",
-		"grunt-contrib-nodeunit": "~0.4.1",
-		"grunt-contrib-uglify": "~0.6.0",
-		"grunt-contrib-watch": "~0.6.1",
-		"grunt-contrib-symlink": "~0.3.0",
-		"grunt-browserify": "~3.0.1",
-		"grunt-jsdoc": "~0.5.7",
-        "grunt-qunit-serverless": ">=0.2.6",
-        "grunt-notify": ">=0.2.6",
-        "grunt-bumpx": "0.1.5",
-		"pegjs": "0.7.0"
-	},
-    "engines": {
-        "node": ">=0.8"
-    },
-    "license": "MIT",
-    "scripts": {
-        "test": "grunt travis --verbose"
+  "name": "exsip",
+  "title": "ExSIP",
+  "description": "BroadSoft Javascript SIP library",
+  "version": "2.0.0",
+  "homepage": "http://www.broadsoft.com",
+  "author": "BroadSoft, Inc.",
+  "contributors": [
+    {
+      "url": ""
     }
+  ],
+  "main": "src/ExSIP.js",
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "keywords": [
+    "sip",
+    "websocket",
+    "webrtc",
+    "library"
+  ],
+  "dependencies": {
+    "sdp-transform": "~0.6.1",
+    "ws": "~0.4.32"
+  },
+  "devDependencies": {
+    "nodeunit": "0.9.0",
+    "grunt": "~0.4.5",
+    "grunt-contrib-jshint": "~0.10.0",
+    "grunt-contrib-concat": "~0.5.0",
+    "grunt-contrib-nodeunit": "~0.4.1",
+    "grunt-contrib-uglify": "~0.6.0",
+    "grunt-contrib-watch": "~0.6.1",
+    "grunt-contrib-symlink": "~0.3.0",
+    "grunt-browserify": "~3.0.1",
+    "grunt-jsdoc": "~0.5.7",
+    "grunt-qunit-serverless": ">=0.2.6",
+    "grunt-notify": ">=0.2.6",
+    "grunt-bumpx": "0.1.5",
+    "pegjs": "0.7.0"
+  },
+  "engines": {
+    "node": ">=0.8"
+  },
+  "license": "MIT",
+  "scripts": {
+    "test": "grunt travis --verbose"
+  }
 }

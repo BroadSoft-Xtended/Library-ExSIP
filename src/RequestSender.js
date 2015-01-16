@@ -67,7 +67,7 @@ RequestSender.prototype = {
   receiveResponse: function(response) {
     var cseq, challenge, authorization_header_name,
       status_code = response.status_code;
-
+    console.log('response : '+response);
     /*
     * Authentication
     * Authenticate once. _challenged_ flag used to avoid infinite authentications.

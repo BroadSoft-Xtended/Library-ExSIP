@@ -38,6 +38,7 @@ module.exports.C = C;
 var ExSIP_C = require('./Constants');
 var EventEmitter = require('./EventEmitter');
 var Timers = require('./Timers');
+var Utils = require('./Utils');
 
 
 function NonInviteClientTransaction(request_sender, request, transport) {
@@ -117,7 +118,6 @@ NonInviteClientTransaction.prototype.receiveResponse = function(response) {
   var
     tr = this,
     status_code = response.status_code;
-
   if(status_code < 200) {
     switch(this.state) {
       case C.STATUS_TRYING:
@@ -136,6 +136,7 @@ NonInviteClientTransaction.prototype.receiveResponse = function(response) {
         if(status_code === 408) {
           this.request_sender.onRequestTimeout();
         } else {
+          console.log(this.request_sender);
           this.request_sender.receiveResponse(response);
         }
 

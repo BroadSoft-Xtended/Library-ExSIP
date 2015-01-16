@@ -65,7 +65,8 @@ module.exports = function(grunt) {
 					RTCPeerConnection: false,
 					webkitRTCSessionDescription: false,
 					mozRTCSessionDescription: false,
-					RTCSessionDescription: false
+					RTCSessionDescription: false,
+					RTCIceCandidate: false
 				}
 			},
 			// Lint JS files separately.
@@ -86,6 +87,17 @@ module.exports = function(grunt) {
 					browserifyOptions: {
 						standalone: 'ExSIP',
 						externalRequireName: 'KKKK'
+					}
+				}
+			},
+			test: {
+				files: {
+					'builds/test-<%= pkg.name %>-<%= pkg.version %>.js': [ 'test/test-Call.js' ]
+				},
+				options: {
+					browserifyOptions: {
+						standalone: 'test',
+						externalRequireName: 'test'
 					}
 				}
 			}
@@ -111,6 +123,13 @@ module.exports = function(grunt) {
 	        }
 	      }
 	    },
+
+		nodeunit: {
+			all: [ 'test/*.js' ],
+			options: {
+				reporter: 'default'
+			}
+		},
 
 		uglify: {
 			dist: {
@@ -251,7 +270,7 @@ module.exports = function(grunt) {
 	grunt.registerTask('devel', [ 'grammar' ]);
 
 	// Test task (nodeunit).
-	grunt.registerTask('test', [ 'qunit-serverless', 'notify:qunit' ]);
+	grunt.registerTask('test', [ 'nodeunit', 'notify:qunit' ]);
 
 	// Taks for building builds/jssip-X.Y.Z.js and builds/jssip-last.js symlink.
 	// NOTE: This task assumes that 'grunt devel' has been already executed.

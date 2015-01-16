@@ -542,3 +542,5 @@ function IncomingResponse(ua) {
   this.status_code = null;
   this.reason_phrase = null;
 }
+
+IncomingResponse.prototype = new IncomingMessage();

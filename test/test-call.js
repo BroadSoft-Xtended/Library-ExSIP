@@ -1,19 +1,25 @@
-module( "call", {
-  setup: function() {
-    ua = TestExSIP.Helpers.createFakeUA({trace_sip: true, use_preloaded_route: false});
-    ua.on('newRTCSession', function(e){ session = e.data.session; });
-    TestExSIP.Helpers.mockWebRTC();
-    TestExSIP.Helpers.startAndConnect(ua);
+require('./include/common');
+var testUA = require('./include/testUA');
+var ExSIP = require('../');
 
-    ua.transport.onMessage({data: TestExSIP.Helpers.ringingResponse(ua)});
-    ua.transport.onMessage({data: TestExSIP.Helpers.inviteResponse(ua)});
-  }, teardown: function() {
+
+module.exports = {
+  setUp: function (callback) {
+    ua = testUA.createFakeUA({trace_sip: true, use_preloaded_route: false});
+    ua.on('newRTCSession', function(e){ session = e.data.session; });
+    testUA.mockWebRTC();
+    testUA.startAndConnect(ua);
+
+    ua.transport.onMessage({data: testUA.ringingResponse(ua)});
+    ua.transport.onMessage({data: testUA.inviteResponse(ua)});
+    callback();
+  },
+  'hangup': function(test) {
+    session.terminate();
+    var byeMsg = testUA.popMessageSentAndClear(ua);
+    testUA.responseFor(byeMsg, {method: 'BYE', noSdp: true});
+    var ackMsg = testUA.popMessageSentAndClear(ua);
+    test.strictEqual(ackMsg.method, ExSIP.C.ACK);
+    test.done();
   }
-});
-test('hangup', function() {
-  session.terminate();
-  var byeMsg = TestExSIP.Helpers.popMessageSentAndClear(ua);
-  TestExSIP.Helpers.responseFor(byeMsg, {method: "BYE", noSdp: true});
-  var ackMsg = TestExSIP.Helpers.popMessageSentAndClear(ua);
-  strictEqual(ackMsg.method, ExSIP.C.ACK);
-});
+}
