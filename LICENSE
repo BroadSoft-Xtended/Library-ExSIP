@@ -1,9 +1,15 @@
+<<<<<<< HEAD
 Name: ExSIP
 Maintainer: BroadSoft, Inc.
 Copyright (c) 2013 BroadSoft, Inc.
 
 Fork of JsSIP 0.3.7
 Copyright (c) 2012-2013 José Luis Millán - Versatica <http://www.versatica.com>
+=======
+Name: JsSIP
+Maintainer: José Luis Millán <jmillan@aliax.net>
+Copyright (c) 2012-2014 José Luis Millán - Versatica <http://www.versatica.com>
+>>>>>>> jssip050
 
 
 License: The MIT License

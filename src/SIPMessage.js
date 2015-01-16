@@ -1,39 +1,288 @@
-/**
- * @fileoverview SIP Message
- */
-
-(function(ExSIP) {
-var
-  SIPMessage,
-  OutgoingRequest,
-  IncomingMessage,
-  IncomingRequest,
-  IncomingResponse,
-  logger = new ExSIP.Logger(ExSIP.name +' | '+ 'SIP MESSAGE');
-
-/**
- * @augments SIPMessage
- * @class Class for SIP messages.
- */
-SIPMessage = function() {
-  this.headers = {};
+module.exports = {
+  OutgoingRequest: OutgoingRequest,
+  IncomingRequest: IncomingRequest,
+  IncomingResponse: IncomingResponse
 };
 
-SIPMessage.prototype = {
+
+/**
+ * Dependencies.
+ */
+var ExSIP_C = require('./Constants');
+var Utils = require('./Utils');
+var NameAddrHeader = require('./NameAddrHeader');
+var Grammar = require('./Grammar');
+
+
+/**
+ * -param {String} method request method
+ * -param {String} ruri request uri
+ * -param {UA} ua
+ * -param {Object} params parameters that will have priority over ua.configuration parameters:
+ * <br>
+ *  - cseq, call_id, from_tag, from_uri, from_display_name, to_uri, to_tag, route_set
+ * -param {Object} [headers] extra headers
+ * -param {String} [body]
+ */
+function OutgoingRequest(method, ruri, ua, params, extraHeaders, body) {
+  var
+    to,
+    from,
+    call_id,
+    cseq;
+
+  params = params || {};
+
+  // Mandatory parameters check
+  if(!method || !ruri || !ua) {
+    return null;
+  }
+
+  this.logger = ua.getLogger('ExSIP.sipmessage');
+  this.ua = ua;
+  this.headers = {};
+  this.method = method;
+  this.ruri = ruri;
+  this.body = body;
+  this.extraHeaders = extraHeaders && extraHeaders.slice() || [];
+
+  // Fill the Common SIP Request Headers
+
+  // Route
+  if (params.route_set) {
+    this.setHeader('route', params.route_set);
+  } else if (ua.configuration.use_preloaded_route){
+    this.setHeader('route', ua.transport.server.sip_uri);
+  }
+
+  // Via
+  // Empty Via header. Will be filled by the client transaction.
+  this.setHeader('via', '');
+
+  // Max-Forwards
+  this.setHeader('max-forwards', ExSIP_C.MAX_FORWARDS);
+
+  // To
+  to = (params.to_display_name || params.to_display_name === 0) ? '"' + params.to_display_name + '" ' : '';
+  var toUri = (params.to_uri || ruri);
+  to += '<' + (ua.configuration.enable_ims && toUri.isPhoneNumber() && toUri.toString().indexOf(';user=phone') === -1 ? toUri +";user=phone" : toUri) + '>';
+  to += params.to_tag ? ';tag=' + params.to_tag : '';
+  this.to = new NameAddrHeader.parse(to);
+  this.setHeader('to', to);
+
+
+  // From
+  var fromName;
+  if (params.from_display_name || params.from_display_name === 0) {
+    fromName = '"' + params.from_display_name + '" ';
+  } else if (ua.configuration.display_name) {
+    fromName = '"' + ua.configuration.display_name + '" ';
+  } else {
+    fromName = '';
+  }
+  var fromUri = (params.from_uri || ua.configuration.uri);
+  fromName += '<' + (ua.configuration.enable_ims && fromUri.isPhoneNumber() && fromUri.toString().indexOf(';user=phone') === -1 ? fromUri +";user=phone" : fromUri) + '>';
+  var fromTag = ';tag=' + (params.from_tag || Utils.newTag());
+  from = fromName + fromTag;
+  this.from = new NameAddrHeader.parse(from);
+  this.setHeader('from', from);
+
+  // Call-ID
+  call_id = params.call_id || (ua.configuration.exsip_id + Utils.createRandomToken(15));
+  this.call_id = call_id;
+  this.setHeader('call-id', call_id);
+
+  // CSeq
+  cseq = params.cseq || Math.floor(Math.random() * 10000);
+  this.cseq = cseq;
+  this.setHeader('cseq', cseq + ' ' + method);
+
+  // P-Asserted-Identity
+  if(ua.configuration.enable_ims) {
+    this.setHeader('P-Asserted-Identity', fromName);
+  } else if(ua.configuration.p_asserted_identity) {
+    this.setHeader('P-Asserted-Identity', ua.configuration.p_asserted_identity);
+  }
+}
+
+OutgoingRequest.prototype = {
+  /**
+   * Replace the the given header by the given value.
+   * -param {String} name header name
+   * -param {String | Array} value header value
+   */
+  setHeader: function(name, value) {
+    this.headers[Utils.headerize(name)] = (value instanceof Array) ? value : [value];
+  },
+
   /**
    * Get the value of the given header name at the given position.
-   * @param {String} name header name
-   * @param {Number} [idx=0] header index
-   * @returns {String|undefined} Returns the specified header, null if header doesn't exist.
+   * -param {String} name header name
+   * -returns {String|undefined} Returns the specified header, null if header doesn't exist.
    */
-  getHeader: function(name, idx) {
-    var header = this.headers[ExSIP.Utils.headerize(name)];
-
-    idx = idx || 0;
+  getHeader: function(name) {
+    var regexp, idx,
+      length = this.extraHeaders.length,
+      header = this.headers[Utils.headerize(name)];
 
     if(header) {
-      if(header[idx]) {
-        return header[idx].raw;
+      if(header[0]) {
+        return header[0];
+      }
+    } else {
+      regexp = new RegExp('^\\s*'+ name +'\\s*:','i');
+      for (idx=0; idx<length; idx++) {
+        header = this.extraHeaders[idx];
+        if (regexp.test(header)) {
+          return header.substring(header.indexOf(':')+1).trim();
+        }
+      }
+    }
+
+    return;
+  },
+
+  /**
+   * Get the header/s of the given name.
+   * -param {String} name header name
+   * -returns {Array} Array with all the headers of the specified name.
+   */
+  getHeaders: function(name) {
+    var idx, length, regexp,
+      header = this.headers[Utils.headerize(name)],
+      result = [];
+
+    if (header) {
+      length = header.length;
+      for (idx = 0; idx < length; idx++) {
+        result.push(header[idx]);
+      }
+      return result;
+    } else {
+      length = this.extraHeaders.length;
+      regexp = new RegExp('^\\s*'+ name +'\\s*:','i');
+      for (idx=0; idx<length; idx++) {
+        header = this.extraHeaders[idx];
+        if (regexp.test(header)) {
+          result.push(header.substring(header.indexOf(':')+1).trim());
+        }
+      }
+      return result;
+    }
+  },
+
+  /**
+   * Verify the existence of the given header.
+   * -param {String} name header name
+   * -returns {boolean} true if header with given name exists, false otherwise
+   */
+  hasHeader: function(name) {
+    var regexp, idx,
+      length = this.extraHeaders.length;
+
+    if (this.headers[Utils.headerize(name)]) {
+      return true;
+    } else {
+      regexp = new RegExp('^\\s*'+ name +'\\s*:','i');
+      for (idx=0; idx<length; idx++) {
+        if (regexp.test(this.extraHeaders[idx])) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  },
+
+  toString: function() {
+    var msg = '', header, length, idx,
+      supported = [];
+
+    msg += this.method + ' ' + this.ruri + ' SIP/2.0\r\n';
+
+    for (header in this.headers) {
+      length = this.headers[header].length;
+      for (idx = 0; idx < length; idx++) {
+        msg += header + ': ' + this.headers[header][idx] + '\r\n';
+      }
+    }
+
+    length = this.extraHeaders.length;
+    for (idx = 0; idx < length; idx++) {
+      msg += this.extraHeaders[idx].trim() +'\r\n';
+    }
+
+    // Supported
+    switch (this.method) {
+      case ExSIP_C.REGISTER:
+        supported.push('path', 'gruu');
+        break;
+      case ExSIP_C.INVITE:
+        if (this.ua.contact.pub_gruu || this.ua.contact.temp_gruu) {
+          supported.push('gruu');
+        }
+        break;
+    }
+
+    supported.push('outbound');
+
+    // Allow
+    msg += 'Allow: '+ ExSIP_C.ALLOWED_METHODS +'\r\n';
+
+    msg += 'Supported: ' +  supported +'\r\n';
+    msg += 'User-Agent: ' + ExSIP_C.USER_AGENT +'\r\n';
+
+    if(this.body) {
+      length = Utils.str_utf8_length(this.body);
+      msg += 'Content-Length: ' + length + '\r\n\r\n';
+      msg += this.body;
+    } else {
+      msg += 'Content-Length: 0\r\n\r\n';
+    }
+
+    return msg;
+  }
+};
+
+
+function IncomingMessage(){
+  this.data = null;
+  this.headers = null;
+  this.method =  null;
+  this.via = null;
+  this.via_branch = null;
+  this.call_id = null;
+  this.cseq = null;
+  this.from = null;
+  this.from_tag = null;
+  this.to = null;
+  this.to_tag = null;
+  this.body = null;
+}
+
+IncomingMessage.prototype = {
+  /**
+  * Insert a header of the given name and value into the last position of the
+  * header array.
+  */
+  addHeader: function(name, value) {
+    var header = { raw: value };
+
+    name = Utils.headerize(name);
+
+    if(this.headers[name]) {
+      this.headers[name].push(header);
+    } else {
+      this.headers[name] = [header];
+    }
+  },
+
+  getHeader: function(name) {
+    var header = this.headers[Utils.headerize(name)];
+
+    if(header) {
+      if(header[0]) {
+        return header[0].raw;
       }
     } else {
       return;
@@ -42,12 +291,10 @@ SIPMessage.prototype = {
 
   /**
    * Get the header/s of the given name.
-   * @param {String} name header name
-   * @returns {Array} Array with all the headers of the specified name.
    */
-  getHeaderAll: function(name) {
+  getHeaders: function(name) {
     var idx, length,
-      header = this.headers[ExSIP.Utils.headerize(name)],
+      header = this.headers[Utils.headerize(name)],
       result = [];
 
     if(!header) {
@@ -64,64 +311,29 @@ SIPMessage.prototype = {
 
   /**
    * Verify the existence of the given header.
-   * @param {String} name header name
-   * @returns {boolean} true if header with given name exists, false otherwise
    */
   hasHeader: function(name) {
-    return(this.headers[ExSIP.Utils.headerize(name)]) ? true : false;
+    return(this.headers[Utils.headerize(name)]) ? true : false;
   },
 
   /**
-   * Insert a header of the given name and value into the last position of the
-   * header array.
-   * @param {String} name header name
-   * @param {String} value header value
-   */
-  addHeader: function(name, value) {
-    var header = { raw: value };
-
-    name = ExSIP.Utils.headerize(name);
-
-    if(this.headers[name]) {
-      this.headers[name].push(header);
-    } else {
-      this.headers[name] = [header];
-    }
-  },
-
-  /**
-   * Count the number of headers of the given header name.
-   * @param {String} name header name
-   * @returns {Number} Number of headers with the given name
-   */
-  countHeader: function(name) {
-    var header = this.headers[ExSIP.Utils.headerize(name)];
-
-    if(header) {
-      return header.length;
-    } else {
-      return 0;
-    }
-  },
-
-  /**
-   * Parse the given header on the given index.
-   * @param {String} name header name
-   * @param {Number} [idx=0] header index
-   * @returns {Object|undefined} Parsed header object, undefined if the header is not present or in case of a parsing error.
-   */
+  * Parse the given header on the given index.
+  * -param {String} name header name
+  * -param {Number} [idx=0] header index
+  * -returns {Object|undefined} Parsed header object, undefined if the header is not present or in case of a parsing error.
+  */
   parseHeader: function(name, idx) {
     var header, value, parsed;
 
-    name = ExSIP.Utils.headerize(name);
+    name = Utils.headerize(name);
 
     idx = idx || 0;
 
     if(!this.headers[name]) {
-      logger.log('header "' + name + '" not present', this.ua);
+      this.logger.log('header "' + name + '" not present');
       return;
     } else if(idx >= this.headers[name].length) {
-      logger.log('not so many "' + name + '" headers present', this.ua);
+      this.logger.log('not so many "' + name + '" headers present');
       return;
     }
 
@@ -133,11 +345,11 @@ SIPMessage.prototype = {
     }
 
     //substitute '-' by '_' for grammar rule matching.
-    parsed = ExSIP.Grammar.parse(value, name.replace(/-/g, '_'));
+    parsed = Grammar.parse(value, name.replace(/-/g, '_'));
 
     if(parsed === -1) {
       this.headers[name].splice(idx, 1); //delete from headers
-      logger.warn('error parsing "' + name + '" header field with value "' + value + '"', this.ua);
+      this.logger.warn('error parsing "' + name + '" header field with value "' + value + '"');
       return;
     } else {
       header.parsed = parsed;
@@ -147,11 +359,11 @@ SIPMessage.prototype = {
 
   /**
    * Message Header attribute selector. Alias of parseHeader.
-   * @param {String} name header name
-   * @param {Number} [idx=0] header index
-   * @returns {Object|undefined} Parsed header object, undefined if the header is not present or in case of a parsing error.
+   * -param {String} name header name
+   * -param {Number} [idx=0] header index
+   * -returns {Object|undefined} Parsed header object, undefined if the header is not present or in case of a parsing error.
    *
-   * @example
+   * -example
    * message.s('via',3).port
    */
   s: function(name, idx) {
@@ -159,188 +371,39 @@ SIPMessage.prototype = {
   },
 
   /**
-   * Replace the value of the given header by the value.
-   * @param {String} name header name
-   * @param {String} value header value
-   */
+  * Replace the value of the given header by the value.
+  * -param {String} name header name
+  * -param {String} value header value
+  */
   setHeader: function(name, value) {
     var header = { raw: value };
-    this.headers[ExSIP.Utils.headerize(name)] = [header];
+    this.headers[Utils.headerize(name)] = [header];
   }
 };
 
-  /**
- * @augments ExSIP
- * @class Class for outgoing SIP request.
- * @param {String} method request method
- * @param {String} ruri request uri
- * @param {ExSIP.UA} ua
- * @param {Object} params parameters that will have priority over ua.configuration parameters:
- * <br>
- *  - cseq, call_id, from_tag, from_uri, from_display_name, to_uri, to_tag, route_set
- * @param {Object} [headers] extra headers
- * @param {String} [body]
- */
-OutgoingRequest = function(method, ruri, ua, params, extraHeaders, body) {
-  SIPMessage.call(this);
-  var
-    to,
-    from, fromName, fromTag,
-    call_id,
-    cseq;
-
-  params = params || {};
-
-  // Mandatory parameters check
-  if(!method || !ruri || !ua) {
-    return null;
-  }
-
+function IncomingRequest(ua) {
+  this.logger = ua.getLogger('ExSIP.sipmessage');
   this.ua = ua;
-  this.method = method;
-  this.ruri = ruri;
-  this.body = body;
-  this.extraHeaders = extraHeaders || [];
-
-  // Fill the Common SIP Request Headers
-
-  // Route
-  if (params.route_set && params.route_set.toString() !== "") {
-    this.setHeader('route', params.route_set);
-  } else if (ua.configuration.use_preloaded_route){
-    this.setHeader('route', ua.transport.server.sip_uri);
-  }
-
-  // Via
-  // Empty Via header. Will be filled by the client transaction.
-  this.setHeader('via', '');
-
-  // Max-Forwards
-  this.setHeader('max-forwards', ExSIP.UA.C.MAX_FORWARDS);
-
-  // To
-  to = (params.to_display_name || params.to_display_name === 0) ? '"' + params.to_display_name + '" ' : '';
-  var toUri = (params.to_uri || ruri);
-  to += '<' + (ua.configuration.enable_ims && toUri.isPhoneNumber() && toUri.toString().indexOf(';user=phone') === -1 ? toUri +";user=phone" : toUri) + '>';
-  to += params.to_tag ? ';tag=' + params.to_tag : '';
-  this.to = new ExSIP.NameAddrHeader.parse(to);
-  this.setHeader('to', to);
-
-  // From
-  if (params.from_display_name || params.from_display_name === 0) {
-    fromName = '"' + params.from_display_name + '" ';
-  } else if (ua.configuration.display_name) {
-    fromName = '"' + ua.configuration.display_name + '" ';
-  } else {
-    fromName = '';
-  }
-  var fromUri = (params.from_uri || ua.configuration.uri);
-  fromName += '<' + (ua.configuration.enable_ims && fromUri.isPhoneNumber() && fromUri.toString().indexOf(';user=phone') === -1 ? fromUri +";user=phone" : fromUri) + '>';
-  fromTag = ';tag=' + (params.from_tag || ExSIP.Utils.newTag());
-  from = fromName + fromTag;
-  this.from = new ExSIP.NameAddrHeader.parse(from);
-  this.setHeader('from', from);
-
-  // Call-ID
-  call_id = params.call_id || (ua.configuration.exsip_id + ExSIP.Utils.createRandomToken(15));
-  this.call_id = call_id;
-  this.setHeader('call-id', call_id);
-
-  // CSeq
-  cseq = params.cseq || Math.floor(Math.random() * 10000);
-  this.cseq = cseq;
-  this.setHeader('cseq', cseq + ' ' + method);
-
-  // P-Asserted-Identity
-  if(ua.configuration.enable_ims) {
-    this.setHeader('P-Asserted-Identity', fromName);
-  } else if(ua.configuration.p_asserted_identity) {
-    this.setHeader('P-Asserted-Identity', ua.configuration.p_asserted_identity);
-  }
-};
-
-OutgoingRequest.prototype = new SIPMessage();
-
-OutgoingRequest.prototype.toString = function() {
-  var msg = '', header, length, idx;
-
-  msg += this.method + ' ' + (this.ua.configuration.enable_ims && this.ruri.isPhoneNumber() ? this.ruri + ";user=phone" : this.ruri) + ' SIP/2.0\r\n';
-
-  for (header in this.headers) {
-    length = this.headers[header].length;
-    for (idx = 0; idx < length; idx++) {
-      msg += header + ': ' + this.headers[header][idx].raw + '\r\n';
-    }
-  }
-
-  length = this.extraHeaders.length;
-  for (idx = 0; idx < length; idx++) {
-    msg += this.extraHeaders[idx] +'\r\n';
-  }
-
-  msg += 'Supported: ' +  ExSIP.UA.C.SUPPORTED +'\r\n';
-  msg += 'User-Agent: ' + ExSIP.C.USER_AGENT +'\r\n';
-
-  if(this.body) {
-    length = ExSIP.Utils.str_utf8_length(this.body);
-    msg += 'Content-Length: ' + length + '\r\n\r\n';
-    msg += this.body;
-  } else {
-    msg += 'Content-Length: 0\r\n\r\n';
-  }
-
-  return msg;
-};
-
-
-  /**
- * @augments ExSIP
- * @class Class for incoming SIP message.
- */
-IncomingMessage = function(){
-  SIPMessage.call(this);
-  this.data = null;
-  this.method =  null;
-  this.via = null;
-  this.via_branch = null;
-  this.call_id = null;
-  this.cseq = null;
-  this.from = null;
-  this.from_tag = null;
-  this.to = null;
-  this.to_tag = null;
-  this.body = null;
-};
-
-IncomingMessage.prototype.toString = function(){
-  return this.data;
-};
-IncomingMessage.prototype = new SIPMessage();
-
-  /**
- * @augments IncomingMessage
- * @class Class for incoming SIP request.
- */
-IncomingRequest = function(ua) {
-  IncomingMessage.call(this);
-  this.ua = ua;
+  this.headers = {};
   this.ruri = null;
   this.transport = null;
   this.server_transaction = null;
-};
+}
+
 IncomingRequest.prototype = new IncomingMessage();
 
 /**
 * Stateful reply.
-* @param {Number} code status code
-* @param {String} reason reason phrase
-* @param {Object} headers extra headers
-* @param {String} body body
-* @param {Function} [onSuccess] onSuccess callback
-* @param {Function} [onFailure] onFailure callback
+* -param {Number} code status code
+* -param {String} reason reason phrase
+* -param {Object} headers extra headers
+* -param {String} body body
+* -param {Function} [onSuccess] onSuccess callback
+* -param {Function} [onFailure] onFailure callback
 */
 IncomingRequest.prototype.reply = function(code, reason, extraHeaders, body, onSuccess, onFailure) {
   var rr, vias, length, idx, response,
+    supported = [],
     to = this.getHeader('To'),
     r = 0,
     v = 0;
@@ -355,27 +418,29 @@ IncomingRequest.prototype.reply = function(code, reason, extraHeaders, body, onS
     throw new TypeError('Invalid reason_phrase: '+ reason);
   }
 
-  reason = reason || ExSIP.C.REASON_PHRASE[code] || '';
-  extraHeaders = extraHeaders || [];
+  reason = reason || ExSIP_C.REASON_PHRASE[code] || '';
+  extraHeaders = extraHeaders && extraHeaders.slice() || [];
 
   response = 'SIP/2.0 ' + code + ' ' + reason + '\r\n';
 
-  if(this.method === ExSIP.C.INVITE && code > 100 && code <= 200) {
-    rr = this.countHeader('record-route');
+  if(this.method === ExSIP_C.INVITE && code > 100 && code <= 200) {
+    rr = this.getHeaders('record-route');
+    length = rr.length;
 
-    for(r; r < rr; r++) {
-      response += 'Record-Route: ' + this.getHeader('record-route', r) + '\r\n';
+    for(r; r < length; r++) {
+      response += 'Record-Route: ' + rr[r] + '\r\n';
     }
   }
 
-  vias = this.countHeader('via');
+  vias = this.getHeaders('via');
+  length = vias.length;
 
-  for(v; v < vias; v++) {
-    response += 'Via: ' + this.getHeader('via', v) + '\r\n';
+  for(v; v < length; v++) {
+    response += 'Via: ' + vias[v] + '\r\n';
   }
 
   if(!this.to_tag && code > 100) {
-    to += ';tag=' + ExSIP.Utils.newTag();
+    to += ';tag=' + Utils.newTag();
   } else if(this.to_tag && !this.s('to').hasParam('tag')) {
     to += ';tag=' + this.to_tag;
   }
@@ -387,11 +452,34 @@ IncomingRequest.prototype.reply = function(code, reason, extraHeaders, body, onS
 
   length = extraHeaders.length;
   for (idx = 0; idx < length; idx++) {
-    response += extraHeaders[idx] +'\r\n';
+    response += extraHeaders[idx].trim() +'\r\n';
   }
 
+  // Supported
+  switch (this.method) {
+    case ExSIP_C.INVITE:
+      if (this.ua.contact.pub_gruu || this.ua.contact.temp_gruu) {
+        supported.push('gruu');
+      }
+      break;
+  }
+
+  supported.push('outbound');
+
+  // Allow and Accept
+  if (this.method === ExSIP_C.OPTIONS) {
+    response += 'Allow: '+ ExSIP_C.ALLOWED_METHODS +'\r\n';
+    response += 'Accept: '+ ExSIP_C.ACCEPTED_BODY_TYPES +'\r\n';
+  } else if (code === 405) {
+    response += 'Allow: '+ ExSIP_C.ALLOWED_METHODS +'\r\n';
+  } else if (code === 415 ) {
+    response += 'Accept: '+ ExSIP_C.ACCEPTED_BODY_TYPES +'\r\n';
+  }
+
+  response += 'Supported: ' +  supported +'\r\n';
+
   if(body) {
-    length = ExSIP.Utils.str_utf8_length(body);
+    length = Utils.str_utf8_length(body);
     response += 'Content-Type: application/sdp\r\n';
     response += 'Content-Length: ' + length + '\r\n\r\n';
     response += body;
@@ -404,12 +492,14 @@ IncomingRequest.prototype.reply = function(code, reason, extraHeaders, body, onS
 
 /**
 * Stateless reply.
-* @param {Number} code status code
-* @param {String} reason reason phrase
+* -param {Number} code status code
+* -param {String} reason reason phrase
 */
 IncomingRequest.prototype.reply_sl = function(code, reason) {
   var to, response,
-    vias = this.countHeader('via');
+    v = 0,
+    vias = this.getHeaders('via'),
+    length = vias.length;
 
   code = code || null;
   reason = reason || null;
@@ -421,18 +511,18 @@ IncomingRequest.prototype.reply_sl = function(code, reason) {
     throw new TypeError('Invalid reason_phrase: '+ reason);
   }
 
-  reason = reason || ExSIP.C.REASON_PHRASE[code] || '';
+  reason = reason || ExSIP_C.REASON_PHRASE[code] || '';
 
   response = 'SIP/2.0 ' + code + ' ' + reason + '\r\n';
 
-  for(var v = 0; v < vias; v++) {
-    response += 'Via: ' + this.getHeader('via', v) + '\r\n';
+  for(v; v < length; v++) {
+    response += 'Via: ' + vias[v] + '\r\n';
   }
 
   to = this.getHeader('To');
 
   if(!this.to_tag && code > 100) {
-    to += ';tag=' + ExSIP.Utils.newTag();
+    to += ';tag=' + Utils.newTag();
   } else if(this.to_tag && !this.s('to').hasParam('tag')) {
     to += ';tag=' + this.to_tag;
   }
@@ -446,18 +536,9 @@ IncomingRequest.prototype.reply_sl = function(code, reason) {
   this.transport.send(response);
 };
 
-/**
- * @augments IncomingMessage
- * @class Class for incoming SIP response.
- */
-IncomingResponse = function() {
-  IncomingMessage.call(this);
+function IncomingResponse(ua) {
+  this.logger = ua.getLogger('ExSIP.sipmessage');
+  this.headers = {};
   this.status_code = null;
   this.reason_phrase = null;
-};
-IncomingResponse.prototype = new IncomingMessage();
-
-ExSIP.OutgoingRequest = OutgoingRequest;
-ExSIP.IncomingRequest = IncomingRequest;
-ExSIP.IncomingResponse = IncomingResponse;
-}(ExSIP));
+}

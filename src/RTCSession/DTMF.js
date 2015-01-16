@@ -1,41 +1,38 @@
-/**
- * @fileoverview DTMF
- */
+module.exports = DTMF;
+
+
+var C = {
+  MIN_DURATION:            70,
+  MAX_DURATION:            6000,
+  DEFAULT_DURATION:        100,
+  MIN_INTER_TONE_GAP:      50,
+  DEFAULT_INTER_TONE_GAP:  500
+};
 
 /**
- * @class DTMF
- * @param {ExSIP.RTCSession} session
+ * Expose C object.
  */
-(function(ExSIP) {
+DTMF.C = C;
 
-var DTMF,
-  logger = new ExSIP.Logger(ExSIP.name +' | '+ 'DTMF'),
-  C = {
-    MIN_DURATION:            70,
-    MAX_DURATION:            6000,
-    DEFAULT_DURATION:        100,
-    MIN_INTER_TONE_GAP:      50,
-    DEFAULT_INTER_TONE_GAP:  500
-  };
 
-DTMF = function(session) {
-  var events = [
-  'succeeded',
-  'failed'
-  ];
+/**
+ * Dependencies.
+ */
+var ExSIP_C = require('../Constants');
+var EventEmitter = require('../EventEmitter');
+var Exceptions = require('../Exceptions');
+var RTCSession = require('../RTCSession');
+var Utils = require('../Utils');
 
+
+function DTMF(session) {
   this.sendTimeoutId = null;
   this.queuedDTMFs = [];
   this.session = session;
-  this.direction = null;
-  this.tone = null;
-  this.duration = null;
-  this.interToneGap = null;
-  this.dtmfSender = null;
-
-  this.initEvents(events);
-};
-DTMF.prototype = new ExSIP.EventEmitter();
+  this.logger = session.ua.getLogger('ExSIP.rtcsession.dtmf', session.id);
+  this.owner = session;
+}
+DTMF.prototype = new EventEmitter();
 
 DTMF.prototype.isDebug = function() {
   return this.session.ua.isDebug();
@@ -51,8 +48,9 @@ DTMF.prototype.send = function(tone, options) {
   this.direction = 'outgoing';
 
   // Check RTCSession Status
-  if (this.session.status !== ExSIP.RTCSession.C.STATUS_CONFIRMED && this.session.status !== ExSIP.RTCSession.C.STATUS_WAITING_FOR_ACK) {
-    throw new ExSIP.Exceptions.InvalidStateError(this.session.status);
+  if (this.owner.status !== RTCSession.C.STATUS_CONFIRMED &&
+    this.owner.status !== RTCSession.C.STATUS_WAITING_FOR_ACK) {
+    throw new Exceptions.InvalidStateError(this.owner.status);
   }
 
   // Get DTMF options
@@ -90,7 +88,7 @@ DTMF.prototype.processQueuedDTMFs = function() {
     return;
   }
   if(!this.dtmfSender.canInsertDTMF) {
-    logger.log("DTMF Sender cannot insert DTMF - trying again after timeout", this.session.ua);
+    this.logger.log("DTMF Sender cannot insert DTMF - trying again after timeout", this.session.ua);
     this.sendTimeoutId = window.setTimeout(function(){
       self.processQueuedDTMFs();
     }, 1000);
@@ -108,12 +106,12 @@ DTMF.prototype.processQueuedDTMFs = function() {
   var duration = durationSum / this.queuedDTMFs.length;
   var interToneGap = interToneGapSum / this.queuedDTMFs.length;
 
-  logger.log("sending DTMF with tones "+tones+", duration "+duration+", gap "+interToneGap, this.session.ua);
+  this.logger.log("sending DTMF with tones "+tones+", duration "+duration+", gap "+interToneGap, this.session.ua);
   this.dtmfSender.insertDTMF(tones, duration, interToneGap);
 };
 
 DTMF.prototype.queueTone = function(tone, duration, interToneGap) {
-  logger.log("Queue tone : "+tone, this.session.ua);
+  this.logger.log("Queue tone : "+tone, this.session.ua);
   window.clearTimeout(this.sendTimeoutId);
   this.queuedDTMFs.push({tone: tone, duration: duration, interToneGap: interToneGap});
   var self = this;
@@ -127,17 +125,17 @@ DTMF.prototype.onDTMFSent = function(tone) {
     return;
   }
 
-  logger.log("Sent Dtmf tone: " + tone.tone, this.session.ua);
+  this.logger.log("Sent Dtmf tone: " + tone.tone, this.session.ua);
   for(var i=0; i < this.queuedDTMFs.length; i++) {
     var dtmf = this.queuedDTMFs[i];
     if(tone.tone === dtmf.tone) {
       this.queuedDTMFs.splice(i, 1);
-      logger.log("removing from queued tones - remaining queue: \t" + ExSIP.Utils.toString(this.queuedDTMFs), this.session.ua);
+      this.logger.log("removing from queued tones - remaining queue: \t" + Utils.toString(this.queuedDTMFs), this.session.ua);
       break;
     } else if(dtmf.tone.indexOf(tone.tone) !== -1) {
       dtmf.tone = dtmf.tone.replace(tone.tone, '');
       this.queuedDTMFs[i] = dtmf;
-      logger.log("removing from queued tones as contained - remaining queue: \t" + ExSIP.Utils.toString(this.queuedDTMFs), this.session.ua);
+      this.logger.log("removing from queued tones as contained - remaining queue: \t" + Utils.toString(this.queuedDTMFs), this.session.ua);
       break;
     }
   }
@@ -150,10 +148,10 @@ DTMF.prototype.onDTMFSent = function(tone) {
 
 DTMF.prototype.enableDtmfSender = function(localstream, peerConnection) {
   var self = this;
-  if (localstream != null) {
+  if (localstream !== null) {
     var local_audio_track = localstream.getAudioTracks()[0];
     this.dtmfSender = peerConnection.createDTMFSender(local_audio_track);
-    logger.log("Created DTMF Sender with canInsertDTMF : "+this.dtmfSender.canInsertDTMF, this.session.ua);
+    this.logger.log("Created DTMF Sender with canInsertDTMF : "+this.dtmfSender.canInsertDTMF, this.session.ua);
 
     this.dtmfSender.ontonechange = function(tone) {
       self.onDTMFSent(tone);
@@ -162,7 +160,7 @@ DTMF.prototype.enableDtmfSender = function(localstream, peerConnection) {
     this.processQueuedDTMFs();
   }
   else {
-    logger.error("No Local Stream to create DTMF Sender");
+    this.logger.error("No Local Stream to create DTMF Sender");
   }
 };
 
@@ -185,7 +183,7 @@ DTMF.prototype.receiveResponse = function(response) {
       break;
 
     default:
-      cause = ExSIP.Utils.sipErrorCause(response.status_code);
+      cause = Utils.sipErrorCause(response.status_code);
       this.emit('failed', this, {
         originator: 'remote',
         response: response,
@@ -195,29 +193,31 @@ DTMF.prototype.receiveResponse = function(response) {
   }
 };
 
-/**
- * @private
- */
 DTMF.prototype.onRequestTimeout = function() {
   this.emit('failed', this, {
     originator: 'system',
-    cause: ExSIP.C.causes.REQUEST_TIMEOUT
+    cause: ExSIP_C.causes.REQUEST_TIMEOUT
   });
+  this.owner.onRequestTimeout();
 };
 
-/**
- * @private
- */
 DTMF.prototype.onTransportError = function() {
   this.emit('failed', this, {
     originator: 'system',
-    cause: ExSIP.C.causes.CONNECTION_ERROR
+    cause: ExSIP_C.causes.CONNECTION_ERROR
   });
+  this.owner.onTransportError();
 };
 
-/**
- * @private
- */
+DTMF.prototype.onDialogError = function(response) {
+  this.emit('failed', this, {
+    originator: 'remote',
+    response: response,
+    cause: ExSIP_C.causes.DIALOG_ERROR
+  });
+  this.owner.onDialogError(response);
+};
+
 DTMF.prototype.init_incoming = function(request) {
   var body,
     reg_tone = /^(Signal\s*?=\s*?)([0-9A-D#*]{1})(\s)?.*/,
@@ -241,16 +241,12 @@ DTMF.prototype.init_incoming = function(request) {
   }
 
   if (!this.tone || !this.duration) {
-    logger.warn('invalid INFO DTMF received, discarded', this.session.ua);
+    this.logger.warn('invalid INFO DTMF received, discarded');
   } else {
-    this.session.emit('newDTMF', this.session, {
+    this.owner.emit('newDTMF', this.owner, {
       originator: 'remote',
       dtmf: this,
       request: request
     });
   }
 };
-
-DTMF.C = C;
-return DTMF;
-}(ExSIP));

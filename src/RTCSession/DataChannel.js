@@ -1,22 +1,10 @@
+module.exports = DataChannel;
+
+var EventEmitter = require('../EventEmitter');
 /**
- * @fileoverview DataChannel
+ * Dependencies.
  */
-
-/**
- * @class DataChannel
- * @param {ExSIP.RTCSession} session
- */
-(function(ExSIP) {
-
-var DataChannel,
-  logger = new ExSIP.Logger(ExSIP.name +' | '+ 'DataChannel');
-
-DataChannel = function(session, peerConnection) {
-  var events = [
-  'received',
-  'sent',
-  'failed'
-  ];
+function DataChannel(session, peerConnection) {
 
   this.session = session;
   this.peerConnection = peerConnection;
@@ -25,11 +13,12 @@ DataChannel = function(session, peerConnection) {
   this.chunkLength = 60000;
   this.dataReceived = [];
 
-  this.initEvents(events);
+  this.logger = session.ua.getLogger('ExSIP.rtcsession.datachannel', session.id);
 
   this.initSendChannel();
-};
-DataChannel.prototype = new ExSIP.EventEmitter();
+}
+
+DataChannel.prototype = new EventEmitter();
 
 DataChannel.prototype.isDebug = function() {
   return this.session.ua.isDebug();
@@ -46,7 +35,7 @@ DataChannel.prototype.close = function() {
 
 DataChannel.prototype.send = function(data) {
   this.sendInChunks(data);
-  logger.log('Sent Data: ' + data, this.session.ua);
+  this.logger.log('Sent Data: ' + data, this.session.ua);
   this.session.emit('dataSent', this, { data: data });
 };
 
@@ -70,32 +59,32 @@ DataChannel.prototype.sendInChunks = function(data) {
 };
 
 DataChannel.prototype.initSendChannel = function() {
+  var self = this;
   try {
-    var self = this;
     // Data Channel api supported from Chrome M25.
     // You might need to start chrome with  --enable-data-channels flag.
     this.sendChannel = this.peerConnection.createDataChannel("sendDataChannel", null);
-    logger.log('Created send data channel', this.session.ua);
+    this.logger.log('Created send data channel', this.session.ua);
 
     var onSendChannelStateChange = function() {
       var readyState = self.sendChannel.readyState;
-      logger.log('Send channel state is: ' + readyState, self.session.ua);
+      this.logger.log('Send channel state is: ' + readyState, self.session.ua);
     };
 
     this.sendChannel.onopen = onSendChannelStateChange;
     this.sendChannel.onclose = onSendChannelStateChange;
 
     var receiveChannelCallback = function(event) {
-      logger.log('Receive Channel Callback', self.session.ua);
+      this.logger.log('Receive Channel Callback', self.session.ua);
       self.receiveChannel = event.channel;
 
       var onReceiveChannelStateChange = function() {
         var readyState = self.receiveChannel.readyState;
-        logger.log('Receive channel state is: ' + readyState, self.session.ua);
+        this.logger.log('Receive channel state is: ' + readyState, self.session.ua);
       };
 
       var onReceiveMessageCallback = function(event) {
-        logger.log('Received Message : '+event.data, self.session.ua);
+        this.logger.log('Received Message : '+event.data, self.session.ua);
 
         if(event.data.indexOf('\n') !== -1) {
           self.dataReceived.push(event.data.replace('\n', ''));
@@ -117,9 +106,6 @@ DataChannel.prototype.initSendChannel = function() {
     this.emit('failed', this, {
       cause: 'Failed to create data channel'
     });
-    logger.error('Create Data channel failed with exception: ' + e.message);
+    self.logger.error('Create Data channel failed with exception: ' + e.message);
   }
 };
-
-  return DataChannel;
-}(ExSIP));

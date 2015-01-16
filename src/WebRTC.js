@@ -1,32 +1,30 @@
-/**
- * @fileoverview WebRTC
- */
+var WebRTC = {};
 
-(function(ExSIP) {
-var WebRTC;
+module.exports = WebRTC;
 
-WebRTC = {};
+var ExSIP_C = require('./Constants');
+var Utils = require('./Utils');
 
 // getUserMedia
-if (window.navigator.webkitGetUserMedia) {
-  WebRTC.getUserMedia = window.navigator.webkitGetUserMedia.bind(navigator);
+if (typeof navigator !== 'undefined' && navigator.webkitGetUserMedia) {
+  WebRTC.getUserMedia = navigator.webkitGetUserMedia.bind(navigator);
 }
-else if (window.navigator.mozGetUserMedia) {
-  WebRTC.getUserMedia = window.navigator.mozGetUserMedia.bind(navigator);
+else if (typeof navigator !== 'undefined' && navigator.mozGetUserMedia) {
+  WebRTC.getUserMedia = navigator.mozGetUserMedia.bind(navigator);
 }
-else if (window.navigator.getUserMedia) {
-  WebRTC.getUserMedia = window.navigator.getUserMedia.bind(navigator);
+else if (typeof navigator !== 'undefined' && navigator.getUserMedia) {
+  WebRTC.getUserMedia = navigator.getUserMedia.bind(navigator);
 }
 
 // RTCPeerConnection
-if (window.webkitRTCPeerConnection) {
-  WebRTC.RTCPeerConnection = window.webkitRTCPeerConnection;
+if (typeof webkitRTCPeerConnection !== 'undefined') {
+  WebRTC.RTCPeerConnection = webkitRTCPeerConnection;
 }
-else if (window.mozRTCPeerConnection) {
-  WebRTC.RTCPeerConnection = window.mozRTCPeerConnection;
+else if (typeof mozRTCPeerConnection !== 'undefined') {
+  WebRTC.RTCPeerConnection = mozRTCPeerConnection;
 }
-else if (window.RTCPeerConnection) {
-  WebRTC.RTCPeerConnection = window.RTCPeerConnection;
+else if (typeof RTCPeerConnection !== 'undefined') {
+  WebRTC.RTCPeerConnection = RTCPeerConnection;
 }
 else {
   console.log("WebRTC.RTCPeerConnection undefined");
@@ -46,21 +44,21 @@ else {
 }
 
 // RTCSessionDescription
-if (window.webkitRTCSessionDescription) {
-  WebRTC.RTCSessionDescription = window.webkitRTCSessionDescription;
+if (typeof webkitRTCSessionDescription !== 'undefined') {
+  WebRTC.RTCSessionDescription = webkitRTCSessionDescription;
 }
-else if (window.mozRTCSessionDescription) {
-  WebRTC.RTCSessionDescription = window.mozRTCSessionDescription;
+else if (typeof mozRTCSessionDescription !== 'undefined') {
+  WebRTC.RTCSessionDescription = mozRTCSessionDescription;
 }
-else if (window.RTCSessionDescription) {
-  WebRTC.RTCSessionDescription = window.RTCSessionDescription;
+else if (typeof RTCSessionDescription !== 'undefined') {
+  WebRTC.RTCSessionDescription = RTCSessionDescription;
 }
 else {
   console.log("WebRTC.RTCSessionDescription undefined");
   WebRTC.RTCSessionDescription = function(options){
     options = options || {};
-    this.sdp = options["sdp"];
-    this.type = options["offer"];
+    this.sdp = options.sdp;
+    this.type = options.offer;
   };
 }
 
@@ -100,7 +98,7 @@ WebRTC.RTCSessionDescription.prototype.getMedias = function(type, filter){
   var regex = new RegExp("(m="+type+"(?:(?!m=)[\\s\\S])*)", "mig");
   var match;
   var results = [];
-  while((match = regex.exec(this.sdp)) != null) {
+  while((match = regex.exec(this.sdp)) !== null) {
     var media = match.pop();
     if(!filter || media.indexOf(filter) !== -1) {
       results.push(media);
@@ -110,19 +108,19 @@ WebRTC.RTCSessionDescription.prototype.getMedias = function(type, filter){
 };
 WebRTC.RTCSessionDescription.prototype.getAudioIcePwd = function(){
   var match = this.sdp.match(/m=audio(?:(?!m=)[\s\S])*a=ice-pwd:(.*)/mi);
-  return match != null ? match[match.length-1] : null;
+  return match !== null ? match[match.length-1] : null;
 };
 WebRTC.RTCSessionDescription.prototype.getVideoIcePwd = function(){
   var match = this.sdp.match(/m=video(?:(?!m=)[\s\S])*a=ice-pwd:(.*)/mi);
-  return match != null ? match[match.length-1] : null;
+  return match !== null ? match[match.length-1] : null;
 };
 WebRTC.RTCSessionDescription.prototype.getAudioIceUfrag = function(){
   var match = this.sdp.match(/m=audio(?:(?!m=)[\s\S])*a=ice-ufrag:(.*)/mi);
-  return match != null ? match[match.length-1] : null;
+  return match !== null ? match[match.length-1] : null;
 };
 WebRTC.RTCSessionDescription.prototype.getVideoIceUfrag = function(){
   var match = this.sdp.match(/m=video(?:(?!m=)[\s\S])*a=ice-ufrag:(.*)/mi);
-  return match != null ? match[match.length-1] : null;
+  return match !== null ? match[match.length-1] : null;
 };
 WebRTC.RTCSessionDescription.prototype.getCandidates = function(media){
   var regex = new RegExp("a=candidate:(.*)", "ig");
@@ -144,45 +142,45 @@ WebRTC.RTCSessionDescription.prototype.getVideoCandidates = function(){
 };
 WebRTC.RTCSessionDescription.prototype.getConnection = function(){
   var match = this.sdp.match(/v=(?:(?!m=)[\s\S])*c=(.*)/mi);
-  return match != null ? match[match.length-1] : null;
+  return match !== null ? match[match.length-1] : null;
 };
 WebRTC.RTCSessionDescription.prototype.getAudio = function(){
   var match = this.sdp.match(/m=audio(?:(?!m=)[\s\S])*/mi);
-  return match != null ? match[match.length-1] : null;
+  return match !== null ? match[match.length-1] : null;
 };
 WebRTC.RTCSessionDescription.prototype.getVideo = function(){
   var match = this.sdp.match(/m=video(?:(?!m=)[\s\S])*/mi);
-  return match != null ? match[match.length-1] : null;
+  return match !== null ? match[match.length-1] : null;
 };
 WebRTC.RTCSessionDescription.prototype.getAudioConnection = function(){
   var match = this.sdp.match(/m=audio(?:(?!m=)[\s\S])*c=(.*)/mi);
-  return match != null ? match[match.length-1] : this.getConnection();
+  return match !== null ? match[match.length-1] : this.getConnection();
 };
 WebRTC.RTCSessionDescription.prototype.getVideoConnection = function(){
   var match = this.sdp.match(/m=video(?:(?!m=)[\s\S])*c=(.*)/mi);
-  return match != null ? match[match.length-1] : this.getConnection();
+  return match !== null ? match[match.length-1] : this.getConnection();
 };
 WebRTC.RTCSessionDescription.prototype.hasVideo = function(){
-  return this.sdp.match(/m=video/) != null;
+  return this.sdp.match(/m=video/) !== null;
 };
 WebRTC.RTCSessionDescription.prototype.hasAudio = function(){
-  return this.sdp.match(/m=audio/) != null;
+  return this.sdp.match(/m=audio/) !== null;
 };
 WebRTC.RTCSessionDescription.prototype.videoPort = function(){
   var match = this.sdp.match(/m=video\s(\d*)\s/);
-  return  match != null ? match[match.length-1] : null;
+  return  match !== null ? match[match.length-1] : null;
 };
 WebRTC.RTCSessionDescription.prototype.audioPort = function(){
   var match = this.sdp.match(/m=audio\s(\d*)\s/);
-  return  match != null ? match[match.length-1] : null;
+  return  match !== null ? match[match.length-1] : null;
 };
 WebRTC.RTCSessionDescription.prototype.getAudioMedia = function(){
   var match = this.sdp.match(/m=audio\s(.*)/);
-  return  match != null ? match[match.length-1] : null;
+  return  match !== null ? match[match.length-1] : null;
 };
 WebRTC.RTCSessionDescription.prototype.getVideoMedia = function(){
   var match = this.sdp.match(/m=video\s(.*)/);
-  return  match != null ? match[match.length-1] : null;
+  return  match !== null ? match[match.length-1] : null;
 };
 WebRTC.RTCSessionDescription.prototype.getAudioCodecs = function(){
   var audioMedia = this.getAudioMedia();
@@ -202,38 +200,38 @@ WebRTC.RTCSessionDescription.prototype.getCodecs = function(media){
 WebRTC.RTCSessionDescription.prototype.getAudioCodecRtpmap = function(codec){
   var regex = new RegExp("m=audio(?:(?!m=)[\\s\\S])*a=rtpmap:"+codec+"(.*)", "mi");
   var match = this.sdp.match(regex);
-  return match != null ? match[match.length-1].trim() : null;
+  return match !== null ? match[match.length-1].trim() : null;
 };
 WebRTC.RTCSessionDescription.prototype.getVideoCodecRtpmap = function(codec){
   var regex = new RegExp("m=video(?:(?!m=)[\\s\\S])*a=rtpmap:"+codec+"(.*)", "mi");
   var match = this.sdp.match(regex);
-  return match != null ? match[match.length-1].trim() : null;
+  return match !== null ? match[match.length-1].trim() : null;
 };
 WebRTC.RTCSessionDescription.prototype.getAudioCodecFmtp = function(codec){
   var regex = new RegExp("m=audio(?:(?!m=)[\\s\\S])*a=fmtp:"+codec+"(.*)", "mi");
   var match = this.sdp.match(regex);
-  return match != null ? match[match.length-1].trim() : null;
+  return match !== null ? match[match.length-1].trim() : null;
 };
 WebRTC.RTCSessionDescription.prototype.getVideoCodecFmtp = function(codec){
   var regex = new RegExp("m=video(?:(?!m=)[\\s\\S])*a=fmtp:"+codec+"(.*)", "mi");
   var match = this.sdp.match(regex);
-  return match != null ? match[match.length-1].trim() : null;
+  return match !== null ? match[match.length-1].trim() : null;
 };
 WebRTC.RTCSessionDescription.prototype.getAudioFingerprint = function(){
   var match = this.sdp.match(/m=audio(?:(?!m=)[\s\S])*a=fingerprint:(.*)/mi);
-  return match != null ? match[match.length-1] : null;
+  return match !== null ? match[match.length-1] : null;
 };
 WebRTC.RTCSessionDescription.prototype.getVideoFingerprint = function(){
   var match = this.sdp.match(/m=video(?:(?!m=)[\s\S])*a=fingerprint:(.*)/mi);
-  return match != null ? match[match.length-1] : null;
+  return match !== null ? match[match.length-1] : null;
 };
 WebRTC.RTCSessionDescription.prototype.getAudioRtcp = function(){
   var match = this.sdp.match(/m=audio(?:(?!m=)[\s\S])*a=rtcp:(.*)/mi);
-  return match != null ? match[match.length-1] : null;
+  return match !== null ? match[match.length-1] : null;
 };
 WebRTC.RTCSessionDescription.prototype.getVideoRtcp = function(){
   var match = this.sdp.match(/m=video(?:(?!m=)[\s\S])*a=rtcp:(.*)/mi);
-  return match != null ? match[match.length-1] : null;
+  return match !== null ? match[match.length-1] : null;
 };
 WebRTC.RTCSessionDescription.prototype.removeVideoFingerprint = function(){
   if(this.getVideoFingerprint()) {
@@ -257,7 +255,7 @@ WebRTC.RTCSessionDescription.prototype.hasActiveAudio = function(){
 };
 WebRTC.RTCSessionDescription.prototype.getVideoBandwidth = function(){
   var match = this.sdp.match(/m=video(?:(?!m=)[\s\S])*b=.*:(.*)/mi);
-  return match != null ? match[match.length-1] : null;
+  return match !== null ? match[match.length-1] : null;
 };
 WebRTC.RTCSessionDescription.prototype.setVideoBandwidth = function(videoBandwidth){
   if(this.getVideoBandwidth()) {
@@ -278,7 +276,7 @@ WebRTC.RTCSessionDescription.prototype.setVideoPort = function(port){
 };
 WebRTC.RTCSessionDescription.prototype.getVideoMode = function(){
   var match = this.sdp.match(/m=video(?:(?!m=)[\s\S])*a=(sendrecv|sendonly|recvonly|inactive)/mi);
-  return match != null ? match[match.length-1] : null;
+  return match !== null ? match[match.length-1] : null;
 };
 WebRTC.RTCSessionDescription.prototype.setAudioMode = function(mode){
   if(this.getAudioMode()) {
@@ -320,13 +318,13 @@ WebRTC.RTCSessionDescription.prototype.setVideoRtcp = function(videoRtcp){
 };
 WebRTC.RTCSessionDescription.prototype.getAudioMode = function(){
   var match = this.sdp.match(/m=audio(?:(?!m=)[\s\S])*a=(sendrecv|sendonly|recvonly|inactive)/mi);
-  return match != null ? match[match.length-1] : null;
+  return match !== null ? match[match.length-1] : null;
 };
 WebRTC.RTCSessionDescription.prototype.isActive = function(){
-  if(this.hasAudio() && this.audioPort() !== "0" && this.getAudioMode() !== ExSIP.C.INACTIVE) {
+  if(this.hasAudio() && this.audioPort() !== "0" && this.getAudioMode() !== ExSIP_C.INACTIVE) {
     return true;
   }
-  if(this.hasVideo() && this.videoPort() !== "0" && this.getVideoMode() !== ExSIP.C.INACTIVE) {
+  if(this.hasVideo() && this.videoPort() !== "0" && this.getVideoMode() !== ExSIP_C.INACTIVE) {
     return true;
   }
   return false;
@@ -352,11 +350,11 @@ WebRTC.RTCSessionDescription.prototype.mediaChanges = function(otherSdp){
     mediaChanges.push("video connection has changed : "+this.getVideoConnection()+" - " + otherSdp.getVideoConnection());
   }
   var audioCodecs = this.getAudioCodecs();
-  if(!ExSIP.Utils.isEqArrays(audioCodecs, otherSdp.getAudioCodecs())) {
+  if(!Utils.isEqArrays(audioCodecs, otherSdp.getAudioCodecs())) {
     mediaChanges.push("audio codecs has changed : "+audioCodecs+" - " + otherSdp.getAudioCodecs());
   }
   var videoCodecs = this.getVideoCodecs();
-  if(!ExSIP.Utils.isEqArrays(videoCodecs, otherSdp.getVideoCodecs())) {
+  if(!Utils.isEqArrays(videoCodecs, otherSdp.getVideoCodecs())) {
     mediaChanges.push("video codecs has changed : "+videoCodecs+" - " + otherSdp.getVideoCodecs());
   }
 
@@ -386,7 +384,7 @@ WebRTC.RTCSessionDescription.prototype.mediaChanges = function(otherSdp){
 
 // New syntax for getting streams in Chrome M26.
 if (WebRTC.RTCPeerConnection && WebRTC.RTCPeerConnection.prototype) {
-  if (!WebRTC.RTCPeerConnection.prototype.getLocalStreams) {
+  if (! WebRTC.RTCPeerConnection.prototype.getLocalStreams) {
     WebRTC.RTCPeerConnection.prototype.getLocalStreams = function() {
       return this.localStreams;
     };
@@ -412,6 +410,3 @@ if (WebRTC.getUserMedia && WebRTC.RTCPeerConnection && WebRTC.RTCSessionDescript
 else {
   WebRTC.isSupported = false;
 }
-
-ExSIP.WebRTC = WebRTC;
-}(ExSIP));

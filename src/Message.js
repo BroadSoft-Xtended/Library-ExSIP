@@ -1,25 +1,27 @@
-/**
- * @fileoverview Message
- */
+module.exports = Message;
 
-/**
- * @augments ExSIP
- * @class Class creating SIP MESSAGE request.
- * @param {ExSIP.UA} ua
- */
-(function(ExSIP) {
-var Message;
-
-Message = function(ua) {
+function Message(ua) {
   this.ua = ua;
-  this.direction = null;
-  this.local_identity = null;
-  this.remote_identity = null;
+  this.logger = ua.getLogger('ExSIP.message');
 
   // Custom message empty object for high level use
   this.data = {};
-};
-Message.prototype = new ExSIP.EventEmitter();
+}
+
+
+/**
+ * Dependencies.
+ */
+var ExSIP_C = require('./Constants');
+var EventEmitter = require('./EventEmitter');
+var SIPMessage = require('./SIPMessage');
+var Utils = require('./Utils');
+var RequestSender = require('./RequestSender');
+var Transactions = require('./Transactions');
+var Exceptions = require('./Exceptions');
+
+
+Message.prototype = new EventEmitter();
 
 
 Message.prototype.isDebug = function() {
@@ -32,70 +34,54 @@ Message.prototype.send = function(target, body, options) {
       'succeeded',
       'failed'
     ],
-    invalidTarget = false;
+    originalTarget = target;
 
   if (target === undefined || body === undefined) {
     throw new TypeError('Not enough arguments');
+  }
+
+  // Check target validity
+  target = this.ua.normalizeTarget(target);
+  if (!target) {
+    throw new TypeError('Invalid target: '+ originalTarget);
   }
 
   this.initEvents(events);
 
   // Get call options
   options = options || {};
-  extraHeaders = options.extraHeaders || [];
+  extraHeaders = options.extraHeaders && options.extraHeaders.slice() || [];
   eventHandlers = options.eventHandlers || {};
   contentType = options.contentType || 'text/plain';
+
+  this.content_type = contentType;
 
   // Set event handlers
   for (event in eventHandlers) {
     this.on(event, eventHandlers[event]);
   }
 
-  // Check target validity
-  try {
-    target = ExSIP.Utils.normalizeURI(target, this.ua.configuration.hostport_params);
-  } catch(e) {
-    target = ExSIP.URI.parse(ExSIP.C.INVALID_TARGET_URI);
-    invalidTarget = true;
-  }
-
-  // Message parameter initialization
-  this.direction = 'outgoing';
-  this.local_identity = this.ua.configuration.uri;
-  this.remote_identity = target;
-
   this.closed = false;
   this.ua.applicants[this] = this;
 
   extraHeaders.push('Content-Type: '+ contentType);
 
-  this.request = new ExSIP.OutgoingRequest(ExSIP.C.MESSAGE, target, this.ua, null, extraHeaders);
+  this.request = new SIPMessage.OutgoingRequest(ExSIP_C.MESSAGE, target, this.ua, null, extraHeaders);
 
   if(body) {
     this.request.body = body;
-  }
-
-  request_sender = new ExSIP.RequestSender(this, this.ua);
-
-  this.ua.emit('newMessage', this.ua, {
-    originator: 'local',
-    message: this,
-    request: this.request
-  });
-
-  if (invalidTarget) {
-    this.emit('failed', this, {
-      originator: 'local',
-      cause: ExSIP.C.causes.INVALID_TARGET
-    });
+    this.content = body;
   } else {
-    request_sender.send();
+    this.content = null;
   }
+
+  request_sender = new RequestSender(this, this.ua);
+
+  this.newMessage('local', this.request);
+
+  request_sender.send();
 };
 
-/**
-* @private
-*/
 Message.prototype.receiveResponse = function(response) {
   var cause;
 
@@ -117,7 +103,7 @@ Message.prototype.receiveResponse = function(response) {
 
     default:
       delete this.ua.applicants[this];
-      cause = ExSIP.Utils.sipErrorCause(response.status_code);
+      cause = Utils.sipErrorCause(response.status_code);
       this.emit('failed', this, {
         originator: 'remote',
         response: response,
@@ -128,66 +114,49 @@ Message.prototype.receiveResponse = function(response) {
 };
 
 
-/**
-* @private
-*/
 Message.prototype.onRequestTimeout = function() {
   if(this.closed) {
     return;
   }
   this.emit('failed', this, {
     originator: 'system',
-    cause: ExSIP.C.causes.REQUEST_TIMEOUT
+    cause: ExSIP_C.causes.REQUEST_TIMEOUT
   });
 };
 
-/**
-* @private
-*/
 Message.prototype.onTransportError = function() {
   if(this.closed) {
     return;
   }
   this.emit('failed', this, {
     originator: 'system',
-    cause: ExSIP.C.causes.CONNECTION_ERROR
+    cause: ExSIP_C.causes.CONNECTION_ERROR
   });
 };
 
-/**
-* @private
-*/
 Message.prototype.close = function() {
   this.closed = true;
   delete this.ua.applicants[this];
 };
 
-/**
- * @private
- */
 Message.prototype.init_incoming = function(request) {
-  var transaction,
-    contentType = request.getHeader('content-type');
+  var transaction;
 
-  this.direction = 'incoming';
   this.request = request;
-  this.local_identity = request.to.uri;
-  this.remote_identity = request.from.uri;
+  this.content_type = request.getHeader('Content-Type');
 
-  if (contentType && (contentType.match(/^text\/plain(\s*;\s*.+)*$/i) || contentType.match(/^text\/html(\s*;\s*.+)*$/i))) {
-    this.ua.emit('newMessage', this.ua, {
-      originator: 'remote',
-      message: this,
-      request: request
-    });
-
-    transaction = this.ua.transactions.nist[request.via_branch];
-
-    if (transaction && (transaction.state === ExSIP.Transactions.C.STATUS_TRYING || transaction.state === ExSIP.Transactions.C.STATUS_PROCEEDING)) {
-      request.reply(200);
-    }
+  if (request.body) {
+    this.content = request.body;
   } else {
-    request.reply(415, null, ['Accept: text/plain, text/html']);
+    this.content = null;
+  }
+
+  this.newMessage('remote', request);
+
+  transaction = this.ua.transactions.nist[request.via_branch];
+
+  if (transaction && (transaction.state === Transactions.C.STATUS_TRYING || transaction.state === Transactions.C.STATUS_PROCEEDING)) {
+    request.reply(200);
   }
 };
 
@@ -199,11 +168,11 @@ Message.prototype.accept = function(options) {
   options = options || {};
 
   var
-    extraHeaders = options.extraHeaders || [],
+    extraHeaders = options.extraHeaders && options.extraHeaders.slice() || [],
     body = options.body;
 
   if (this.direction !== 'incoming') {
-    throw new TypeError('Invalid method "accept" for an outgoing message');
+    throw new Exceptions.NotSupportedError('"accept" not supported for outgoing Message');
   }
 
   this.request.reply(200, null, extraHeaders, body);
@@ -212,9 +181,6 @@ Message.prototype.accept = function(options) {
 /**
  * Reject the incoming Message
  * Only valid for incoming Messages
- *
- * @param {Number} status_code
- * @param {String} [reason_phrase]
  */
 Message.prototype.reject = function(options) {
   options = options || {};
@@ -222,11 +188,11 @@ Message.prototype.reject = function(options) {
   var
     status_code = options.status_code || 480,
     reason_phrase = options.reason_phrase,
-    extraHeaders = options.extraHeaders || [],
+    extraHeaders = options.extraHeaders && options.extraHeaders.slice() || [],
     body = options.body;
 
   if (this.direction !== 'incoming') {
-    throw new TypeError('Invalid method "reject" for an outgoing message');
+    throw new Exceptions.NotSupportedError('"reject" not supported for outgoing Message');
   }
 
   if (status_code < 300 || status_code >= 700) {
@@ -236,5 +202,27 @@ Message.prototype.reject = function(options) {
   this.request.reply(status_code, reason_phrase, extraHeaders, body);
 };
 
-ExSIP.Message = Message;
-}(ExSIP));
+/**
+ * Internal Callbacks
+ */
+
+Message.prototype.newMessage = function(originator, request) {
+  var message = this,
+    event_name = 'newMessage';
+
+  if (originator === 'remote') {
+    message.direction = 'incoming';
+    message.local_identity = request.to;
+    message.remote_identity = request.from;
+  } else if (originator === 'local'){
+    message.direction = 'outgoing';
+    message.local_identity = request.from;
+    message.remote_identity = request.to;
+  }
+
+  message.ua.emit(event_name, message.ua, {
+    originator: originator,
+    message: message,
+    request: request
+  });
+};

@@ -1,16 +1,19 @@
+var Parser = {};
+
+module.exports = Parser;
+
+
 /**
- * @fileoverview SIP Message Parser
+ * Dependencies.
  */
+var sdp_transform = require('sdp-transform');
+var Grammar = require('./Grammar');
+var SIPMessage = require('./SIPMessage');
+
 
 /**
  * Extract and parse every header of a SIP message.
- * @augments ExSIP
- * @namespace
  */
-(function(ExSIP) {
-var Parser,
-  logger = new ExSIP.Logger(ExSIP.name +' | '+ 'PARSER');
-
 function getHeader(data, headerStart) {
   var
     // 'start' position of the header.
@@ -56,7 +59,7 @@ function parseHeader(message, data, headerStart, headerEnd) {
     case 'via':
     case 'v':
       message.addHeader('via', headerValue);
-      if(message.countHeader('via') === 1) {
+      if(message.getHeaders('via').length === 1) {
         parsed = message.parseHeader('Via');
         if(parsed) {
           message.via = parsed;
@@ -85,7 +88,7 @@ function parseHeader(message, data, headerStart, headerEnd) {
       }
       break;
     case 'record-route':
-      parsed = ExSIP.Grammar.parse(headerValue, 'Record_Route');
+      parsed = Grammar.parse(headerValue, 'Record_Route');
 
       if (parsed === -1) {
         parsed = undefined;
@@ -95,7 +98,7 @@ function parseHeader(message, data, headerStart, headerEnd) {
       for (idx = 0; idx < length; idx++) {
         header = parsed[idx];
         message.addHeader('record-route', headerValue.substring(header.possition, header.offset));
-        message.headers['Record-Route'][message.countHeader('record-route')-1].parsed = header.parsed;
+        message.headers['Record-Route'][message.getHeaders('record-route').length - 1].parsed = header.parsed;
       }
       break;
     case 'call-id':
@@ -108,7 +111,7 @@ function parseHeader(message, data, headerStart, headerEnd) {
       break;
     case 'contact':
     case 'm':
-      parsed = ExSIP.Grammar.parse(headerValue, 'Contact');
+      parsed = Grammar.parse(headerValue, 'Contact');
 
       if (parsed === -1) {
         parsed = undefined;
@@ -118,7 +121,7 @@ function parseHeader(message, data, headerStart, headerEnd) {
       for (idx = 0; idx < length; idx++) {
         header = parsed[idx];
         message.addHeader('contact', headerValue.substring(header.possition, header.offset));
-        message.headers['Contact'][message.countHeader('contact')-1].parsed = header.parsed;
+        message.headers.Contact[message.getHeaders('contact').length - 1].parsed = header.parsed;
       }
       break;
     case 'content-length':
@@ -137,7 +140,7 @@ function parseHeader(message, data, headerStart, headerEnd) {
       if(parsed) {
         message.cseq = parsed.value;
       }
-      if(message instanceof ExSIP.IncomingResponse) {
+      if(message instanceof SIPMessage.IncomingResponse) {
         message.method = parsed.method;
       }
       break;
@@ -160,41 +163,42 @@ function parseHeader(message, data, headerStart, headerEnd) {
   }
 
   if (parsed === undefined) {
-    return false;
+    return {
+      error: 'error parsing header "'+ headerName +'"'
+    };
   } else {
     return true;
   }
 }
 
-/** Parse SIP Message
- * @function
- * @param {String} message SIP message.
- * @returns {ExSIP.IncomingRequest|ExSIP.IncomingResponse|undefined}
+
+/**
+ * Parse SIP Message
  */
-Parser = {};
-Parser.parseMessage = function(ua, data) {
+Parser.parseMessage = function(data, ua) {
   var message, firstLine, contentLength, bodyStart, parsed,
     headerStart = 0,
-    headerEnd = data.indexOf('\r\n');
+    headerEnd = data.indexOf('\r\n'),
+    logger = ua.getLogger('ExSIP.parser');
 
   if(headerEnd === -1) {
-    logger.warn('no CRLF found, not a SIP message, discarded', ua);
+    logger.warn('no CRLF found, not a SIP message, discarded');
     return;
   }
 
   // Parse first line. Check if it is a Request or a Reply.
   firstLine = data.substring(0, headerEnd);
-  parsed = ExSIP.Grammar.parse(firstLine, 'Request_Response');
+  parsed = Grammar.parse(firstLine, 'Request_Response');
 
   if(parsed === -1) {
-    logger.warn('error parsing first line of SIP message: "' + firstLine + '"', ua);
+    logger.warn('error parsing first line of SIP message: "' + firstLine + '"');
     return;
   } else if(!parsed.status_code) {
-    message = new ExSIP.IncomingRequest(ua);
+    message = new SIPMessage.IncomingRequest(ua);
     message.method = parsed.method;
     message.ruri = parsed.uri;
   } else {
-    message = new ExSIP.IncomingResponse();
+    message = new SIPMessage.IncomingResponse(ua);
     message.status_code = parsed.status_code;
     message.reason_phrase = parsed.reason_phrase;
   }
@@ -215,13 +219,14 @@ Parser.parseMessage = function(ua, data) {
     }
     // data.indexOf returned -1 due to a malformed message.
     else if(headerEnd === -1) {
-      logger.warn('malformed message at : '+headerStart, ua);
+      parsed.error('malformed message');
       return;
     }
 
     parsed = parseHeader(message, data, headerStart, headerEnd);
 
-    if(!parsed) {
+    if(parsed !== true) {
+      logger.error(parsed.error);
       return;
     }
 
@@ -242,5 +247,11 @@ Parser.parseMessage = function(ua, data) {
   return message;
 };
 
-ExSIP.Parser = Parser;
-}(ExSIP));
+/**
+ * sdp-transform features.
+ */
+Parser.parseSDP = sdp_transform.parse;
+Parser.writeSDP = sdp_transform.write;
+Parser.parseFmtpConfig = sdp_transform.parseFmtpConfig;
+Parser.parsePayloads = sdp_transform.parsePayloads;
+Parser.parseRemoteCandidates = sdp_transform.parseRemoteCandidates;

@@ -1,36 +1,33 @@
+module.exports = DigestAuthentication;
 
-/**
- * @fileoverview SIP Digest Authentication
- */
 
-/**
- * SIP Digest Authentication.
- * @augments ExSIP.
- * @function Digest Authentication
- * @param {ExSIP.UA} ua
- */
-(function(ExSIP) {
-var DigestAuthentication,
-  logger = new ExSIP.Logger(ExSIP.name +' | '+ 'DIGEST AUTHENTICATION');
-
-DigestAuthentication = function(ua) {
-  this.ua = ua;
+function DigestAuthentication(ua) {
+  this.logger = ua.getLogger('ExSIP.digestauthentication');
   this.username = ua.configuration.authorization_user;
   this.password = ua.configuration.password;
   this.cnonce = null;
   this.nc = 0;
   this.ncHex = '00000000';
   this.response = null;
-};
+}
+
+
+/**
+ * Dependencies.
+ */
+var Utils = require('./Utils');
 
 
 /**
 * Performs Digest authentication given a SIP request and the challenge
 * received in a response to that request.
 * Returns true if credentials were successfully generated, false otherwise.
+<<<<<<< HEAD
 * 
 * @param {ExSIP.OutgoingRequest} request
 * @param {Object} challenge
+=======
+>>>>>>> ExSIP050
 */
 DigestAuthentication.prototype.authenticate = function(request, challenge) {
   // Inspect and validate the challenge.
@@ -43,7 +40,7 @@ DigestAuthentication.prototype.authenticate = function(request, challenge) {
 
   if (this.algorithm) {
     if (this.algorithm !== 'MD5') {
-      logger.warn('challenge with Digest algorithm different than "MD5", authentication aborted', this.ua);
+      this.logger.warn('challenge with Digest algorithm different than "MD5", authentication aborted');
       return false;
     }
   } else {
@@ -51,12 +48,12 @@ DigestAuthentication.prototype.authenticate = function(request, challenge) {
   }
 
   if (! this.realm) {
-    logger.warn('challenge without Digest realm, authentication aborted', this.ua);
+    this.logger.warn('challenge without Digest realm, authentication aborted');
     return false;
   }
 
   if (! this.nonce) {
-    logger.warn('challenge without Digest nonce, authentication aborted', this.ua);
+    this.logger.warn('challenge without Digest nonce, authentication aborted');
     return false;
   }
 
@@ -68,7 +65,7 @@ DigestAuthentication.prototype.authenticate = function(request, challenge) {
       this.qop = 'auth-int';
     } else {
       // Otherwise 'qop' is present but does not contain 'auth' or 'auth-int', so abort here.
-      logger.warn('challenge without Digest qop different than "auth" or "auth-int", authentication aborted', this.ua);
+      this.logger.warn('challenge without Digest qop different than "auth" or "auth-int", authentication aborted');
       return false;
     }
   } else {
@@ -79,7 +76,7 @@ DigestAuthentication.prototype.authenticate = function(request, challenge) {
 
   this.method = request.method;
   this.uri = request.ruri;
-  this.cnonce = ExSIP.Utils.createRandomToken(12);
+  this.cnonce = Utils.createRandomToken(12);
   this.nc += 1;
   this.updateNcHex();
 
@@ -98,31 +95,30 @@ DigestAuthentication.prototype.authenticate = function(request, challenge) {
 
 /**
 * Generate Digest 'response' value.
-* @private
 */
 DigestAuthentication.prototype.calculateResponse = function() {
   var ha1, ha2;
 
   // HA1 = MD5(A1) = MD5(username:realm:password)
-  ha1 = ExSIP.Utils.calculateMD5(this.username + ":" + this.realm + ":" + this.password);
+  ha1 = Utils.calculateMD5(this.username + ":" + this.realm + ":" + this.password);
 
   if (this.qop === 'auth') {
     // HA2 = MD5(A2) = MD5(method:digestURI)
-    ha2 = ExSIP.Utils.calculateMD5(this.method + ":" + this.uri);
+    ha2 = Utils.calculateMD5(this.method + ":" + this.uri);
     // response = MD5(HA1:nonce:nonceCount:credentialsNonce:qop:HA2)
-    this.response = ExSIP.Utils.calculateMD5(ha1 + ":" + this.nonce + ":" + this.ncHex + ":" + this.cnonce + ":auth:" + ha2);
+    this.response = Utils.calculateMD5(ha1 + ":" + this.nonce + ":" + this.ncHex + ":" + this.cnonce + ":auth:" + ha2);
 
   } else if (this.qop === 'auth-int') {
     // HA2 = MD5(A2) = MD5(method:digestURI:MD5(entityBody))
-    ha2 = ExSIP.Utils.calculateMD5(this.method + ":" + this.uri + ":" + ExSIP.Utils.calculateMD5(this.body ? this.body : ""));
+    ha2 = Utils.calculateMD5(this.method + ":" + this.uri + ":" + Utils.calculateMD5(this.body ? this.body : ""));
     // response = MD5(HA1:nonce:nonceCount:credentialsNonce:qop:HA2)
-    this.response = ExSIP.Utils.calculateMD5(ha1 + ":" + this.nonce + ":" + this.ncHex + ":" + this.cnonce + ":auth-int:" + ha2);
+    this.response = Utils.calculateMD5(ha1 + ":" + this.nonce + ":" + this.ncHex + ":" + this.cnonce + ":auth-int:" + ha2);
 
   } else if (this.qop === null) {
     // HA2 = MD5(A2) = MD5(method:digestURI)
-    ha2 = ExSIP.Utils.calculateMD5(this.method + ":" + this.uri);
+    ha2 = Utils.calculateMD5(this.method + ":" + this.uri);
     // response = MD5(HA1:nonce:HA2)
-    this.response = ExSIP.Utils.calculateMD5(ha1 + ":" + this.nonce + ":" + ha2);
+    this.response = Utils.calculateMD5(ha1 + ":" + this.nonce + ":" + ha2);
   }
 };
 
@@ -158,12 +154,8 @@ DigestAuthentication.prototype.toString = function() {
 
 /**
 * Generate the 'nc' value as required by Digest in this.ncHex by reading this.nc.
-* @private
 */
 DigestAuthentication.prototype.updateNcHex = function() {
   var hex = Number(this.nc).toString(16);
   this.ncHex = '00000000'.substr(0, 8-hex.length) + hex;
 };
-
-ExSIP.DigestAuthentication = DigestAuthentication;
-}(ExSIP));

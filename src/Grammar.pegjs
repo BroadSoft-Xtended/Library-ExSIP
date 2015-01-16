@@ -1,4 +1,11 @@
-{ var data = {}; } // Object to which header attributes will be assigned during parsing
+{
+  var URI = require('./URI');
+  var NameAddrHeader = require('./NameAddrHeader');
+
+  var data = {};
+}
+
+
 
 // ABNF BASIC
 
@@ -95,7 +102,7 @@ quoted_pair = "\\" ( [\x00-\x09] / [\x0B-\x0C] / [\x0E-\x7F] )
 
 SIP_URI_noparams  = uri_scheme ":"  userinfo ? hostport {
                     try {
-                        data.uri = new ExSIP.URI(data.scheme, data.user, data.host, data.port);
+                        data.uri = new URI(data.scheme, data.user, data.host, data.port);
                         delete data.scheme;
                         delete data.user;
                         delete data.host;
@@ -108,7 +115,7 @@ SIP_URI_noparams  = uri_scheme ":"  userinfo ? hostport {
 SIP_URI         = uri_scheme ":"  userinfo ? hostport uri_parameters headers ? {
                     var header;
                     try {
-                        data.uri = new ExSIP.URI(data.scheme, data.user, data.host, data.port, data.uri_params, data.uri_headers);
+                        data.uri = new URI(data.scheme, data.user, data.host, data.port, data.uri_params, data.uri_headers);
                         delete data.scheme;
                         delete data.user;
                         delete data.host;
@@ -121,11 +128,11 @@ SIP_URI         = uri_scheme ":"  userinfo ? hostport uri_parameters headers ? {
                         data = -1;
                       }}
 
-uri_scheme      = uri_scheme:  "sip"i {
+uri_scheme      = uri_scheme:  "sip"i / "sips"i {
                     data.scheme = uri_scheme.toLowerCase(); }
 
 userinfo        = user (":" password)? "@" {
-                    data.user = window.decodeURIComponent(input.substring(pos-1, offset));}
+                    data.user = decodeURIComponent(input.substring(pos-1, offset));}
 
 user            = ( unreserved / escaped / user_unreserved )+
 
@@ -136,9 +143,15 @@ password        = ( unreserved / escaped / "&" / "=" / "+" / "$" / "," )* {
 
 hostport        = host ( ":" port )?
 
-host            = ( hostname / IPv4address / IPv6reference ) {
+host            = ( IPv4address / IPv6reference / hostname ) {
                     data.host = input.substring(pos, offset).toLowerCase();
                     return data.host; }
+
+// 'hostname' grammar is relaxed.
+// RFC 3261:
+//   hostname = *( domainlabel "." ) toplabel [ "." ]
+//   domainlabel = alphanum / alphanum *( alphanum / "-" ) alphanum
+//   toplabel = ALPHA / ALPHA *( alphanum / "-" ) alphanum
 
 hostname        = ( domainlabel "." )* toplabel  "." ? {
                   data.host_type = 'domain';
@@ -146,7 +159,7 @@ hostname        = ( domainlabel "." )* toplabel  "." ? {
 
 domainlabel     = domainlabel: ( [a-zA-Z0-9_-]+ )
 
-toplabel        = toplabel: ( [a-zA-Z_-]+ )
+toplabel        = toplabel: ( [a-zA-Z0-9_-]+ )
 
 IPv6reference   = "[" IPv6address "]" {
                     data.host_type = 'IPv6';
@@ -393,7 +406,7 @@ contact_param       = (addr_spec / name_addr) (SEMI contact_params)* {
                         var header;
                         if(!data.multi_header) data.multi_header = [];
                         try {
-                          header = new ExSIP.NameAddrHeader(data.uri, data.display_name, data.params);
+                          header = new NameAddrHeader(data.uri, data.display_name, data.params);
                           delete data.uri;
                           delete data.display_name;
                           delete data.params;
@@ -537,7 +550,7 @@ event_param       = generic_param
 From        = ( addr_spec / name_addr ) ( SEMI from_param )* {
                 var tag = data.tag;
                 try {
-                  data = new ExSIP.NameAddrHeader(data.uri, data.display_name, data.params);
+                  data = new NameAddrHeader(data.uri, data.display_name, data.params);
                   if (tag) {data.setParam('tag',tag)}
                 } catch(e) {
                   data = -1;
@@ -562,7 +575,7 @@ Min_Expires  = min_expires: delta_seconds {data = min_expires; }
 
 Name_Addr_Header =  ( display_name )* LAQUOT SIP_URI RAQUOT ( SEMI generic_param )* {
                       try {
-                        data = new ExSIP.NameAddrHeader(data.uri, data.display_name, data.params);
+                        data = new NameAddrHeader(data.uri, data.display_name, data.params);
                       } catch(e) {
                         data = -1;
                       }}
@@ -640,7 +653,7 @@ rec_route     = name_addr ( SEMI rr_param )* {
                   var header;
                   if(!data.multi_header) data.multi_header = [];
                   try {
-                    header = new ExSIP.NameAddrHeader(data.uri, data.display_name, data.params);
+                    header = new NameAddrHeader(data.uri, data.display_name, data.params);
                     delete data.uri;
                     delete data.display_name;
                     delete data.params;
@@ -712,7 +725,7 @@ Supported  = ( option_tag (COMMA option_tag)* )?
 To         = ( addr_spec / name_addr ) ( SEMI to_param )* {
               var tag = data.tag;
               try {
-                data = new ExSIP.NameAddrHeader(data.uri, data.display_name, data.params);
+                data = new NameAddrHeader(data.uri, data.display_name, data.params);
                 if (tag) {data.setParam('tag',tag)}
               } catch(e) {
                 data = -1;
@@ -758,7 +771,7 @@ transport         = via_transport: ("UDP"i / "TCP"i / "TLS"i / "SCTP"i / other_t
 
 sent_by           = via_host ( COLON via_port )?
 
-via_host          = ( hostname / IPv4address / IPv6reference ) {
+via_host          = ( IPv4address / IPv6reference / hostname ) {
                       data.host = input.substring(pos, offset); }
 
 via_port          = via_sent_by_port: (DIGIT ? DIGIT ? DIGIT ? DIGIT ? DIGIT ?) {
@@ -813,3 +826,11 @@ turn_scheme       = scheme: ("turns"i / "turn"i) {
 
 turn_transport    = transport ("udp"i / "tcp"i / unreserved*) {
                       data.transport = transport; }
+
+// UUID URI
+uuid_URI      = "uuid:" uuid
+uuid          = uuid: hex8 "-" hex4 "-" hex4 "-" hex4 "-" hex12 {
+                  data = input.substring(pos+5, offset); }
+hex4          = HEXDIG HEXDIG HEXDIG HEXDIG
+hex8          = hex4 hex4
+hex12         = hex4 hex4 hex4

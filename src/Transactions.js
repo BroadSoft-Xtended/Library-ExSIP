@@ -1,495 +1,606 @@
-/**
- * @fileoverview SIP Transactions
- */
+module.exports = {
+  C: null,
+  NonInviteClientTransaction: NonInviteClientTransaction,
+  InviteClientTransaction: InviteClientTransaction,
+  AckClientTransaction: AckClientTransaction,
+  NonInviteServerTransaction: NonInviteServerTransaction,
+  InviteServerTransaction: InviteServerTransaction,
+  checkTransaction: checkTransaction
+};
 
-/**
- * SIP Transactions module.
- * @augments ExSIP
- */
-(function(ExSIP) {
-var Transactions,
-  logger =  new ExSIP.Logger(ExSIP.name +' | '+ 'TRANSACTION'),
-  C = {
-    // Transaction states
-    STATUS_TRYING:     1,
-    STATUS_PROCEEDING: 2,
-    STATUS_CALLING:    3,
-    STATUS_ACCEPTED:   4,
-    STATUS_COMPLETED:  5,
-    STATUS_TERMINATED: 6,
-    STATUS_CONFIRMED:  7
-  };
 
-Transactions = {};
+var C = {
+  // Transaction states
+  STATUS_TRYING:     1,
+  STATUS_PROCEEDING: 2,
+  STATUS_CALLING:    3,
+  STATUS_ACCEPTED:   4,
+  STATUS_COMPLETED:  5,
+  STATUS_TERMINATED: 6,
+  STATUS_CONFIRMED:  7,
 
-/**
-* @class Client Transaction
-* @private
-*/
-var ClientTransaction = function() {
-  this.init = function(request_sender, request, transport) {
-    var via;
-
-    this.transport = transport;
-    this.id = 'z9hG4bK' + Math.floor(Math.random() * 10000000);
-    this.request_sender = request_sender;
-    this.request = request;
-
-    via = 'SIP/2.0/' + (request_sender.ua.configuration.hack_via_tcp ? 'TCP' : transport.server.scheme);
-    via += ' ' + request_sender.ua.configuration.via_host + ';branch=' + this.id;
-
-    this.request.setHeader('via', via);
-  };
+  // Transaction types
+  NON_INVITE_CLIENT: 'nict',
+  NON_INVITE_SERVER: 'nist',
+  INVITE_CLIENT: 'ict',
+  INVITE_SERVER: 'ist'
 };
 
 /**
-* @class Non Invite Client Transaction Prototype
-* @private
-*/
-var NonInviteClientTransactionPrototype = function() {
-  this.send = function() {
-    var tr = this;
+ * Expose C object.
+ */
+module.exports.C = C;
 
-    this.state = C.STATUS_TRYING;
-    this.F = window.setTimeout(function() {tr.timer_F();}, ExSIP.Timers.TIMER_F);
 
-    if(!this.transport.send(this.request)) {
-      this.onTransportError();
+/**
+ * Dependencies.
+ */
+var ExSIP_C = require('./Constants');
+var EventEmitter = require('./EventEmitter');
+var Timers = require('./Timers');
+
+
+function NonInviteClientTransaction(request_sender, request, transport) {
+  var via,
+    via_transport,
+    events = ['stateChanged'];
+
+  this.type = C.NON_INVITE_CLIENT;
+  this.transport = transport;
+  this.id = 'z9hG4bK' + Math.floor(Math.random() * 10000000);
+  this.request_sender = request_sender;
+  this.request = request;
+
+  this.logger = request_sender.ua.getLogger('ExSIP.transaction.nict', this.id);
+
+  if (request_sender.ua.configuration.hack_via_tcp) {
+    via_transport = 'TCP';
+  }
+  else if (request_sender.ua.configuration.hack_via_ws) {
+    via_transport = 'WS';
+  }
+  else {
+    via_transport = transport.server.scheme;
+  }
+
+  via = 'SIP/2.0/' + via_transport;
+  via += ' ' + request_sender.ua.configuration.via_host + ';branch=' + this.id;
+
+  this.request.setHeader('via', via);
+
+  this.request_sender.ua.newTransaction(this);
+
+  this.initEvents(events);
+}
+
+
+NonInviteClientTransaction.prototype = new EventEmitter();
+
+NonInviteClientTransaction.prototype.stateChanged = function(state) {
+  this.state = state;
+  this.emit('stateChanged', this);
+};
+
+NonInviteClientTransaction.prototype.send = function() {
+  var tr = this;
+
+  this.stateChanged(C.STATUS_TRYING);
+  this.F = setTimeout(function() {tr.timer_F();}, Timers.TIMER_F);
+
+  if(!this.transport.send(this.request)) {
+    this.onTransportError();
+  }
+};
+
+NonInviteClientTransaction.prototype.onTransportError = function() {
+  this.logger.debug('transport error occurred, deleting non-INVITE client transaction ' + this.id);
+  clearTimeout(this.F);
+  clearTimeout(this.K);
+  this.stateChanged(C.STATUS_TERMINATED);
+  this.request_sender.ua.destroyTransaction(this);
+  this.request_sender.onTransportError();
+};
+
+NonInviteClientTransaction.prototype.timer_F = function() {
+  this.logger.debug('Timer F expired for non-INVITE client transaction ' + this.id);
+  this.stateChanged(C.STATUS_TERMINATED);
+  this.request_sender.ua.destroyTransaction(this);
+  this.request_sender.onRequestTimeout();
+};
+
+NonInviteClientTransaction.prototype.timer_K = function() {
+  this.stateChanged(C.STATUS_TERMINATED);
+  this.request_sender.ua.destroyTransaction(this);
+};
+
+NonInviteClientTransaction.prototype.receiveResponse = function(response) {
+  var
+    tr = this,
+    status_code = response.status_code;
+
+  if(status_code < 200) {
+    switch(this.state) {
+      case C.STATUS_TRYING:
+      case C.STATUS_PROCEEDING:
+        this.stateChanged(C.STATUS_PROCEEDING);
+        this.request_sender.receiveResponse(response);
+        break;
     }
+  } else {
+    switch(this.state) {
+      case C.STATUS_TRYING:
+      case C.STATUS_PROCEEDING:
+        this.stateChanged(C.STATUS_COMPLETED);
+        clearTimeout(this.F);
+
+        if(status_code === 408) {
+          this.request_sender.onRequestTimeout();
+        } else {
+          this.request_sender.receiveResponse(response);
+        }
+
+        this.K = setTimeout(function() {tr.timer_K();}, Timers.TIMER_K);
+        break;
+      case C.STATUS_COMPLETED:
+        break;
+    }
+  }
+};
+
+
+function InviteClientTransaction(request_sender, request, transport) {
+  var via,
+    tr = this,
+    via_transport,
+    events = ['stateChanged'];
+
+  this.type = C.INVITE_CLIENT;
+  this.transport = transport;
+  this.id = 'z9hG4bK' + Math.floor(Math.random() * 10000000);
+  this.request_sender = request_sender;
+  this.request = request;
+
+  this.logger = request_sender.ua.getLogger('ExSIP.transaction.ict', this.id);
+
+  if (request_sender.ua.configuration.hack_via_tcp) {
+    via_transport = 'TCP';
+  }
+  else if (request_sender.ua.configuration.hack_via_ws) {
+    via_transport = 'WS';
+  }
+  else {
+    via_transport = transport.server.scheme;
+  }
+
+  via = 'SIP/2.0/' + via_transport;
+  via += ' ' + request_sender.ua.configuration.via_host + ';branch=' + this.id;
+
+  this.request.setHeader('via', via);
+
+  this.request_sender.ua.newTransaction(this);
+
+  // TODO: Adding here the cancel() method is a hack that must be fixed.
+  // Add the cancel property to the request.
+  //Will be called from the request instance, not the transaction itself.
+  this.request.cancel = function(reason) {
+    tr.cancel_request(tr, reason);
   };
 
-  this.onTransportError = function() {
-    logger.log('transport error occurred, deleting non-INVITE client transaction ' + this.id, this.request_sender.ua);
-    window.clearTimeout(this.F);
-    window.clearTimeout(this.K);
-    delete this.request_sender.ua.transactions.nict[this.id];
+  this.initEvents(events);
+}
+
+InviteClientTransaction.prototype = new EventEmitter();
+
+InviteClientTransaction.prototype.stateChanged = function(state) {
+  this.state = state;
+  this.emit('stateChanged', this);
+};
+
+InviteClientTransaction.prototype.send = function() {
+  var tr = this;
+  this.stateChanged(C.STATUS_CALLING);
+  this.B = setTimeout(function() {
+    tr.timer_B();
+  }, Timers.TIMER_B);
+
+  if(!this.transport.send(this.request)) {
+    this.onTransportError();
+  }
+};
+
+InviteClientTransaction.prototype.onTransportError = function() {
+  this.logger.debug('transport error occurred, deleting INVITE client transaction ' + this.id);
+  clearTimeout(this.B);
+  clearTimeout(this.D);
+  clearTimeout(this.M);
+  this.stateChanged(C.STATUS_TERMINATED);
+  this.request_sender.ua.destroyTransaction(this);
+
+  if (this.state !== C.STATUS_ACCEPTED) {
     this.request_sender.onTransportError();
-  };
+  }
+};
 
-  this.timer_F = function() {
-    logger.log('Timer F expired for non-INVITE client transaction ' + this.id, this.request_sender.ua);
-    this.state = C.STATUS_TERMINATED;
+// RFC 6026 7.2
+InviteClientTransaction.prototype.timer_M = function() {
+  this.logger.debug('Timer M expired for INVITE client transaction ' + this.id);
+
+  if(this.state === C.STATUS_ACCEPTED) {
+    clearTimeout(this.B);
+    this.stateChanged(C.STATUS_TERMINATED);
+    this.request_sender.ua.destroyTransaction(this);
+  }
+};
+
+// RFC 3261 17.1.1
+InviteClientTransaction.prototype.timer_B = function() {
+  this.logger.debug('Timer B expired for INVITE client transaction ' + this.id);
+  if(this.state === C.STATUS_CALLING) {
+    this.stateChanged(C.STATUS_TERMINATED);
+    this.request_sender.ua.destroyTransaction(this);
     this.request_sender.onRequestTimeout();
-    delete this.request_sender.ua.transactions.nict[this.id];
-  };
-
-  this.timer_K = function() {
-    this.state = C.STATUS_TERMINATED;
-    delete this.request_sender.ua.transactions.nict[this.id];
-  };
-
-  this.receiveResponse = function(response) {
-    var
-      tr = this,
-      status_code = response.status_code;
-
-    if(status_code < 200) {
-      switch(this.state) {
-        case C.STATUS_TRYING:
-        case C.STATUS_PROCEEDING:
-          this.state = C.STATUS_PROCEEDING;
-          this.request_sender.receiveResponse(response);
-          break;
-      }
-    } else {
-      switch(this.state) {
-        case C.STATUS_TRYING:
-        case C.STATUS_PROCEEDING:
-          this.state = C.STATUS_COMPLETED;
-          window.clearTimeout(this.F);
-
-          if(status_code === 408) {
-            this.request_sender.onRequestTimeout();
-          } else {
-            this.request_sender.receiveResponse(response);
-          }
-
-          this.K = window.setTimeout(function() {tr.timer_K();}, ExSIP.Timers.TIMER_K);
-          break;
-        case C.STATUS_COMPLETED:
-          break;
-      }
-    }
-  };
-};
-NonInviteClientTransactionPrototype.prototype = new ClientTransaction();
-
-
-/**
- * @class Invite Client Transaction Prototype
- * @private
- */
-var InviteClientTransactionPrototype = function() {
-
-  this.send = function() {
-    var tr = this;
-    this.state = C.STATUS_CALLING;
-    this.B = window.setTimeout(function() {
-      tr.timer_B();
-    }, ExSIP.Timers.TIMER_B);
-
-    if(!this.transport.send(this.request)) {
-      this.onTransportError();
-    }
-  };
-
-  this.onTransportError = function() {
-    logger.log('transport error occurred, deleting INVITE client transaction ' + this.id, this.request_sender.ua);
-    window.clearTimeout(this.B);
-    window.clearTimeout(this.D);
-    window.clearTimeout(this.M);
-    delete this.request_sender.ua.transactions.ict[this.id];
-
-    if (this.state !== C.STATUS_ACCEPTED) {
-      this.request_sender.onTransportError();
-    }
-  };
-
-  // RFC 6026 7.2
-  this.timer_M = function() {
-    logger.log('Timer M expired for INVITE client transaction ' + this.id, this.request_sender.ua);
-
-    if(this.state === C.STATUS_ACCEPTED) {
-      this.state = C.STATUS_TERMINATED;
-      window.clearTimeout(this.B);
-      delete this.request_sender.ua.transactions.ict[this.id];
-    }
-  };
-
-  // RFC 3261 17.1.1
-  this.timer_B = function() {
-    logger.log('Timer B expired for INVITE client transaction ' + this.id, this.request_sender.ua);
-    if(this.state === C.STATUS_CALLING) {
-      this.state = C.STATUS_TERMINATED;
-      this.request_sender.onRequestTimeout();
-      delete this.request_sender.ua.transactions.ict[this.id];
-    }
-  };
-
-  this.timer_D = function() {
-    logger.log('Timer D expired for INVITE client transaction ' + this.id, this.request_sender.ua);
-    this.state = C.STATUS_TERMINATED;
-    window.clearTimeout(this.B);
-    delete this.request_sender.ua.transactions.ict[this.id];
-  };
-
-  this.sendACK = function(response) {
-    var tr = this;
-
-    this.ack = 'ACK ' + this.request.ruri + ' SIP/2.0\r\n';
-    this.ack += 'Via: ' + this.request.getHeader('Via').toString() + '\r\n';
-
-    if(this.request.getHeader('Route') && this.request.getHeader('Route').toString() !== "") {
-      this.ack += 'Route: ' + this.request.getHeader('Route').toString() + '\r\n';
-    }
-
-    this.ack += 'To: ' + response.getHeader('to') + '\r\n';
-    this.ack += 'From: ' + this.request.getHeader('From').toString() + '\r\n';
-    this.ack += 'Call-ID: ' + this.request.getHeader('Call-ID').toString() + '\r\n';
-    this.ack += 'CSeq: ' + this.request.getHeader('CSeq').toString().split(' ')[0];
-    this.ack += ' ACK\r\n\r\n';
-
-    this.D = window.setTimeout(function() {tr.timer_D();}, ExSIP.Timers.TIMER_D);
-
-    this.transport.send(this.ack);
-  };
-
-  this.cancel_request = function(tr, reason) {
-    var request = tr.request;
-
-    this.cancel = ExSIP.C.CANCEL + ' ' + request.ruri + ' SIP/2.0\r\n';
-    this.cancel += 'Via: ' + request.getHeader('Via').toString() + '\r\n';
-
-    if(this.request.getHeader('Route')) {
-      this.cancel += 'Route: ' + request.getHeader('Route').toString() + '\r\n';
-    }
-
-    this.cancel += 'To: ' + request.getHeader('To').toString() + '\r\n';
-    this.cancel += 'From: ' + request.getHeader('From').toString() + '\r\n';
-    this.cancel += 'Call-ID: ' + request.getHeader('Call-ID').toString() + '\r\n';
-    this.cancel += 'CSeq: ' + request.getHeader('CSeq').toString().split(' ')[0] +
-    ' CANCEL\r\n';
-
-    if(reason) {
-      this.cancel += 'Reason: ' + reason + '\r\n';
-    }
-
-    this.cancel += 'Content-Length: 0\r\n\r\n';
-
-    // Send only if a provisional response (>100) has been received.
-    if(this.state === C.STATUS_PROCEEDING) {
-      this.transport.send(this.cancel);
-    }
-  };
-
-  this.receiveResponse = function(response) {
-    var
-      tr = this,
-      status_code = response.status_code;
-
-    if(status_code >= 100 && status_code <= 199) {
-      switch(this.state) {
-        case C.STATUS_CALLING:
-          this.state = C.STATUS_PROCEEDING;
-          this.request_sender.receiveResponse(response);
-          if(this.cancel) {
-            this.transport.send(this.cancel);
-          }
-          break;
-        case C.STATUS_PROCEEDING:
-          this.request_sender.receiveResponse(response);
-          break;
-      }
-    } else if(status_code >= 200 && status_code <= 299) {
-      switch(this.state) {
-        case C.STATUS_CALLING:
-        case C.STATUS_PROCEEDING:
-          this.state = C.STATUS_ACCEPTED;
-          this.M = window.setTimeout(function() {
-            tr.timer_M();
-          }, ExSIP.Timers.TIMER_M);
-          this.request_sender.receiveResponse(response);
-          break;
-        case C.STATUS_ACCEPTED:
-          this.request_sender.receiveResponse(response);
-          break;
-      }
-    } else if(status_code >= 300 && status_code <= 699) {
-      switch(this.state) {
-        case C.STATUS_CALLING:
-        case C.STATUS_PROCEEDING:
-          this.state = C.STATUS_COMPLETED;
-          this.sendACK(response);
-          if(status_code === 503) {
-            var options = {code: 503, reason: 'Service Unavailable', retryCallback: function(transport){
-              transport.ua.once("connected", function(e){
-                if(transport === e.data.transport) {
-                  tr.send();
-                }
-              });
-            }};
-            this.request_sender.ua.onTransportError(this.request_sender.ua.transport, options);
-          } else {
-            this.request_sender.receiveResponse(response);
-          }
-          break;
-        case C.STATUS_COMPLETED:
-          this.sendACK(response);
-          break;
-      }
-    }
-  };
-};
-InviteClientTransactionPrototype.prototype = new ClientTransaction();
-
-/**
- * @class Server Transaction
- * @private
- */
-var ServerTransaction = function() {
-  this.init = function(request, ua) {
-    this.id = request.via_branch;
-    this.request = request;
-    this.transport = request.transport;
-    this.ua = ua;
-    this.last_response = '';
-    request.server_transaction = this;
-  };
+  }
 };
 
-/**
- * @class Non Invite Server Transaction Prototype
- * @private
- */
-var NonInviteServerTransactionPrototype = function() {
-  this.timer_J = function() {
-    logger.log('Timer J expired for non-INVITE server transaction ' + this.id, this.ua);
-    this.state = C.STATUS_TERMINATED;
-    delete this.ua.transactions.nist[this.id];
-  };
-
-  this.onTransportError = function() {
-    if (!this.transportError) {
-      this.transportError = true;
-
-      logger.log('transport error occurred, deleting non-INVITE server transaction ' + this.id, this.ua);
-
-      window.clearTimeout(this.J);
-      delete this.ua.transactions.nist[this.id];
-    }
-  };
-
-  this.receiveResponse = function(status_code, response, onSuccess, onFailure) {
-    var tr = this;
-
-    if(status_code === 100) {
-      /* RFC 4320 4.1
-       * 'A SIP element MUST NOT
-       * send any provisional response with a
-       * Status-Code other than 100 to a non-INVITE request.'
-       */
-      switch(this.state) {
-        case C.STATUS_TRYING:
-          this.state = C.STATUS_PROCEEDING;
-          if(!this.transport.send(response))  {
-            this.onTransportError();
-          }
-          break;
-        case C.STATUS_PROCEEDING:
-          this.last_response = response;
-          if(!this.transport.send(response)) {
-            this.onTransportError();
-            if (onFailure) {
-              onFailure();
-            }
-          } else if (onSuccess) {
-            onSuccess();
-          }
-          break;
-      }
-    } else if(status_code >= 200 && status_code <= 699) {
-      switch(this.state) {
-        case C.STATUS_TRYING:
-        case C.STATUS_PROCEEDING:
-          this.state = C.STATUS_COMPLETED;
-          this.last_response = response;
-          if(ExSIP.Timers.TIMER_J === 0) {
-              tr.timer_J();
-          } else {
-            this.J = window.setTimeout(function() {
-              tr.timer_J();
-            }, ExSIP.Timers.TIMER_J);
-          }
-          if(!this.transport.send(response)) {
-            this.onTransportError();
-            if (onFailure) {
-              onFailure();
-            }
-          } else if (onSuccess) {
-            onSuccess();
-          }
-          break;
-        case C.STATUS_COMPLETED:
-          break;
-      }
-    }
-  };
+InviteClientTransaction.prototype.timer_D = function() {
+  this.logger.debug('Timer D expired for INVITE client transaction ' + this.id);
+  clearTimeout(this.B);
+  this.stateChanged(C.STATUS_TERMINATED);
+  this.request_sender.ua.destroyTransaction(this);
 };
-NonInviteServerTransactionPrototype.prototype = new ServerTransaction();
 
-/**
- * @class Invite Server Transaction Prototype
- * @private
- */
-var InviteServerTransactionPrototype = function() {
-  this.timer_H = function() {
-    logger.log('Timer H expired for INVITE server transaction ' + this.id, this.ua);
+InviteClientTransaction.prototype.sendACK = function(response) {
+  var tr = this;
 
-    if(this.state === C.STATUS_COMPLETED) {
-      logger.warn('transactions', 'ACK for INVITE server transaction was never received, call will be terminated', this.ua);
-      this.state = C.STATUS_TERMINATED;
-    }
+  this.ack = 'ACK ' + this.request.ruri + ' SIP/2.0\r\n';
+  this.ack += 'Via: ' + this.request.headers.Via.toString() + '\r\n';
 
-    delete this.ua.transactions.ist[this.id];
-  };
+  if(this.request.headers.Route) {
+    this.ack += 'Route: ' + this.request.headers.Route.toString() + '\r\n';
+  }
 
-  this.timer_I = function() {
-    this.state = C.STATUS_TERMINATED;
-    delete this.ua.transactions.ist[this.id];
-  };
+  this.ack += 'To: ' + response.getHeader('to') + '\r\n';
+  this.ack += 'From: ' + this.request.headers.From.toString() + '\r\n';
+  this.ack += 'Call-ID: ' + this.request.headers['Call-ID'].toString() + '\r\n';
+  this.ack += 'CSeq: ' + this.request.headers.CSeq.toString().split(' ')[0];
+  this.ack += ' ACK\r\n';
+  this.ack += 'Content-Length: 0\r\n\r\n';
 
-  // RFC 6026 7.1
-  this.timer_L = function() {
-    logger.log('Timer L expired for INVITE server transaction ' + this.id, this.ua);
+  this.D = setTimeout(function() {tr.timer_D();}, Timers.TIMER_D);
 
-    if(this.state === C.STATUS_ACCEPTED) {
-      this.state = C.STATUS_TERMINATED;
-      delete this.ua.transactions.ist[this.id];
-    }
-  };
+  this.transport.send(this.ack);
+};
 
-  this.onTransportError = function() {
-    if (!this.transportError) {
-      this.transportError = true;
+InviteClientTransaction.prototype.cancel_request = function(tr, reason) {
+  var request = tr.request;
 
-      logger.log('transport error occurred, deleting INVITE server transaction ' + this.id, this.ua);
+  this.cancel = ExSIP_C.CANCEL + ' ' + request.ruri + ' SIP/2.0\r\n';
+  this.cancel += 'Via: ' + request.headers.Via.toString() + '\r\n';
 
-      if (this.resendProvisionalTimer !== null) {
-        window.clearInterval(this.resendProvisionalTimer);
-        this.resendProvisionalTimer = null;
-      }
-      window.clearTimeout(this.L);
-      window.clearTimeout(this.H);
-      window.clearTimeout(this.I);
-      delete this.ua.transactions.ist[this.id];
-    }
-  };
+  if(this.request.headers.Route) {
+    this.cancel += 'Route: ' + request.headers.Route.toString() + '\r\n';
+  }
 
-  this.resend_provisional = function() {
-    if(!this.transport.send(this.last_response)) {
-      this.onTransportError();
-    }
-  };
+  this.cancel += 'To: ' + request.headers.To.toString() + '\r\n';
+  this.cancel += 'From: ' + request.headers.From.toString() + '\r\n';
+  this.cancel += 'Call-ID: ' + request.headers['Call-ID'].toString() + '\r\n';
+  this.cancel += 'CSeq: ' + request.headers.CSeq.toString().split(' ')[0] +
+  ' CANCEL\r\n';
 
-  this.cancel_request = function(tr, reason) {
-    var request = tr.request;
+  if(reason) {
+    this.cancel += 'Reason: ' + reason + '\r\n';
+  }
 
-    this.cancel = ExSIP.C.CANCEL + ' ' + request.ruri + ' SIP/2.0\r\n';
-    this.cancel += 'Via: ' + request.getHeader('Via').toString() + '\r\n';
+  this.cancel += 'Content-Length: 0\r\n\r\n';
 
-    if(this.request.getHeader('Route')) {
-      this.cancel += 'Route: ' + request.getHeader('Route').toString() + '\r\n';
-    }
-
-    this.cancel += 'To: ' + request.getHeader('From').toString() + '\r\n';
-    this.cancel += 'From: ' + request.getHeader('To').toString() + '\r\n';
-    this.cancel += 'Call-ID: ' + request.getHeader('Call-ID').toString() + '\r\n';
-    this.cancel += 'CSeq: ' + request.getHeader('CSeq').toString().split(' ')[0] +
-      ' CANCEL\r\n';
-
-    if(reason) {
-      this.cancel += 'Reason: ' + reason + '\r\n';
-    }
-
-    this.cancel += 'Content-Length: 0\r\n\r\n';
-
+  // Send only if a provisional response (>100) has been received.
+  if(this.state === C.STATUS_PROCEEDING) {
     this.transport.send(this.cancel);
-  };
+  }
+};
 
-  // INVITE Server Transaction RFC 3261 17.2.1
-  this.receiveResponse = function(status_code, response, onSuccess, onFailure) {
-    var tr = this;
+InviteClientTransaction.prototype.receiveResponse = function(response) {
+  var
+  tr = this,
+  status_code = response.status_code;
 
-    if(status_code >= 100 && status_code <= 199) {
-      switch(this.state) {
-        case C.STATUS_PROCEEDING:
-          if(!this.transport.send(response)) {
-            this.onTransportError();
+  if(status_code >= 100 && status_code <= 199) {
+    switch(this.state) {
+      case C.STATUS_CALLING:
+        this.stateChanged(C.STATUS_PROCEEDING);
+        this.request_sender.receiveResponse(response);
+        break;
+      case C.STATUS_PROCEEDING:
+        this.request_sender.receiveResponse(response);
+        break;
+    }
+  } else if(status_code >= 200 && status_code <= 299) {
+    switch(this.state) {
+      case C.STATUS_CALLING:
+      case C.STATUS_PROCEEDING:
+        this.stateChanged(C.STATUS_ACCEPTED);
+        this.M = setTimeout(function() {
+          tr.timer_M();
+        }, Timers.TIMER_M);
+        this.request_sender.receiveResponse(response);
+        break;
+      case C.STATUS_ACCEPTED:
+        this.request_sender.receiveResponse(response);
+        break;
+    }
+  } else if(status_code >= 300 && status_code <= 699) {
+    switch(this.state) {
+      case C.STATUS_CALLING:
+      case C.STATUS_PROCEEDING:
+        this.stateChanged(C.STATUS_COMPLETED);
+        this.sendACK(response);
+        this.request_sender.receiveResponse(response);
+        break;
+      case C.STATUS_COMPLETED:
+        this.sendACK(response);
+        break;
+    }
+  }
+};
+
+
+function AckClientTransaction(request_sender, request, transport) {
+  var via,
+    via_transport;
+
+  this.transport = transport;
+  this.id = 'z9hG4bK' + Math.floor(Math.random() * 10000000);
+  this.request_sender = request_sender;
+  this.request = request;
+
+  this.logger = request_sender.ua.getLogger('ExSIP.transaction.nict', this.id);
+
+  if (request_sender.ua.configuration.hack_via_tcp) {
+    via_transport = 'TCP';
+  }
+  else if (request_sender.ua.configuration.hack_via_ws) {
+    via_transport = 'WS';
+  }
+  else {
+    via_transport = transport.server.scheme;
+  }
+
+  via = 'SIP/2.0/' + via_transport;
+  via += ' ' + request_sender.ua.configuration.via_host + ';branch=' + this.id;
+
+  this.request.setHeader('via', via);
+}
+
+AckClientTransaction.prototype = new EventEmitter();
+
+AckClientTransaction.prototype.send = function() {
+  if(!this.transport.send(this.request)) {
+    this.onTransportError();
+  }
+};
+
+AckClientTransaction.prototype.onTransportError = function() {
+  this.logger.debug('transport error occurred, for an ACK client transaction ' + this.id);
+  this.request_sender.onTransportError();
+};
+
+
+function NonInviteServerTransaction(request, ua) {
+  var events = ['stateChanged'];
+
+  this.type = C.NON_INVITE_SERVER;
+  this.id = request.via_branch;
+  this.request = request;
+  this.transport = request.transport;
+  this.ua = ua;
+  this.last_response = '';
+  request.server_transaction = this;
+
+  this.logger = ua.getLogger('ExSIP.transaction.nist', this.id);
+
+  this.state = C.STATUS_TRYING;
+
+  ua.newTransaction(this);
+
+  this.initEvents(events);
+}
+
+NonInviteServerTransaction.prototype = new EventEmitter();
+
+NonInviteServerTransaction.prototype.stateChanged = function(state) {
+  this.state = state;
+  this.emit('stateChanged', this);
+};
+
+NonInviteServerTransaction.prototype.timer_J = function() {
+  this.logger.debug('Timer J expired for non-INVITE server transaction ' + this.id);
+  this.stateChanged(C.STATUS_TERMINATED);
+  this.ua.destroyTransaction(this);
+};
+
+NonInviteServerTransaction.prototype.onTransportError = function() {
+  if (!this.transportError) {
+    this.transportError = true;
+
+    this.logger.debug('transport error occurred, deleting non-INVITE server transaction ' + this.id);
+
+    clearTimeout(this.J);
+    this.stateChanged(C.STATUS_TERMINATED);
+    this.ua.destroyTransaction(this);
+  }
+};
+
+NonInviteServerTransaction.prototype.receiveResponse = function(status_code, response, onSuccess, onFailure) {
+  var tr = this;
+
+  if(status_code === 100) {
+    /* RFC 4320 4.1
+     * 'A SIP element MUST NOT
+     * send any provisional response with a
+     * Status-Code other than 100 to a non-INVITE request.'
+     */
+    switch(this.state) {
+      case C.STATUS_TRYING:
+        this.stateChanged(C.STATUS_PROCEEDING);
+        if(!this.transport.send(response))  {
+          this.onTransportError();
+        }
+        break;
+      case C.STATUS_PROCEEDING:
+        this.last_response = response;
+        if(!this.transport.send(response)) {
+          this.onTransportError();
+          if (onFailure) {
+            onFailure();
           }
-          this.last_response = response;
-          break;
-      }
+        } else if (onSuccess) {
+          onSuccess();
+        }
+        break;
+    }
+  } else if(status_code >= 200 && status_code <= 699) {
+    switch(this.state) {
+      case C.STATUS_TRYING:
+      case C.STATUS_PROCEEDING:
+        this.stateChanged(C.STATUS_COMPLETED);
+        this.last_response = response;
+        this.J = setTimeout(function() {
+          tr.timer_J();
+        }, Timers.TIMER_J);
+        if(!this.transport.send(response)) {
+          this.onTransportError();
+          if (onFailure) {
+            onFailure();
+          }
+        } else if (onSuccess) {
+          onSuccess();
+        }
+        break;
+      case C.STATUS_COMPLETED:
+        break;
+    }
+  }
+};
+
+
+function InviteServerTransaction(request, ua) {
+  var events = ['stateChanged'];
+
+  this.type = C.INVITE_SERVER;
+  this.id = request.via_branch;
+  this.request = request;
+  this.transport = request.transport;
+  this.ua = ua;
+  this.last_response = '';
+  request.server_transaction = this;
+
+  this.logger = ua.getLogger('ExSIP.transaction.ist', this.id);
+
+  this.state = C.STATUS_PROCEEDING;
+
+  ua.newTransaction(this);
+
+  this.resendProvisionalTimer = null;
+
+  request.reply(100);
+
+  this.initEvents(events);
+}
+
+InviteServerTransaction.prototype = new EventEmitter();
+
+InviteServerTransaction.prototype.stateChanged = function(state) {
+  this.state = state;
+  this.emit('stateChanged', this);
+};
+
+InviteServerTransaction.prototype.timer_H = function() {
+  this.logger.debug('Timer H expired for INVITE server transaction ' + this.id);
+
+  if(this.state === C.STATUS_COMPLETED) {
+    this.logger.log('transactions', 'ACK for INVITE server transaction was never received, call will be terminated');
+  }
+
+  this.stateChanged(C.STATUS_TERMINATED);
+  this.ua.destroyTransaction(this);
+};
+
+InviteServerTransaction.prototype.timer_I = function() {
+  this.stateChanged(C.STATUS_TERMINATED);
+  this.ua.destroyTransaction(this);
+};
+
+// RFC 6026 7.1
+InviteServerTransaction.prototype.timer_L = function() {
+  this.logger.debug('Timer L expired for INVITE server transaction ' + this.id);
+
+  if(this.state === C.STATUS_ACCEPTED) {
+    this.stateChanged(C.STATUS_TERMINATED);
+    this.ua.destroyTransaction(this);
+  }
+};
+
+InviteServerTransaction.prototype.onTransportError = function() {
+  if (!this.transportError) {
+    this.transportError = true;
+
+    this.logger.debug('transport error occurred, deleting INVITE server transaction ' + this.id);
+
+    if (this.resendProvisionalTimer !== null) {
+      clearInterval(this.resendProvisionalTimer);
+      this.resendProvisionalTimer = null;
     }
 
-    if(status_code > 100 && status_code <= 199 && this.state === C.STATUS_PROCEEDING) {
-      // Trigger the resendProvisionalTimer only for the first non 100 provisional response.
-      if(this.resendProvisionalTimer === null) {
-        this.resendProvisionalTimer = window.setInterval(function() {
-          tr.resend_provisional();}, ExSIP.Timers.PROVISIONAL_RESPONSE_INTERVAL);
-      }
-    } else if(status_code >= 200 && status_code <= 299) {
-      switch(this.state) {
-        case C.STATUS_PROCEEDING:
-          this.state = C.STATUS_ACCEPTED;
-          this.last_response = response;
-          this.L = window.setTimeout(function() {
-            tr.timer_L();
-          }, ExSIP.Timers.TIMER_L);
-          if (this.resendProvisionalTimer !== null) {
-            window.clearInterval(this.resendProvisionalTimer);
-            this.resendProvisionalTimer = null;
-          }
-          /* falls through */
+    clearTimeout(this.L);
+    clearTimeout(this.H);
+    clearTimeout(this.I);
+
+    this.stateChanged(C.STATUS_TERMINATED);
+    this.ua.destroyTransaction(this);
+  }
+};
+
+InviteServerTransaction.prototype.resend_provisional = function() {
+  if(!this.transport.send(this.last_response)) {
+    this.onTransportError();
+  }
+};
+
+// INVITE Server Transaction RFC 3261 17.2.1
+InviteServerTransaction.prototype.receiveResponse = function(status_code, response, onSuccess, onFailure) {
+  var tr = this;
+
+  if(status_code >= 100 && status_code <= 199) {
+    switch(this.state) {
+      case C.STATUS_PROCEEDING:
+        if(!this.transport.send(response)) {
+          this.onTransportError();
+        }
+        this.last_response = response;
+        break;
+    }
+  }
+
+  if(status_code > 100 && status_code <= 199 && this.state === C.STATUS_PROCEEDING) {
+    // Trigger the resendProvisionalTimer only for the first non 100 provisional response.
+    if(this.resendProvisionalTimer === null) {
+      this.resendProvisionalTimer = setInterval(function() {
+        tr.resend_provisional();}, Timers.PROVISIONAL_RESPONSE_INTERVAL);
+    }
+  } else if(status_code >= 200 && status_code <= 299) {
+    switch(this.state) {
+      case C.STATUS_PROCEEDING:
+        this.stateChanged(C.STATUS_ACCEPTED);
+        this.last_response = response;
+        this.L = setTimeout(function() {
+          tr.timer_L();
+        }, Timers.TIMER_L);
+
+        if (this.resendProvisionalTimer !== null) {
+          clearInterval(this.resendProvisionalTimer);
+          this.resendProvisionalTimer = null;
+        }
+        /* falls through */
         case C.STATUS_ACCEPTED:
           // Note that this point will be reached for proceeding tr.state also.
           if(!this.transport.send(response)) {
@@ -501,125 +612,35 @@ var InviteServerTransactionPrototype = function() {
             onSuccess();
           }
           break;
-      }
-    } else if(status_code >= 300 && status_code <= 699) {
-      switch(this.state) {
-        case C.STATUS_PROCEEDING:
-          if (this.resendProvisionalTimer !== null) {
-            window.clearInterval(this.resendProvisionalTimer);
-            this.resendProvisionalTimer = null;
-          }
-          if(!this.transport.send(response)) {
-            this.onTransportError();
-            if (onFailure) {
-              onFailure();
-            }
-          } else {
-            this.state = C.STATUS_COMPLETED;
-            this.H = window.setTimeout(function() {
-              tr.timer_H();
-            }, ExSIP.Timers.TIMER_H);
-            if (onSuccess) {
-              onSuccess();
-            }
-          }
-          break;
-      }
     }
-  };
+  } else if(status_code >= 300 && status_code <= 699) {
+    switch(this.state) {
+      case C.STATUS_PROCEEDING:
+        if (this.resendProvisionalTimer !== null) {
+          clearInterval(this.resendProvisionalTimer);
+          this.resendProvisionalTimer = null;
+        }
+
+        if(!this.transport.send(response)) {
+          this.onTransportError();
+          if (onFailure) {
+            onFailure();
+          }
+        } else {
+          this.stateChanged(C.STATUS_COMPLETED);
+          this.H = setTimeout(function() {
+            tr.timer_H();
+          }, Timers.TIMER_H);
+          if (onSuccess) {
+            onSuccess();
+          }
+        }
+        break;
+    }
+  }
 };
-InviteServerTransactionPrototype.prototype = new ServerTransaction();
 
 /**
-* @augments ExSIP.Transactions
-* @class Non Invite Client Transaction
-* @param {ExSIP.RequestSender} request_sender
-* @param {ExSIP.OutgoingRequest} request
-* @param {ExSIP.Transport} transport
-*/
-Transactions.NonInviteClientTransaction = function(request_sender, request, transport) {
-  this.init(request_sender, request, transport);
-  this.request_sender.ua.transactions.nict[this.id] = this;
-};
-Transactions.NonInviteClientTransaction.prototype = new NonInviteClientTransactionPrototype();
-
-/**
-* @augments ExSIP.Transactions
-* @class Invite Client Transaction
-* @param {ExSIP.RequestSender} request_sender
-* @param {ExSIP.OutgoingRequest} request
-* @param {ExSIP.Transport} transport
-*/
-Transactions.InviteClientTransaction = function(request_sender, request, transport) {
-  var tr = this;
-
-  this.init(request_sender, request, transport);
-  this.request_sender.ua.transactions.ict[this.id] = this;
-
-  // Add the cancel property to the request.
-  //Will be called from the request instance, not the transaction itself.
-  this.request.cancel = function(reason) {
-    tr.cancel_request(tr, reason);
-  };
-};
-Transactions.InviteClientTransaction.prototype = new InviteClientTransactionPrototype();
-
-Transactions.AckClientTransaction = function(request_sender, request, transport) {
-  this.init(request_sender, request, transport);
-  this.send = function() {
-    this.transport.send(request);
-  };
-};
-Transactions.AckClientTransaction.prototype = new NonInviteClientTransactionPrototype();
-
-
-/**
-* @augments ExSIP.Transactions
-* @class Non Invite Server Transaction
-* @param {ExSIP.IncomingRequest} request
-* @param {ExSIP.UA} ua
-*/
-Transactions.NonInviteServerTransaction = function(request, ua) {
-  this.init(request, ua);
-  this.state = C.STATUS_TRYING;
-
-  ua.transactions.nist[this.id] = this;
-};
-Transactions.NonInviteServerTransaction.prototype = new NonInviteServerTransactionPrototype();
-
-
-
-/**
-* @augments ExSIP.Transactions
-* @class Invite Server Transaction
-* @param {ExSIP.IncomingRequest} request
-* @param {ExSIP.UA} ua
-*/
-Transactions.InviteServerTransaction = function(request, ua) {
-  var tr = this;
-  this.init(request, ua);
-  this.state = C.STATUS_PROCEEDING;
-
-  ua.transactions.ist[this.id] = this;
-
-  this.resendProvisionalTimer = null;
-
-  // Add the cancel property to the request.
-  //Will be called from the request instance, not the transaction itself.
-  request.cancel = function(reason) {
-    tr.cancel_request(tr, reason);
-  };
-
-  request.reply(100);
-};
-Transactions.InviteServerTransaction.prototype = new InviteServerTransactionPrototype();
-
-/**
- * @function
- * @param {ExSIP.UA} ua
- * @param {ExSIP.IncomingRequest} request
- *
- * @return {boolean}
  * INVITE:
  *  _true_ if retransmission
  *  _false_ new request
@@ -637,11 +658,11 @@ Transactions.InviteServerTransaction.prototype = new InviteServerTransactionProt
  *  _true_  retransmission
  *  _false_ new request
  */
-Transactions.checkTransaction = function(ua, request) {
+function checkTransaction(ua, request) {
   var tr;
 
   switch(request.method) {
-    case ExSIP.C.INVITE:
+    case ExSIP_C.INVITE:
       tr = ua.transactions.ist[request.via_branch];
       if(tr) {
         switch(tr.state) {
@@ -654,11 +675,11 @@ Transactions.checkTransaction = function(ua, request) {
           case C.STATUS_ACCEPTED:
             break;
         }
-        logger.log("checkTransaction failed for INVITE request and server transaction in state : "+tr.state, ua);
+        this.logger.log("checkTransaction failed for INVITE request and server transaction in state : "+tr.state, ua);
         return true;
       }
       break;
-    case ExSIP.C.ACK:
+    case ExSIP_C.ACK:
       tr = ua.transactions.ist[request.via_branch];
 
       // RFC 6026 7.1
@@ -667,30 +688,28 @@ Transactions.checkTransaction = function(ua, request) {
           return false;
         } else if(tr.state === C.STATUS_COMPLETED) {
           tr.state = C.STATUS_CONFIRMED;
-          tr.I = window.setTimeout(function() {tr.timer_I();}, ExSIP.Timers.TIMER_I);
-          logger.log("checkTransaction failed for ACK request and server transaction in state : "+tr.state, ua);
+          tr.I = setTimeout(function() {tr.timer_I();}, Timers.TIMER_I);
           return true;
         }
       }
-
       // ACK to 2XX Response.
       else {
         return false;
       }
       break;
-    case ExSIP.C.CANCEL:
+    case ExSIP_C.CANCEL:
       tr = ua.transactions.ist[request.via_branch];
       if(tr) {
         request.reply_sl(200);
         if(tr.state === C.STATUS_PROCEEDING) {
           return false;
         } else {
-          logger.log("checkTransaction failed for CANCEL request and server transaction in state : "+tr.state, ua);
+          this.logger.log("checkTransaction failed for CANCEL request and server transaction in state : "+tr.state, ua);
           return true;
         }
       } else {
         request.reply_sl(481);
-        logger.log("checkTransaction failed for CANCEL request and no server transaction", ua);
+        this.logger.log("checkTransaction failed for CANCEL request and no server transaction", ua);
         return true;
       }
       break;
@@ -707,13 +726,9 @@ Transactions.checkTransaction = function(ua, request) {
             tr.transport.send(tr.last_response);
             break;
         }
-        logger.log("checkTransaction failed for non invite server transaction in state : "+tr.state, ua);
+        this.logger.log("checkTransaction failed for non invite server transaction in state : "+tr.state, ua);
         return true;
       }
       break;
   }
-};
-
-Transactions.C = C;
-ExSIP.Transactions = Transactions;
-}(ExSIP));
+}

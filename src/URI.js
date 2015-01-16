@@ -1,23 +1,24 @@
-/**
- * @fileoverview SIP URI
- */
+module.exports = URI;
+
 
 /**
- * @augments ExSIP
- * @class Class creating a SIP URI.
- *
- * @param {String} [scheme]
- * @param {String} [user]
- * @param {String} host
- * @param {String} [port]
- * @param {Object} [parameters]
- * @param {Object} [headers]
+ * Dependencies.
+ */
+var ExSIP_C = require('./Constants');
+var Utils = require('./Utils');
+var Grammar = require('./Grammar');
+
+
+/**
+ * -param {String} [scheme]
+ * -param {String} [user]
+ * -param {String} host
+ * -param {String} [port]
+ * -param {Object} [parameters]
+ * -param {Object} [headers]
  *
  */
-(function(ExSIP) {
-var URI;
-
-URI = function(scheme, user, host, port, parameters, headers) {
+function URI(scheme, user, host, port, parameters, headers) {
   var param, header;
 
   // Checks
@@ -26,7 +27,7 @@ URI = function(scheme, user, host, port, parameters, headers) {
   }
 
   // Initialize parameters
-  scheme = scheme || ExSIP.C.SIP;
+  scheme = scheme || ExSIP_C.SIP;
   this.parameters = {};
   this.headers = {};
 
@@ -67,7 +68,9 @@ URI = function(scheme, user, host, port, parameters, headers) {
       }
     }
   });
-};
+}
+
+
 URI.prototype = {
   setParam: function(key, value) {
     if(key) {
@@ -102,24 +105,24 @@ URI.prototype = {
   },
 
   setHeader: function(name, value) {
-    this.headers[ExSIP.Utils.headerize(name)] = (value instanceof Array) ? value : [value];
+    this.headers[Utils.headerize(name)] = (value instanceof Array) ? value : [value];
   },
 
   getHeader: function(name) {
     if(name) {
-      return this.headers[ExSIP.Utils.headerize(name)];
+      return this.headers[Utils.headerize(name)];
     }
   },
 
   hasHeader: function(name) {
     if(name) {
-      return (this.headers.hasOwnProperty(ExSIP.Utils.headerize(name)) && true) || false;
+      return (this.headers.hasOwnProperty(Utils.headerize(name)) && true) || false;
     }
   },
 
   deleteHeader: function(header) {
     var value;
-    header = ExSIP.Utils.headerize(header);
+    header = Utils.headerize(header);
     if(this.headers.hasOwnProperty(header)) {
       value = this.headers[header];
       delete this.headers[header];
@@ -141,8 +144,8 @@ URI.prototype = {
       this.user,
       this.host,
       this.port,
-      window.JSON.parse(window.JSON.stringify(this.parameters)),
-      window.JSON.parse(window.JSON.stringify(this.headers)));
+      JSON.parse(JSON.stringify(this.parameters)),
+      JSON.parse(JSON.stringify(this.headers)));
   },
 
   toString: function(){
@@ -151,7 +154,7 @@ URI.prototype = {
 
     uri  = this.scheme + ':';
     if (this.user) {
-      uri += ExSIP.Utils.escapeUser(this.user) + '@';
+      uri += Utils.escapeUser(this.user) + '@';
     }
     uri += this.host;
     if (this.port || this.port === 0) {
@@ -184,7 +187,7 @@ URI.prototype = {
 
       aor  = this.scheme + ':';
       if (this.user) {
-        aor += ExSIP.Utils.escapeUser(this.user) + '@';
+        aor += Utils.escapeUser(this.user) + '@';
       }
       aor += this.host;
       if (show_port && (this.port || this.port === 0)) {
@@ -199,11 +202,9 @@ URI.prototype = {
 /**
   * Parse the given string and returns a ExSIP.URI instance or undefined if
   * it is an invalid URI.
-  * @public
-  * @param {String} uri
   */
 URI.parse = function(uri) {
-  uri = ExSIP.Grammar.parse(uri,'SIP_URI');
+  uri = Grammar.parse(uri,'SIP_URI');
 
   if (uri !== -1) {
     return uri;
@@ -211,6 +212,3 @@ URI.parse = function(uri) {
     return undefined;
   }
 };
-
-ExSIP.URI = URI;
-}(ExSIP));
