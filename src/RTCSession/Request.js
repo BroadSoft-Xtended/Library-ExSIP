@@ -10,7 +10,7 @@ var RTCSession = require('../RTCSession');
 var Utils = require('../Utils');
 
 
-function Request(session, callbacks) {
+function Request(session) {
   var events = [
     'progress',
     'succeeded',
@@ -18,7 +18,6 @@ function Request(session, callbacks) {
   ];
 
   this.owner = session;
-  this.callbacks = callbacks || {};
 
   this.logger = session.ua.getLogger('ExSIP.rtcsession.request', session.id);
   this.initEvents(events);
@@ -54,9 +53,9 @@ Request.prototype.send = function(method, options) {
    * could had been terminated before the ACK had arrived.
    * RFC3261 Section 15, Paragraph 2
    */
-  else if (this.owner.status === RTCSession.C.STATUS_TERMINATED && method !== ExSIP_C.BYE) {
-    throw new Exceptions.InvalidStateError(this.owner.status);
-  }
+  // else if (this.owner.status === RTCSession.C.STATUS_TERMINATED && method !== ExSIP_C.BYE) {
+  //   throw new Exceptions.InvalidStateError(this.owner.status);
+  // }
 
   // Set event handlers
   for (event in eventHandlers) {
@@ -74,6 +73,7 @@ Request.prototype.receiveResponse = function(response) {
 
   switch(true) {
     case /^1[0-9]{2}$/.test(response.status_code):
+      this.owner.received_100 = true;
       this.emit('progress', this, {
         originator: 'remote',
         response: response

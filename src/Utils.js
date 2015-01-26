@@ -11,27 +11,29 @@ var URI = require('./URI');
 var Grammar = require('./Grammar');
 
 Utils.inArray = function(array, el) {
-  for ( var i = array.length; i--; ) {
-    if ( array[i] === el ) { return true; }
+  for (var i = array.length; i--;) {
+    if (array[i] === el) {
+      return true;
+    }
   }
   return false;
 };
 
 Utils.isEqArrays = function(arr1, arr2) {
-  if ( arr1 === null && arr2 !== null ) {
+  if (arr1 === null && arr2 !== null) {
     return false;
   }
-  if ( arr1 !== null && arr2 === null ) {
+  if (arr1 !== null && arr2 === null) {
     return false;
   }
-  if ( arr1 === null && arr2 === null ) {
+  if (arr1 === null && arr2 === null) {
     return true;
   }
-  if ( arr1.length !== arr2.length ) {
+  if (arr1.length !== arr2.length) {
     return false;
   }
-  for ( var i = arr1.length; i--; ) {
-    if ( !this.inArray( arr2, arr1[i] ) ) {
+  for (var i = arr1.length; i--;) {
+    if (!this.inArray(arr2, arr1[i])) {
       return false;
     }
   }
@@ -44,11 +46,24 @@ Utils.isEqArrays = function(arr1, arr2) {
  * @param obj2
  * @returns obj3 a new object based on obj1 and obj2
  */
-Utils.merge_options = function(obj1,obj2){
-    var obj3 = {};
-    for (var attrname1 in obj1) { obj3[attrname1] = obj1[attrname1]; }
-    for (var attrname2 in obj2) { obj3[attrname2] = obj2[attrname2]; }
-    return obj3;
+Utils.merge_options = function(obj1, obj2) {
+  var obj3 = {};
+  for (var attrname1 in obj1) {
+    obj3[attrname1] = obj1[attrname1];
+  }
+  for (var attrname2 in obj2) {
+    obj3[attrname2] = obj2[attrname2];
+  }
+  return obj3;
+};
+
+Utils.containsHeader = function(headers, name) {
+  for (var i = 0; i < headers && headers.length; i++) {
+    if (headers[i].indexOf(name) !== -1) {
+      return true;
+    }
+  }
+  return false;
 };
 
 Utils.str_utf8_length = function(string) {
@@ -71,35 +86,48 @@ Utils.toString = function(object) {
 
 Utils.isFunction = function(fn) {
   if (fn !== undefined) {
-    return (Object.prototype.toString.call(fn) === '[object Function]')? true : false;
+    return (Object.prototype.toString.call(fn) === '[object Function]') ? true : false;
   } else {
     return false;
   }
 };
 
 Utils.isDecimal = function(num) {
-  return !isNaN(num) && (parseFloat(num) === parseInt(num,10));
+  return !isNaN(num) && (parseFloat(num) === parseInt(num, 10));
 };
 
-Utils.getHeadersFromQuery = function (query) {
-    var headers = [];
-    var queryParts = query.split("&");
-    for(var i=0; i<queryParts.length; i++) {
-      var parameters = queryParts[i].split("=");
-      headers.push(parameters[0]+": "+decodeURIComponent(parameters[1]));
-    }
-    return headers;
-  };
+Utils.getHeadersFromQuery = function(query) {
+  var headers = [];
+  var queryParts = query.split("&");
+  for (var i = 0; i < queryParts.length; i++) {
+    var parameters = queryParts[i].split("=");
+    headers.push(parameters[0] + ": " + decodeURIComponent(parameters[1]));
+  }
+  return headers;
+};
 
-Utils.stripSip = function (address) {
-    var match = address.match(/<sip\:(.*)\>/);
-    return match ? match[1] : address;
-  };
+Utils.stripSip = function(address) {
+  var match = address.match(/<sip\:(.*)\>/);
+  return match ? match[1] : address;
+};
 
 Utils.isEmpty = function(value) {
   if (value === null || value === "" || value === undefined || (value instanceof Array && value.length === 0) || (typeof(value) === 'number' && isNaN(value))) {
     return true;
   }
+};
+
+Utils.getAllowedMethods = function(ua) {
+  var event,
+    allowed = ExSIP_C.ALLOWED_METHODS.toString();
+
+  for (event in ExSIP_C.EVENT_METHODS) {
+    if (ua.checkEvent(event) && ua.listeners(event).length > 0) {
+      allowed += ',' + ExSIP_C.EVENT_METHODS[event];
+    }
+  }
+
+  return allowed;
 };
 
 Utils.createRandomToken = function(size, base) {
@@ -108,8 +136,8 @@ Utils.createRandomToken = function(size, base) {
 
   base = base || 32;
 
-  for( i=0; i < size; i++ ) {
-    r = Math.random() * base|0;
+  for (i = 0; i < size; i++) {
+    r = Math.random() * base | 0;
     token += r.toString(base);
   }
   return token;
@@ -122,7 +150,8 @@ Utils.newTag = function() {
 // http://stackoverflow.com/users/109538/broofa
 Utils.newUUID = function() {
   var UUID = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    var r = Math.random()*16|0, v = c === 'x' ? r : (r&0x3|0x8);
+    var r = Math.random() * 16 | 0,
+      v = c === 'x' ? r : (r & 0x3 | 0x8);
     return v.toString(16);
   });
 
@@ -133,7 +162,7 @@ Utils.hostType = function(host) {
   if (!host) {
     return;
   } else {
-    host = Grammar.parse(host,'host');
+    host = Grammar.parse(host, 'host');
     if (host !== -1) {
       return host.host_type;
     }
@@ -141,29 +170,29 @@ Utils.hostType = function(host) {
 };
 
 /**
-* Normalize SIP URI.
-* NOTE: It does not allow a SIP URI without username.
-* Accepts 'sip', 'sips' and 'tel' URIs and convert them into 'sip'.
-* Detects the domain part (if given) and properly hex-escapes the user portion.
-* If the user portion has only 'tel' number symbols the user portion is clean of 'tel' visual separators.
-*/
+ * Normalize SIP URI.
+ * NOTE: It does not allow a SIP URI without username.
+ * Accepts 'sip', 'sips' and 'tel' URIs and convert them into 'sip'.
+ * Detects the domain part (if given) and properly hex-escapes the user portion.
+ * If the user portion has only 'tel' number symbols the user portion is clean of 'tel' visual separators.
+ */
 Utils.normalizeTarget = function(target, domain) {
   var uri, target_array, target_user, target_domain;
 
   // If no target is given then raise an error.
   if (!target) {
     return;
-  // If a URI instance is given then return it.
+    // If a URI instance is given then return it.
   } else if (target instanceof URI) {
     return target;
 
-  // If a string is given split it by '@':
-  // - Last fragment is the desired domain.
-  // - Otherwise append the given domain argument.
+    // If a string is given split it by '@':
+    // - Last fragment is the desired domain.
+    // - Otherwise append the given domain argument.
   } else if (typeof target === 'string') {
     target_array = target.split('@');
 
-    switch(target_array.length) {
+    switch (target_array.length) {
       case 1:
         if (!domain) {
           return;
@@ -176,8 +205,8 @@ Utils.normalizeTarget = function(target, domain) {
         target_domain = target_array[1];
         break;
       default:
-        target_user = target_array.slice(0, target_array.length-1).join('@');
-        target_domain = target_array[target_array.length-1];
+        target_user = target_array.slice(0, target_array.length - 1).join('@');
+        target_domain = target_array[target_array.length - 1];
     }
 
     // Remove the URI scheme (if present).
@@ -203,8 +232,8 @@ Utils.normalizeTarget = function(target, domain) {
 };
 
 /**
-* Hex-escape a SIP URI user.
-*/
+ * Hex-escape a SIP URI user.
+ */
 Utils.escapeUser = function(user) {
   // Don't hex-escape ':' (%3A), '+' (%2B), '?' (%3F"), '/' (%2F).
   return encodeURIComponent(decodeURIComponent(user)).replace(/%3A/ig, ':').replace(/%2B/ig, '+').replace(/%3F/ig, '?').replace(/%2F/ig, '/');
@@ -212,19 +241,20 @@ Utils.escapeUser = function(user) {
 
 Utils.headerize = function(string) {
   var exceptions = {
-    'Call-Id': 'Call-ID',
-    'Cseq': 'CSeq',
-    'Www-Authenticate': 'WWW-Authenticate'
+      'Call-Id': 'Call-ID',
+      'Cseq': 'CSeq',
+      'Www-Authenticate': 'WWW-Authenticate'
     },
-    name = string.toLowerCase().replace(/_/g,'-').split('-'),
+    name = string.toLowerCase().replace(/_/g, '-').split('-'),
     hname = '',
-    parts = name.length, part;
+    parts = name.length,
+    part;
 
   for (part = 0; part < parts; part++) {
     if (part !== 0) {
-      hname +='-';
+      hname += '-';
     }
-    hname += name[part].charAt(0).toUpperCase()+name[part].substring(1);
+    hname += name[part].charAt(0).toUpperCase() + name[part].substring(1);
   }
   if (exceptions[hname]) {
     hname = exceptions[hname];
@@ -245,11 +275,11 @@ Utils.sipErrorCause = function(status_code) {
 };
 
 /**
-* Generate a random Test-Net IP (http://tools.ietf.org/html/rfc5735)
-*/
+ * Generate a random Test-Net IP (http://tools.ietf.org/html/rfc5735)
+ */
 Utils.getRandomTestNetIP = function() {
-  function getOctet(from,to) {
-    return Math.floor(Math.random()*(to-from+1)+from);
+  function getOctet(from, to) {
+    return Math.floor(Math.random() * (to - from + 1) + from);
   }
   return '192.0.2.' + getOctet(1, 254);
 };
@@ -257,16 +287,16 @@ Utils.getRandomTestNetIP = function() {
 // MD5 (Message-Digest Algorithm) http://www.webtoolkit.info
 Utils.calculateMD5 = function(string) {
   function rotateLeft(lValue, iShiftBits) {
-    return (lValue<<iShiftBits) | (lValue>>>(32-iShiftBits));
+    return (lValue << iShiftBits) | (lValue >>> (32 - iShiftBits));
   }
 
-  function addUnsigned(lX,lY) {
-    var lX4,lY4,lX8,lY8,lResult;
+  function addUnsigned(lX, lY) {
+    var lX4, lY4, lX8, lY8, lResult;
     lX8 = (lX & 0x80000000);
     lY8 = (lY & 0x80000000);
     lX4 = (lX & 0x40000000);
     lY4 = (lY & 0x40000000);
-    lResult = (lX & 0x3FFFFFFF)+(lY & 0x3FFFFFFF);
+    lResult = (lX & 0x3FFFFFFF) + (lY & 0x3FFFFFFF);
     if (lX4 & lY4) {
       return (lResult ^ 0x80000000 ^ lX8 ^ lY8);
     }
@@ -281,38 +311,38 @@ Utils.calculateMD5 = function(string) {
     }
   }
 
-  function doF(x,y,z) {
+  function doF(x, y, z) {
     return (x & y) | ((~x) & z);
   }
 
-  function doG(x,y,z) {
+  function doG(x, y, z) {
     return (x & z) | (y & (~z));
   }
 
-  function doH(x,y,z) {
+  function doH(x, y, z) {
     return (x ^ y ^ z);
   }
 
-  function doI(x,y,z) {
+  function doI(x, y, z) {
     return (y ^ (x | (~z)));
   }
 
-  function doFF(a,b,c,d,x,s,ac) {
+  function doFF(a, b, c, d, x, s, ac) {
     a = addUnsigned(a, addUnsigned(addUnsigned(doF(b, c, d), x), ac));
     return addUnsigned(rotateLeft(a, s), b);
   }
 
-  function doGG(a,b,c,d,x,s,ac) {
+  function doGG(a, b, c, d, x, s, ac) {
     a = addUnsigned(a, addUnsigned(addUnsigned(doG(b, c, d), x), ac));
     return addUnsigned(rotateLeft(a, s), b);
   }
 
-  function doHH(a,b,c,d,x,s,ac) {
+  function doHH(a, b, c, d, x, s, ac) {
     a = addUnsigned(a, addUnsigned(addUnsigned(doH(b, c, d), x), ac));
     return addUnsigned(rotateLeft(a, s), b);
   }
 
-  function doII(a,b,c,d,x,s,ac) {
+  function doII(a, b, c, d, x, s, ac) {
     a = addUnsigned(a, addUnsigned(addUnsigned(doI(b, c, d), x), ac));
     return addUnsigned(rotateLeft(a, s), b);
   }
@@ -320,38 +350,40 @@ Utils.calculateMD5 = function(string) {
   function convertToWordArray(string) {
     var lWordCount;
     var lMessageLength = string.length;
-    var lNumberOfWords_temp1=lMessageLength + 8;
-    var lNumberOfWords_temp2=(lNumberOfWords_temp1-(lNumberOfWords_temp1 % 64))/64;
-    var lNumberOfWords = (lNumberOfWords_temp2+1)*16;
-    var lWordArray = new Array(lNumberOfWords-1);
+    var lNumberOfWords_temp1 = lMessageLength + 8;
+    var lNumberOfWords_temp2 = (lNumberOfWords_temp1 - (lNumberOfWords_temp1 % 64)) / 64;
+    var lNumberOfWords = (lNumberOfWords_temp2 + 1) * 16;
+    var lWordArray = new Array(lNumberOfWords - 1);
     var lBytePosition = 0;
     var lByteCount = 0;
-    while ( lByteCount < lMessageLength ) {
-      lWordCount = (lByteCount-(lByteCount % 4))/4;
-      lBytePosition = (lByteCount % 4)*8;
-      lWordArray[lWordCount] = (lWordArray[lWordCount] | (string.charCodeAt(lByteCount)<<lBytePosition));
+    while (lByteCount < lMessageLength) {
+      lWordCount = (lByteCount - (lByteCount % 4)) / 4;
+      lBytePosition = (lByteCount % 4) * 8;
+      lWordArray[lWordCount] = (lWordArray[lWordCount] | (string.charCodeAt(lByteCount) << lBytePosition));
       lByteCount++;
     }
-    lWordCount = (lByteCount-(lByteCount % 4))/4;
-    lBytePosition = (lByteCount % 4)*8;
-    lWordArray[lWordCount] = lWordArray[lWordCount] | (0x80<<lBytePosition);
-    lWordArray[lNumberOfWords-2] = lMessageLength<<3;
-    lWordArray[lNumberOfWords-1] = lMessageLength>>>29;
+    lWordCount = (lByteCount - (lByteCount % 4)) / 4;
+    lBytePosition = (lByteCount % 4) * 8;
+    lWordArray[lWordCount] = lWordArray[lWordCount] | (0x80 << lBytePosition);
+    lWordArray[lNumberOfWords - 2] = lMessageLength << 3;
+    lWordArray[lNumberOfWords - 1] = lMessageLength >>> 29;
     return lWordArray;
   }
 
   function wordToHex(lValue) {
-    var wordToHexValue="",wordToHexValue_temp="",lByte,lCount;
-    for (lCount = 0;lCount<=3;lCount++) {
-      lByte = (lValue>>>(lCount*8)) & 255;
+    var wordToHexValue = "",
+      wordToHexValue_temp = "",
+      lByte, lCount;
+    for (lCount = 0; lCount <= 3; lCount++) {
+      lByte = (lValue >>> (lCount * 8)) & 255;
       wordToHexValue_temp = "0" + lByte.toString(16);
-      wordToHexValue = wordToHexValue + wordToHexValue_temp.substr(wordToHexValue_temp.length-2,2);
+      wordToHexValue = wordToHexValue + wordToHexValue_temp.substr(wordToHexValue_temp.length - 2, 2);
     }
     return wordToHexValue;
   }
 
   function utf8Encode(string) {
-    string = string.replace(/\r\n/g,"\n");
+    string = string.replace(/\r\n/g, "\n");
     var utftext = "";
 
     for (var n = 0; n < string.length; n++) {
@@ -359,12 +391,10 @@ Utils.calculateMD5 = function(string) {
 
       if (c < 128) {
         utftext += String.fromCharCode(c);
-      }
-      else if((c > 127) && (c < 2048)) {
+      } else if ((c > 127) && (c < 2048)) {
         utftext += String.fromCharCode((c >> 6) | 192);
         utftext += String.fromCharCode((c & 63) | 128);
-      }
-      else {
+      } else {
         utftext += String.fromCharCode((c >> 12) | 224);
         utftext += String.fromCharCode(((c >> 6) & 63) | 128);
         utftext += String.fromCharCode((c & 63) | 128);
@@ -373,92 +403,110 @@ Utils.calculateMD5 = function(string) {
     return utftext;
   }
 
-  var x=[];
-  var k,AA,BB,CC,DD,a,b,c,d;
-  var S11=7, S12=12, S13=17, S14=22;
-  var S21=5, S22=9 , S23=14, S24=20;
-  var S31=4, S32=11, S33=16, S34=23;
-  var S41=6, S42=10, S43=15, S44=21;
+  var x = [];
+  var k, AA, BB, CC, DD, a, b, c, d;
+  var S11 = 7,
+    S12 = 12,
+    S13 = 17,
+    S14 = 22;
+  var S21 = 5,
+    S22 = 9,
+    S23 = 14,
+    S24 = 20;
+  var S31 = 4,
+    S32 = 11,
+    S33 = 16,
+    S34 = 23;
+  var S41 = 6,
+    S42 = 10,
+    S43 = 15,
+    S44 = 21;
 
   string = utf8Encode(string);
 
   x = convertToWordArray(string);
 
-  a = 0x67452301; b = 0xEFCDAB89; c = 0x98BADCFE; d = 0x10325476;
+  a = 0x67452301;
+  b = 0xEFCDAB89;
+  c = 0x98BADCFE;
+  d = 0x10325476;
 
-  for (k=0;k<x.length;k+=16) {
-    AA=a; BB=b; CC=c; DD=d;
-    a=doFF(a,b,c,d,x[k+0], S11,0xD76AA478);
-    d=doFF(d,a,b,c,x[k+1], S12,0xE8C7B756);
-    c=doFF(c,d,a,b,x[k+2], S13,0x242070DB);
-    b=doFF(b,c,d,a,x[k+3], S14,0xC1BDCEEE);
-    a=doFF(a,b,c,d,x[k+4], S11,0xF57C0FAF);
-    d=doFF(d,a,b,c,x[k+5], S12,0x4787C62A);
-    c=doFF(c,d,a,b,x[k+6], S13,0xA8304613);
-    b=doFF(b,c,d,a,x[k+7], S14,0xFD469501);
-    a=doFF(a,b,c,d,x[k+8], S11,0x698098D8);
-    d=doFF(d,a,b,c,x[k+9], S12,0x8B44F7AF);
-    c=doFF(c,d,a,b,x[k+10],S13,0xFFFF5BB1);
-    b=doFF(b,c,d,a,x[k+11],S14,0x895CD7BE);
-    a=doFF(a,b,c,d,x[k+12],S11,0x6B901122);
-    d=doFF(d,a,b,c,x[k+13],S12,0xFD987193);
-    c=doFF(c,d,a,b,x[k+14],S13,0xA679438E);
-    b=doFF(b,c,d,a,x[k+15],S14,0x49B40821);
-    a=doGG(a,b,c,d,x[k+1], S21,0xF61E2562);
-    d=doGG(d,a,b,c,x[k+6], S22,0xC040B340);
-    c=doGG(c,d,a,b,x[k+11],S23,0x265E5A51);
-    b=doGG(b,c,d,a,x[k+0], S24,0xE9B6C7AA);
-    a=doGG(a,b,c,d,x[k+5], S21,0xD62F105D);
-    d=doGG(d,a,b,c,x[k+10],S22,0x2441453);
-    c=doGG(c,d,a,b,x[k+15],S23,0xD8A1E681);
-    b=doGG(b,c,d,a,x[k+4], S24,0xE7D3FBC8);
-    a=doGG(a,b,c,d,x[k+9], S21,0x21E1CDE6);
-    d=doGG(d,a,b,c,x[k+14],S22,0xC33707D6);
-    c=doGG(c,d,a,b,x[k+3], S23,0xF4D50D87);
-    b=doGG(b,c,d,a,x[k+8], S24,0x455A14ED);
-    a=doGG(a,b,c,d,x[k+13],S21,0xA9E3E905);
-    d=doGG(d,a,b,c,x[k+2], S22,0xFCEFA3F8);
-    c=doGG(c,d,a,b,x[k+7], S23,0x676F02D9);
-    b=doGG(b,c,d,a,x[k+12],S24,0x8D2A4C8A);
-    a=doHH(a,b,c,d,x[k+5], S31,0xFFFA3942);
-    d=doHH(d,a,b,c,x[k+8], S32,0x8771F681);
-    c=doHH(c,d,a,b,x[k+11],S33,0x6D9D6122);
-    b=doHH(b,c,d,a,x[k+14],S34,0xFDE5380C);
-    a=doHH(a,b,c,d,x[k+1], S31,0xA4BEEA44);
-    d=doHH(d,a,b,c,x[k+4], S32,0x4BDECFA9);
-    c=doHH(c,d,a,b,x[k+7], S33,0xF6BB4B60);
-    b=doHH(b,c,d,a,x[k+10],S34,0xBEBFBC70);
-    a=doHH(a,b,c,d,x[k+13],S31,0x289B7EC6);
-    d=doHH(d,a,b,c,x[k+0], S32,0xEAA127FA);
-    c=doHH(c,d,a,b,x[k+3], S33,0xD4EF3085);
-    b=doHH(b,c,d,a,x[k+6], S34,0x4881D05);
-    a=doHH(a,b,c,d,x[k+9], S31,0xD9D4D039);
-    d=doHH(d,a,b,c,x[k+12],S32,0xE6DB99E5);
-    c=doHH(c,d,a,b,x[k+15],S33,0x1FA27CF8);
-    b=doHH(b,c,d,a,x[k+2], S34,0xC4AC5665);
-    a=doII(a,b,c,d,x[k+0], S41,0xF4292244);
-    d=doII(d,a,b,c,x[k+7], S42,0x432AFF97);
-    c=doII(c,d,a,b,x[k+14],S43,0xAB9423A7);
-    b=doII(b,c,d,a,x[k+5], S44,0xFC93A039);
-    a=doII(a,b,c,d,x[k+12],S41,0x655B59C3);
-    d=doII(d,a,b,c,x[k+3], S42,0x8F0CCC92);
-    c=doII(c,d,a,b,x[k+10],S43,0xFFEFF47D);
-    b=doII(b,c,d,a,x[k+1], S44,0x85845DD1);
-    a=doII(a,b,c,d,x[k+8], S41,0x6FA87E4F);
-    d=doII(d,a,b,c,x[k+15],S42,0xFE2CE6E0);
-    c=doII(c,d,a,b,x[k+6], S43,0xA3014314);
-    b=doII(b,c,d,a,x[k+13],S44,0x4E0811A1);
-    a=doII(a,b,c,d,x[k+4], S41,0xF7537E82);
-    d=doII(d,a,b,c,x[k+11],S42,0xBD3AF235);
-    c=doII(c,d,a,b,x[k+2], S43,0x2AD7D2BB);
-    b=doII(b,c,d,a,x[k+9], S44,0xEB86D391);
-    a=addUnsigned(a,AA);
-    b=addUnsigned(b,BB);
-    c=addUnsigned(c,CC);
-    d=addUnsigned(d,DD);
+  for (k = 0; k < x.length; k += 16) {
+    AA = a;
+    BB = b;
+    CC = c;
+    DD = d;
+    a = doFF(a, b, c, d, x[k + 0], S11, 0xD76AA478);
+    d = doFF(d, a, b, c, x[k + 1], S12, 0xE8C7B756);
+    c = doFF(c, d, a, b, x[k + 2], S13, 0x242070DB);
+    b = doFF(b, c, d, a, x[k + 3], S14, 0xC1BDCEEE);
+    a = doFF(a, b, c, d, x[k + 4], S11, 0xF57C0FAF);
+    d = doFF(d, a, b, c, x[k + 5], S12, 0x4787C62A);
+    c = doFF(c, d, a, b, x[k + 6], S13, 0xA8304613);
+    b = doFF(b, c, d, a, x[k + 7], S14, 0xFD469501);
+    a = doFF(a, b, c, d, x[k + 8], S11, 0x698098D8);
+    d = doFF(d, a, b, c, x[k + 9], S12, 0x8B44F7AF);
+    c = doFF(c, d, a, b, x[k + 10], S13, 0xFFFF5BB1);
+    b = doFF(b, c, d, a, x[k + 11], S14, 0x895CD7BE);
+    a = doFF(a, b, c, d, x[k + 12], S11, 0x6B901122);
+    d = doFF(d, a, b, c, x[k + 13], S12, 0xFD987193);
+    c = doFF(c, d, a, b, x[k + 14], S13, 0xA679438E);
+    b = doFF(b, c, d, a, x[k + 15], S14, 0x49B40821);
+    a = doGG(a, b, c, d, x[k + 1], S21, 0xF61E2562);
+    d = doGG(d, a, b, c, x[k + 6], S22, 0xC040B340);
+    c = doGG(c, d, a, b, x[k + 11], S23, 0x265E5A51);
+    b = doGG(b, c, d, a, x[k + 0], S24, 0xE9B6C7AA);
+    a = doGG(a, b, c, d, x[k + 5], S21, 0xD62F105D);
+    d = doGG(d, a, b, c, x[k + 10], S22, 0x2441453);
+    c = doGG(c, d, a, b, x[k + 15], S23, 0xD8A1E681);
+    b = doGG(b, c, d, a, x[k + 4], S24, 0xE7D3FBC8);
+    a = doGG(a, b, c, d, x[k + 9], S21, 0x21E1CDE6);
+    d = doGG(d, a, b, c, x[k + 14], S22, 0xC33707D6);
+    c = doGG(c, d, a, b, x[k + 3], S23, 0xF4D50D87);
+    b = doGG(b, c, d, a, x[k + 8], S24, 0x455A14ED);
+    a = doGG(a, b, c, d, x[k + 13], S21, 0xA9E3E905);
+    d = doGG(d, a, b, c, x[k + 2], S22, 0xFCEFA3F8);
+    c = doGG(c, d, a, b, x[k + 7], S23, 0x676F02D9);
+    b = doGG(b, c, d, a, x[k + 12], S24, 0x8D2A4C8A);
+    a = doHH(a, b, c, d, x[k + 5], S31, 0xFFFA3942);
+    d = doHH(d, a, b, c, x[k + 8], S32, 0x8771F681);
+    c = doHH(c, d, a, b, x[k + 11], S33, 0x6D9D6122);
+    b = doHH(b, c, d, a, x[k + 14], S34, 0xFDE5380C);
+    a = doHH(a, b, c, d, x[k + 1], S31, 0xA4BEEA44);
+    d = doHH(d, a, b, c, x[k + 4], S32, 0x4BDECFA9);
+    c = doHH(c, d, a, b, x[k + 7], S33, 0xF6BB4B60);
+    b = doHH(b, c, d, a, x[k + 10], S34, 0xBEBFBC70);
+    a = doHH(a, b, c, d, x[k + 13], S31, 0x289B7EC6);
+    d = doHH(d, a, b, c, x[k + 0], S32, 0xEAA127FA);
+    c = doHH(c, d, a, b, x[k + 3], S33, 0xD4EF3085);
+    b = doHH(b, c, d, a, x[k + 6], S34, 0x4881D05);
+    a = doHH(a, b, c, d, x[k + 9], S31, 0xD9D4D039);
+    d = doHH(d, a, b, c, x[k + 12], S32, 0xE6DB99E5);
+    c = doHH(c, d, a, b, x[k + 15], S33, 0x1FA27CF8);
+    b = doHH(b, c, d, a, x[k + 2], S34, 0xC4AC5665);
+    a = doII(a, b, c, d, x[k + 0], S41, 0xF4292244);
+    d = doII(d, a, b, c, x[k + 7], S42, 0x432AFF97);
+    c = doII(c, d, a, b, x[k + 14], S43, 0xAB9423A7);
+    b = doII(b, c, d, a, x[k + 5], S44, 0xFC93A039);
+    a = doII(a, b, c, d, x[k + 12], S41, 0x655B59C3);
+    d = doII(d, a, b, c, x[k + 3], S42, 0x8F0CCC92);
+    c = doII(c, d, a, b, x[k + 10], S43, 0xFFEFF47D);
+    b = doII(b, c, d, a, x[k + 1], S44, 0x85845DD1);
+    a = doII(a, b, c, d, x[k + 8], S41, 0x6FA87E4F);
+    d = doII(d, a, b, c, x[k + 15], S42, 0xFE2CE6E0);
+    c = doII(c, d, a, b, x[k + 6], S43, 0xA3014314);
+    b = doII(b, c, d, a, x[k + 13], S44, 0x4E0811A1);
+    a = doII(a, b, c, d, x[k + 4], S41, 0xF7537E82);
+    d = doII(d, a, b, c, x[k + 11], S42, 0xBD3AF235);
+    c = doII(c, d, a, b, x[k + 2], S43, 0x2AD7D2BB);
+    b = doII(b, c, d, a, x[k + 9], S44, 0xEB86D391);
+    a = addUnsigned(a, AA);
+    b = addUnsigned(b, BB);
+    c = addUnsigned(c, CC);
+    d = addUnsigned(d, DD);
   }
 
-  var temp = wordToHex(a)+wordToHex(b)+wordToHex(c)+wordToHex(d);
+  var temp = wordToHex(a) + wordToHex(b) + wordToHex(c) + wordToHex(d);
 
   return temp.toLowerCase();
 };

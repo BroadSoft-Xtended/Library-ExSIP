@@ -58,7 +58,7 @@ else {
   WebRTC.RTCSessionDescription = function(options){
     options = options || {};
     this.sdp = options.sdp;
-    this.type = options.offer;
+    this.type = options.type;
   };
 }
 

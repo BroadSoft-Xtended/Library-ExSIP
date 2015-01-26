@@ -1,427 +1,560 @@
-module( "transfer", {
-  setup: function() {
-    ua = TestExSIP.Helpers.createFakeUA({trace_sip: true, use_preloaded_route: false});
-    ua.on('newRTCSession', function(e){
+require('./include/common');
+var testUA = require('./include/testUA');
+var ExSIP = require('../');
+var WebRTC = require('../src/WebRTC');
+var ExSIP_C = require('../src/Constants');
+
+module.exports = {
+
+  setUp: function(callback) {
+    ua = testUA.createFakeUA({
+      trace_sip: true,
+      use_preloaded_route: false
+    });
+    ua.on('newRTCSession', function(e) {
       session = e.data.session;
 
     });
     transferTarget = "transfertarget@chicago.example.com";
     targetContact = "482n4z24kdg@chicago.example.com;gr=8594958";
-    TestExSIP.Helpers.mockWebRTC();
-    TestExSIP.Helpers.start(ua);
-  }, teardown: function() {
+    testUA.mockWebRTC();
+    testUA.start(ua);
+    callback();
+  },
+
+  'attended with tdialog supported': function(test) {
+    receiveInviteAndAnswer(test, {
+      allow: "INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY",
+      supported: "replaces, gruu, tdialog"
+    });
+    test.strictEqual(session.supports('tdialog'), true, "Should support tdialog");
+
+    attendedTransfer(test);
+    test.ok(referMsg.call_id !== answerMsg.call_id !== inviteTargetMsg.call_id, "Call ID should not be the same");
+    test.ok(referMsg.from_tag !== answerMsg.to_tag !== inviteTargetMsg.to_tag, "From Tag should not be the same");
+    test.ok(referMsg.to_tag !== answerMsg.from_tag !== inviteTargetMsg.from_tag, "To Tag should not be the same");
+    test.strictEqual(referMsg.getHeader("Require"), "tdialog", "Should contain 'Require: tdialog' header");
+    test.strictEqual(referMsg.getHeader("Target-Dialog"), holdTargetMsg.call_id + ";local-tag=" + holdTargetMsg.from_tag + ";remote-tag=" + holdTargetMsg.to_tag, "Should contain 'Target-Dialog' header");
+
+    receiveTransferTargetBye(test);
+
+    receiveNotify100(test);
+
+    receiveNotify(test, {
+      status_code: 200,
+      status_msg: "OK"
+    });
+    test.done();
+  },
+  'attended with tdialog supported and 420 response from target': function(test) {
+    receiveInviteAndAnswer(test, {
+      allow: "INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY",
+      supported: "replaces, gruu, tdialog"
+    });
+    test.strictEqual(session.supports('tdialog'), true, "Should support tdialog");
+
+    ua.attendedTransfer(transferTarget, session);
+
+    holdSent(test);
+
+    responseForHold(test);
+
+    inviteTargetSent(test);
+
+    responseForInviteTarget(test, {
+      status_code: "420 Bad Extension"
+    });
+
+    referSent(test, "<sip:" + transferTarget + ">");
+
+    test.ok(referMsg.call_id !== answerMsg.call_id, "Call ID should not be the same");
+    test.strictEqual(referMsg.getHeader("Require"), "tdialog", "Should contain 'Require: tdialog' header");
+    test.strictEqual(referMsg.getHeader("Target-Dialog"), answerMsg.call_id + ";local-tag=" + answerMsg.from_tag + ";remote-tag=" + answerMsg.to_tag, "Should contain 'Target-Dialog' header");
+
+    receiveNotify100(test);
+
+    receiveNotify(test, {
+      status_code: 200,
+      status_msg: "OK"
+    });
+    test.done();
+  },
+
+  'attended with tdialog supported and 603 Declined response from transferee': function(test) {
+    receiveInviteAndAnswer(test, {
+      allow: "INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY",
+      supported: "replaces, gruu, tdialog"
+    });
+
+    attendedTransfer(test);
+
+    receiveTransferTargetBye(test);
+
+    receiveNotify100(test);
+
+    receiveNotifyFailure(test, {
+      status_code: 603,
+      status_msg: "Declined"
+    });
+    test.done();
+  },
+
+  'basic with tdialog supported': function(test) {
+    receiveInviteAndAnswer(test, {
+      allow: "INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY",
+      supported: "replaces, gruu, tdialog"
+    });
+    test.strictEqual(session.supports('tdialog'), true, "Should support tdialog");
+
+    basicTransfer(test);
+    test.ok(referMsg.call_id !== answerMsg.call_id, "Call ID should not be the same");
+    test.ok(referMsg.from_tag !== answerMsg.to_tag, "From Tag should not be the same");
+    test.ok(referMsg.to_tag !== answerMsg.from_tag, "To Tag should not be the same");
+    test.strictEqual(referMsg.getHeader("Require"), "tdialog", "Should contain 'Require: tdialog' header");
+    test.strictEqual(referMsg.getHeader("Target-Dialog"), answerMsg.call_id + ";local-tag=" + answerMsg.from_tag + ";remote-tag=" + answerMsg.to_tag, "Should contain 'Target-Dialog' header");
+
+    receiveNotify100(test);
+
+    receiveNotify(test, {
+      status_code: 200,
+      status_msg: "OK"
+    });
+    test.done();
+  },
+
+  'basic and initiating call': function(test) {
+    sendInviteAndReceiveAnswer(test);
+
+    basicTransfer(test);
+
+    receiveNotify100(test);
+
+    receiveNotify(test, {
+      status_code: 200,
+      status_msg: "OK"
+    });
+    test.done();
+  },
+
+  'basic with tdialog supported and target busy': function(test) {
+    receiveInviteAndAnswer(test, {
+      allow: "INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY",
+      supported: "replaces, gruu, tdialog"
+    });
+
+    basicTransfer(test);
+
+    receiveNotify100(test);
+
+    receiveNotifyFailure(test, {
+      status_code: 486,
+      status_msg: "Busy Here"
+    });
+    test.done();
+  },
+
+  'basic without tdialog supported': function(test) {
+    receiveInviteAndAnswer(test, {
+      allow: "INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY",
+      supported: "replaces"
+    });
+    test.strictEqual(session.supports('tdialog'), false, "Should not support tdialog");
+
+    basicTransfer(test);
+    test.ok(referMsg.call_id === answerMsg.call_id, "Call ID should be the same");
+    test.ok(referMsg.from_tag === answerMsg.to_tag, "From Tag should be the same");
+    test.ok(referMsg.to_tag === answerMsg.from_tag, "To Tag should be the same");
+    test.strictEqual(referMsg.getHeader("Require"), undefined, "Should not contain 'Require: tdialog' header");
+    test.strictEqual(referMsg.getHeader("Target-Dialog"), undefined, "Should not contain 'Target-Dialog' header");
+
+    receiveNotify100(test);
+
+    receiveNotify(test, {
+      status_code: 200,
+      status_msg: "OK"
+    });
+    test.done();
+  },
+
+  'basic without tdialog supported and 200 refer status code': function(test) {
+    receiveInviteAndAnswer(test, {
+      allow: "INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY",
+      supported: "replaces"
+    });
+    test.strictEqual(session.supports('tdialog'), false, "Should not support tdialog");
+
+    basicTransfer(test);
+
+    receiveNotify100(test, {
+      refer: {
+        statusCode: "200 OK"
+      }
+    });
+
+    receiveNotify(test, {
+      status_code: 200,
+      status_msg: "OK"
+    });
+    test.done();
+  },
+
+  'basic as transferee': function(test) {
+    sendInviteAndReceiveAnswer(test);
+
+    receiveHold(test);
+
+    receiveRefer(test);
+    test.done();
+  },
+
+  'attended as transferee': function(test) {
+    sendInviteAndReceiveAnswer(test);
+
+    receiveHold(test);
+
+    receiveRefer(test, {
+      referRequest: {
+        referTo: "<sip:" + transferTarget + "?Replaces=592435881734450904%3Bto-tag%3D9m2n3wq%3Bfrom-tag%3D763231>"
+      }
+    });
+    test.done();
   }
-});
-test('attended with tdialog supported', function() {
-  receiveInviteAndAnswer({allow: "INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY", supported: "replaces, gruu, tdialog"});
-  strictEqual(session.supports('tdialog'), true, "Should support tdialog");
-
-  attendedTransfer();
-  ok(referMsg.call_id !== answerMsg.call_id !== inviteTargetMsg.call_id, "Call ID should not be the same");
-  ok(referMsg.from_tag !== answerMsg.to_tag !== inviteTargetMsg.to_tag, "From Tag should not be the same");
-  ok(referMsg.to_tag !== answerMsg.from_tag !== inviteTargetMsg.from_tag, "To Tag should not be the same");
-  strictEqual(referMsg.getHeader("Require"), "tdialog", "Should contain 'Require: tdialog' header");
-  strictEqual(referMsg.getHeader("Target-Dialog"), holdTargetMsg.call_id+";local-tag="+holdTargetMsg.from_tag+";remote-tag="+holdTargetMsg.to_tag, "Should contain 'Target-Dialog' header");
-
-  receiveTransferTargetBye();
-
-  receiveNotify100();
-
-  receiveNotify({status_code: 200, status_msg: "OK"});
-});
-
-test('attended with tdialog supported and 420 response from target', function() {
-  receiveInviteAndAnswer({allow: "INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY", supported: "replaces, gruu, tdialog"});
-  strictEqual(session.supports('tdialog'), true, "Should support tdialog");
-
-  ua.attendedTransfer(transferTarget, session);
-
-  holdSent();
-
-  responseForHold();
-
-  inviteTargetSent();
-
-  responseForInviteTarget({status_code: "420 Bad Extension"});
-
-  referSent("<sip:"+transferTarget+">");
-
-  ok(referMsg.call_id !== answerMsg.call_id, "Call ID should not be the same");
-  strictEqual(referMsg.getHeader("Require"), "tdialog", "Should contain 'Require: tdialog' header");
-  strictEqual(referMsg.getHeader("Target-Dialog"), answerMsg.call_id+";local-tag="+answerMsg.from_tag+";remote-tag="+answerMsg.to_tag, "Should contain 'Target-Dialog' header");
-
-  receiveNotify100();
-
-  receiveNotify({status_code: 200, status_msg: "OK"});
-});
-
-test('attended with tdialog supported and 603 Declined response from transferee', function() {
-  receiveInviteAndAnswer({allow: "INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY", supported: "replaces, gruu, tdialog"});
-
-  attendedTransfer();
-
-  receiveTransferTargetBye();
-
-  receiveNotify100();
-
-  receiveNotifyFailure({status_code: 603, status_msg: "Declined"});
-});
-
-test('basic with tdialog supported', function() {
-  receiveInviteAndAnswer({allow: "INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY", supported: "replaces, gruu, tdialog"});
-  strictEqual(session.supports('tdialog'), true, "Should support tdialog");
-
-  basicTransfer();
-  ok(referMsg.call_id !== answerMsg.call_id, "Call ID should not be the same");
-  ok(referMsg.from_tag !== answerMsg.to_tag, "From Tag should not be the same");
-  ok(referMsg.to_tag !== answerMsg.from_tag, "To Tag should not be the same");
-  strictEqual(referMsg.getHeader("Require"), "tdialog", "Should contain 'Require: tdialog' header");
-  strictEqual(referMsg.getHeader("Target-Dialog"), answerMsg.call_id+";local-tag="+answerMsg.from_tag+";remote-tag="+answerMsg.to_tag, "Should contain 'Target-Dialog' header");
-
-  receiveNotify100();
-
-  receiveNotify({status_code: 200, status_msg: "OK"});
-});
-
-test('basic and initiating call', function() {
-  sendInviteAndReceiveAnswer();
-
-  basicTransfer();
-
-  receiveNotify100();
-
-  receiveNotify({status_code: 200, status_msg: "OK"});
-});
-
-test('basic with tdialog supported and target busy', function() {
-  receiveInviteAndAnswer({allow: "INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY", supported: "replaces, gruu, tdialog"});
-
-  basicTransfer();
-
-  receiveNotify100();
-
-  receiveNotifyFailure({status_code: 486, status_msg: "Busy Here"});
-});
-
-test('basic without tdialog supported', function() {
-  receiveInviteAndAnswer({allow: "INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY", supported: "replaces"});
-  strictEqual(session.supports('tdialog'), false, "Should not support tdialog");
-
-  basicTransfer();
-  ok(referMsg.call_id === answerMsg.call_id, "Call ID should be the same");
-  ok(referMsg.from_tag === answerMsg.to_tag, "From Tag should be the same");
-  ok(referMsg.to_tag === answerMsg.from_tag, "To Tag should be the same");
-  strictEqual(referMsg.getHeader("Require"), undefined, "Should not contain 'Require: tdialog' header");
-  strictEqual(referMsg.getHeader("Target-Dialog"), undefined, "Should not contain 'Target-Dialog' header");
-
-  receiveNotify100();
-
-  receiveNotify({status_code: 200, status_msg: "OK"});
-});
-
-test('basic without tdialog supported and 200 refer status code', function() {
-  receiveInviteAndAnswer({allow: "INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY", supported: "replaces"});
-  strictEqual(session.supports('tdialog'), false, "Should not support tdialog");
-
-  basicTransfer();
-
-  receiveNotify100({refer: {statusCode: "200 OK"}});
-
-  receiveNotify({status_code: 200, status_msg: "OK"});
-});
-
-test('basic as transferee', function() {
-  sendInviteAndReceiveAnswer();
-
-  receiveHold();
-
-  receiveRefer();
-});
-
-test('attended as transferee', function() {
-  sendInviteAndReceiveAnswer();
-
-  receiveHold();
-
-  receiveRefer({referRequest: {referTo: "<sip:"+transferTarget+"?Replaces=592435881734450904%3Bto-tag%3D9m2n3wq%3Bfrom-tag%3D763231>"}});
-});
-
-function receiveInviteAndAnswer(inviteOptions){
-  ua.transport.onMessage({data: TestExSIP.Helpers.initialInviteRequest(ua, inviteOptions)});
-
-  answer();
-
-  TestExSIP.Helpers.responseFor(answerMsg, {method: ExSIP.C.ACK});
 }
 
-function sendInviteAndReceiveAnswer(){
-  TestExSIP.Helpers.connect(ua);
-  inviteMsg = TestExSIP.Helpers.popMessageSentAndClear(ua);
+  function receiveInviteAndAnswer(test, inviteOptions) {
+    ua.transport.onMessage({
+      data: testUA.initialInviteRequest(ua, inviteOptions)
+    });
 
-  ua.transport.onMessage({data: TestExSIP.Helpers.ringingResponse(ua)});
-  ua.transport.onMessage({data: TestExSIP.Helpers.inviteResponse(ua)});
+    answer(test);
 
-  ackSent();
-}
+    testUA.responseFor(answerMsg, {
+      method: ExSIP_C.ACK
+    });
+  }
 
-function basicTransfer() {
-  ua.transfer(transferTarget, session);
+  function sendInviteAndReceiveAnswer(test) {
+    testUA.connect(ua);
+    inviteMsg = testUA.popMessageSentAndClear(ua);
 
-  holdSent();
+    ua.transport.onMessage({
+      data: testUA.ringingResponse(ua)
+    });
+    ua.transport.onMessage({
+      data: testUA.inviteResponse(ua)
+    });
 
-  responseForHold();
+    ackSent(test);
+  }
 
-  referSent("<sip:"+transferTarget+">");
-}
+  function basicTransfer(test) {
+    ua.transfer(transferTarget, session);
 
-function attendedTransfer(options) {
-  options = options || {};
-  ua.attendedTransfer(transferTarget, session);
+    holdSent(test);
 
-  holdSent();
+    responseForHold(test);
 
-  responseForHold();
+    referSent(test, "<sip:" + transferTarget + ">");
+  }
 
-  inviteTargetSent();
+  function attendedTransfer(test, options) {
+    options = options || {};
+    ua.attendedTransfer(transferTarget, session);
 
-  responseForInviteTarget(options.inviteTargetResponse);
+    holdSent(test);
 
-  holdTargetSent();
+    responseForHold(test);
 
-  responseForHoldTarget();
+    inviteTargetSent(test);
 
-  referSent("<sip:"+transferTarget+"?Replaces="
-    +holdTargetMsg.call_id+"%3Bto-tag%3D"+holdTargetMsg.to_tag+"%3Bfrom-tag%3D"+holdTargetMsg.from_tag+">");
-}
+    responseForInviteTarget(test, options.inviteTargetResponse);
 
-function receiveTransferTargetBye() {
-  byeRequestFor(holdTargetMsg);
+    holdTargetSent(test);
 
-  okTargetSent();
-}
+    responseForHoldTarget(test);
 
-function receiveNotify100(options) {
-  options = options || {};
-  responseForRefer(options.refer);
+    referSent(test, "<sip:" + transferTarget + "?Replaces=" + holdTargetMsg.call_id + "%3Bto-tag%3D" + holdTargetMsg.to_tag + "%3Bfrom-tag%3D" + holdTargetMsg.from_tag + ">");
+  }
 
-  notify100Request();
-}
+  function receiveTransferTargetBye(test) {
+    byeRequestFor(test, holdTargetMsg);
 
-function receiveNotify(options) {
-  options = options || {};
-  notifyRequest(options);
+    okTargetSent(test);
+  }
 
-  byeSent();
-}
+  function receiveNotify100(test, options) {
+    options = options || {};
+    responseForRefer(options.refer);
 
-function notifySent(options) {
-  var notifyMsg = TestExSIP.Helpers.popMessageSentAndClear(ua);
-  strictEqual(notifyMsg.method, "NOTIFY");
-  strictEqual(notifyMsg.body, options["sdp"] || "SIP/2.0 200 OK");
-  strictEqual(notifyMsg.getHeader('Content-Type'), "message/sipfrag");
-  strictEqual(notifyMsg.getHeader('Event') || "", "refer");
-  return notifyMsg;
-}
+    notify100Request(test);
+  }
 
-function notifySentAndReceivedBye(options) {
-  options = options || {};
-  var notifyMsg = notifySent(options);
-  strictEqual(notifyMsg.getHeader('Subscription-State'), "terminated;reason=noresource");
+  function receiveNotify(test, options) {
+    options = options || {};
+    notifyRequest(options);
 
-  TestExSIP.Helpers.responseFor(notifyMsg, {method: "NOTIFY"});
+    byeSent(test);
+  }
 
-  byeRequestFor(notifyMsg);
+  function notifySent(options) {
+    var notifyMsg = testUA.popMessageSentAndClear(ua);
+    test.strictEqual(notifyMsg.method, "NOTIFY");
+    test.strictEqual(notifyMsg.body, options["sdp"] || "SIP/2.0 200 OK");
+    test.strictEqual(notifyMsg.getHeader('Content-Type'), "message/sipfrag");
+    test.strictEqual(notifyMsg.getHeader('Event') || "", "refer");
+    return notifyMsg;
+  }
 
-  okSent();
-}
+  function notifySentAndReceivedBye(test, options) {
+    options = options || {};
+    var notifyMsg = notifySent(options);
+    test.strictEqual(notifyMsg.getHeader('Subscription-State'), "terminated;reason=noresource");
 
-function receiveRefer(options) {
-  options = options || {};
-  referRequest(inviteMsg, options.referRequest);
+    testUA.responseFor(notifyMsg, {
+      method: "NOTIFY"
+    });
 
-  okSent({penultimate: true, statusCode: 202});
+    byeRequestFor(notifyMsg);
 
-  var notifyMsg = notifySent({sdp: "SIP/2.0 100 Trying"});
-  strictEqual(notifyMsg.getHeader('Subscription-State'), "active;expires=60");
+    okSent(test);
+  }
 
-  TestExSIP.Helpers.responseFor(notifyMsg, {method: "NOTIFY"});
-}
+  function receiveRefer(test, options) {
+    options = options || {};
+    referRequest(inviteMsg, options.referRequest);
 
-function receiveHold() {
-  holdRequest(inviteMsg);
+    okSent(test, {
+      penultimate: true,
+      statusCode: 202
+    });
 
-  okSent();
+    var notifyMsg = notifySent({
+      sdp: "SIP/2.0 100 Trying"
+    });
+    test.strictEqual(notifyMsg.getHeader('Subscription-State'), "active;expires=60");
 
-  receiveAck(inviteMsg);
-}
+    testUA.responseFor(notifyMsg, {
+      method: "NOTIFY"
+    });
+  }
 
-function receiveNotifyFailure(options) {
-  notifyRequest(options);
+  function receiveHold(test) {
+    holdRequest(test, inviteMsg);
 
-  TestExSIP.Helpers.triggerOnIceCandidate(session.sessionToTransfer);
-  unholdSent();
+    okSent(test);
 
-  responseForUnhold();
-}
+    receiveAck(test, inviteMsg);
+  }
 
-function answer() {
-  var options = TestExSIP.Helpers.getMediaOptions();
-  var allow = "INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY";
-  options["extraHeaders"] = ["Allow: "+allow];
-  session.answer(options);
-  TestExSIP.Helpers.triggerOnIceCandidate(session);
-  answerMsg = TestExSIP.Helpers.popMessageSentAndClear(ua);
-  strictEqual(answerMsg.status_code, 200);
-  strictEqual(answerMsg.getHeader("Allow"), allow);
-}
+  function receiveNotifyFailure(test, options) {
+    notifyRequest(test, options);
 
-function responseForHoldTarget() {
-  TestExSIP.Helpers.responseFor(holdTargetMsg, {videoMode: ExSIP.C.RECVONLY, audioMode: ExSIP.C.RECVONLY});
-  ackSent({penultimate: true});
-}
+    testUA.triggerOnIceCandidate(session.sessionToTransfer);
+    unholdSent(test);
 
-function responseForInviteTarget(options) {
-  options = options || {};
-  options = ExSIP.Utils.merge_options(options, {contact: "<sip:"+targetContact+">"});
-  TestExSIP.Helpers.responseFor(inviteTargetMsg, options);
-  ackSent({penultimate: true});
-}
+    responseForUnhold(test);
+  }
 
-function responseForRefer(options) {
-  options = options || {};
-  TestExSIP.Helpers.responseFor(referMsg, {method: "REFER", status_code: options.statusCode || "202 Accepted"});
-}
+  function answer(test) {
+    var options = testUA.getMediaOptions();
+    var allow = "INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY";
+    options["extraHeaders"] = ["Allow: " + allow];
+    session.answer(options);
+    testUA.triggerOnIceCandidate(session);
+    answerMsg = testUA.popMessageSentAndClear(ua);
+    test.strictEqual(answerMsg.status_code, 200);
+    test.strictEqual(answerMsg.getHeader("Allow"), allow);
+  }
 
-function responseForUnhold() {
-  TestExSIP.Helpers.responseFor(unholdMsg);
-  ackSent();
-}
+  function responseForHoldTarget(test) {
+    testUA.responseFor(holdTargetMsg, {
+      videoMode: ExSIP_C.RECVONLY,
+      audioMode: ExSIP_C.RECVONLY
+    });
+    ackSent(test, {
+      penultimate: true
+    });
+  }
 
-function responseForHold() {
-  TestExSIP.Helpers.responseFor(holdMsg, {videoMode: ExSIP.C.RECVONLY, audioMode: ExSIP.C.RECVONLY});
-  ackSent({penultimate: true});
-}
+  function responseForInviteTarget(test, options) {
+    options = options || {};
+    options = Utils.merge_options(options, {
+      contact: "<sip:" + targetContact + ">"
+    });
+    testUA.responseFor(inviteTargetMsg, options);
+    ackSent(test, {
+      penultimate: true
+    });
+  }
 
-function notifyRequest(options) {
-  options = options || {};
-  notifyRequestFor(referMsg, "SIP/2.0 "+options.status_code+" "+options.status_msg, {subscription_state: "terminated;reason=noresource"});
-  var notify200OkMsg = TestExSIP.Helpers.popPenultimateMessageSent(ua);
-  strictEqual(notify200OkMsg.status_code, 200);
-}
+  function responseForRefer(test, options) {
+    options = options || {};
+    testUA.responseFor(referMsg, {
+      method: "REFER",
+      status_code: options.statusCode || "202 Accepted"
+    });
+  }
 
-function referRequest(request, options) {
-  options = TestExSIP.Helpers.merge({method: ExSIP.C.REFER, supported: "replaces", referTo: "<sip:"+transferTarget+">", noSdp: true}, options || {});
-  options = TestExSIP.Helpers.mergeOptions(request, options);
-  ua.transport.onMessage({data: TestExSIP.Helpers.inviteRequest(ua, options)});
-}
+  function responseForUnhold(test) {
+    testUA.responseFor(unholdMsg);
+    ackSent(test);
+  }
 
-function holdRequest(request) {
-  var options = TestExSIP.Helpers.mergeOptions(request, {audioMode: ExSIP.C.INACTIVE, videoMode: ExSIP.C.INACTIVE});
-  ua.transport.onMessage({data: TestExSIP.Helpers.inviteRequest(ua, options)});
-  TestExSIP.Helpers.triggerOnIceCandidate(session);
-}
+  function responseForHold(test) {
+    testUA.responseFor(holdMsg, {
+      videoMode: ExSIP_C.RECVONLY,
+      audioMode: ExSIP_C.RECVONLY
+    });
+    ackSent(test, {
+      penultimate: true
+    });
+  }
 
-function notify100Request() {
-  notifyRequestFor(referMsg, "SIP/2.0 100 Trying");
-  var notify100OkMsg = TestExSIP.Helpers.popMessageSentAndClear(ua);
-  strictEqual(notify100OkMsg.status_code, 200);
-}
+  function notifyRequest(test, options) {
+    options = options || {};
+    notifyRequestFor(referMsg, "SIP/2.0 " + options.status_code + " " + options.status_msg, {
+      subscription_state: "terminated;reason=noresource"
+    });
+    var notify200OkMsg = testUA.popPenultimateMessageSent(ua);
+    test.strictEqual(notify200OkMsg.status_code, 200);
+  }
 
-function ackSent(options) {
-  options = options || {};
-  var ackMsg = options["penultimate"] ? TestExSIP.Helpers.popPenultimateMessageSent(ua) : TestExSIP.Helpers.popMessageSent(ua);
-  strictEqual(ackMsg.method, ExSIP.C.ACK);
-}
+  function referRequest(test, request, options) {
+    options = testUA.merge({
+      method: ExSIP_C.REFER,
+      supported: "replaces",
+      referTo: "<sip:" + transferTarget + ">",
+      noSdp: true
+    }, options || {});
+    options = testUA.mergeOptions(request, options);
+    ua.transport.onMessage({
+      data: testUA.inviteRequest(ua, options)
+    });
+  }
 
-function byeSent() {
-  var byeMsg = TestExSIP.Helpers.popMessageSentAndClear(ua);
-  strictEqual(byeMsg.method, ExSIP.C.BYE);
-}
+  function holdRequest(test, request) {
+    var options = testUA.mergeOptions(request, {
+      audioMode: ExSIP_C.INACTIVE,
+      videoMode: ExSIP_C.INACTIVE
+    });
+    ua.transport.onMessage({
+      data: testUA.inviteRequest(ua, options)
+    });
+    testUA.triggerOnIceCandidate(session);
+  }
 
-function okSent(options) {
-  options = options || {};
-  var okMsg = options["penultimate"] ? TestExSIP.Helpers.popPenultimateMessageSent() : TestExSIP.Helpers.popMessageSentAndClear(ua);
-  strictEqual(okMsg.status_code, options["statusCode"] || 200);
-}
+  function notify100Request(test) {
+    notifyRequestFor(referMsg, "SIP/2.0 100 Trying");
+    var notify100OkMsg = testUA.popMessageSentAndClear(ua);
+    test.strictEqual(notify100OkMsg.status_code, 200);
+  }
 
-function receiveAck(request, options) {
-  options = TestExSIP.Helpers.mergeOptions(request, options);
-  ua.transport.onMessage({data: TestExSIP.Helpers.ackResponse(ua, options)});
-}
+  function ackSent(test, options) {
+    options = options || {};
+    var ackMsg = options["penultimate"] ? testUA.popPenultimateMessageSent(ua) : testUA.popMessageSent(ua);
+    test.strictEqual(ackMsg.method, ExSIP_C.ACK);
+  }
 
-function holdTargetSent() {
-  TestExSIP.Helpers.triggerOnIceCandidate(session);
-  holdTargetMsg = TestExSIP.Helpers.popMessageSent(ua);
-  strictEqual(holdTargetMsg.method, ExSIP.C.INVITE);
-  isMode(holdTargetMsg.body, ExSIP.C.INACTIVE, "0", ExSIP.C.INACTIVE, "0");
-  ok(holdTargetMsg.call_id === inviteTargetMsg.call_id, "Should be same dialog");
-  strictEqual(holdTargetMsg.getHeader("Content-Type"), "application/sdp");
-}
+  function byeSent(test) {
+    var byeMsg = testUA.popMessageSentAndClear(ua);
+    test.strictEqual(byeMsg.method, ExSIP_C.BYE);
+  }
 
-function inviteTargetSent() {
-  inviteTargetMsg = TestExSIP.Helpers.popMessageSentAndClear(ua);
-  strictEqual(inviteTargetMsg.method, ExSIP.C.INVITE);
-  strictEqual(inviteTargetMsg.to.toString(), "<sip:"+transferTarget+">");
-  strictEqual(inviteTargetMsg.getHeader("Require"), "replaces");
-  strictEqual(inviteTargetMsg.getHeader("Content-Type"), "application/sdp");
-}
+  function okSent(test, options) {
+    options = options || {};
+    var okMsg = options["penultimate"] ? testUA.popPenultimateMessageSent() : testUA.popMessageSentAndClear(ua);
+    test.strictEqual(okMsg.status_code, options["statusCode"] || 200);
+  }
 
-function inviteTargetSentAsTransferee(options) {
-  options = options || {};
-  TestExSIP.Helpers.triggerOnIceCandidate(session);
-  inviteTargetMsg = TestExSIP.Helpers.popMessageSentAndClear(ua);
-  strictEqual(inviteTargetMsg.method, ExSIP.C.INVITE);
-  strictEqual(inviteTargetMsg.to.toString(), "<sip:"+transferTarget+">");
-  strictEqual(inviteTargetMsg.getHeader("Content-Type"), "application/sdp");
+  function receiveAck(test, request, options) {
+    options = testUA.mergeOptions(request, options);
+    ua.transport.onMessage({
+      data: testUA.ackResponse(ua, options)
+    });
+  }
 
-  TestExSIP.Helpers.responseFor(inviteTargetMsg, options.inviteResponse);
+  function holdTargetSent(test) {
+    testUA.triggerOnIceCandidate(session);
+    holdTargetMsg = testUA.popMessageSent(ua);
+    test.strictEqual(holdTargetMsg.method, ExSIP_C.INVITE);
+    isMode(holdTargetMsg.body, ExSIP_C.INACTIVE, "0", ExSIP_C.INACTIVE, "0");
+    test.ok(holdTargetMsg.call_id === inviteTargetMsg.call_id, "Should be same dialog");
+    test.strictEqual(holdTargetMsg.getHeader("Content-Type"), "application/sdp");
+  }
 
-  ackSent({penultimate: true});
-}
+  function inviteTargetSent(test) {
+    inviteTargetMsg = testUA.popMessageSentAndClear(ua);
+    test.strictEqual(inviteTargetMsg.method, ExSIP_C.INVITE);
+    test.strictEqual(inviteTargetMsg.to.toString(), "<sip:" + transferTarget + ">");
+    test.strictEqual(inviteTargetMsg.getHeader("Require"), "replaces");
+    test.strictEqual(inviteTargetMsg.getHeader("Content-Type"), "application/sdp");
+  }
 
-function referSent(referTo) {
-  referMsg = TestExSIP.Helpers.popMessageSentAndClear(ua);
-  strictEqual(referMsg.method, ExSIP.C.REFER);
-  strictEqual(referMsg.getHeader("Refer-To"), referTo);
-  strictEqual(referMsg.getHeader("Content-Type"), undefined);
-}
+  function inviteTargetSentAsTransferee(test, options) {
+    options = options || {};
+    testUA.triggerOnIceCandidate(session);
+    inviteTargetMsg = testUA.popMessageSentAndClear(ua);
+    test.strictEqual(inviteTargetMsg.method, ExSIP_C.INVITE);
+    test.strictEqual(inviteTargetMsg.to.toString(), "<sip:" + transferTarget + ">");
+    test.strictEqual(inviteTargetMsg.getHeader("Content-Type"), "application/sdp");
 
-function okTargetSent() {
-  var okMsg = TestExSIP.Helpers.popMessageSentAndClear(ua);
-  strictEqual(okMsg.status_code, 200);
-  strictEqual(okMsg.method, ExSIP.C.BYE);
-}
+    testUA.responseFor(inviteTargetMsg, options.inviteResponse);
 
-function unholdSent() {
-  TestExSIP.Helpers.triggerOnIceCandidate(session);
-  unholdMsg = TestExSIP.Helpers.popMessageSent(ua);
-  strictEqual(unholdMsg.method, ExSIP.C.INVITE);
-  isMode(unholdMsg.body, ExSIP.C.SENDRECV, "16550", ExSIP.C.SENDRECV, "16930");
-  strictEqual(unholdMsg.getHeader("Content-Type"), "application/sdp");
-}
+    ackSent(test, {
+      penultimate: true
+    });
+  }
 
-function holdSent() {
-  TestExSIP.Helpers.triggerOnIceCandidate(session);
-  holdMsg = TestExSIP.Helpers.popMessageSentAndClear(ua);
-  strictEqual(holdMsg.method, ExSIP.C.INVITE);
-  isMode(holdMsg.body, ExSIP.C.INACTIVE, "0", ExSIP.C.INACTIVE, "0");
-  strictEqual(holdMsg.getHeader("Content-Type"), "application/sdp");
-}
+  function referSent(test, referTo) {
+    referMsg = testUA.popMessageSentAndClear(ua);
+    test.strictEqual(referMsg.method, ExSIP_C.REFER);
+    test.strictEqual(referMsg.getHeader("Refer-To"), referTo);
+    test.strictEqual(referMsg.getHeader("Content-Type"), undefined);
+  }
 
-function byeRequestFor(request, options) {
-  options = TestExSIP.Helpers.mergeOptions(request, options);
-  ua.transport.onMessage({data: TestExSIP.Helpers.byeRequest(ua, options)});
-}
+  function okTargetSent(test) {
+    var okMsg = testUA.popMessageSentAndClear(ua);
+    test.strictEqual(okMsg.status_code, 200);
+    test.strictEqual(okMsg.method, ExSIP_C.BYE);
+  }
 
-function notifyRequestFor(request, body, options) {
-  options = TestExSIP.Helpers.mergeOptions(request, options);
-  ua.transport.onMessage({data: TestExSIP.Helpers.notifyRequest(ua, body, options)});
-}
+  function unholdSent(test) {
+    testUA.triggerOnIceCandidate(session);
+    unholdMsg = testUA.popMessageSent(ua);
+    test.strictEqual(unholdMsg.method, ExSIP_C.INVITE);
+    isMode(test, unholdMsg.body, ExSIP_C.SENDRECV, "16550", ExSIP_C.SENDRECV, "16930");
+    test.strictEqual(unholdMsg.getHeader("Content-Type"), "application/sdp");
+  }
 
-function isMode(body, audioMode, audioPort, videoMode, videoPort) {
-  var localDescription = new ExSIP.WebRTC.RTCSessionDescription({sdp: body, type: "offer"});
-  strictEqual(localDescription.getVideoMode(), videoMode);
-  strictEqual(localDescription.getAudioMode(), audioMode);
-  strictEqual(localDescription.audioPort(), audioPort);
-  strictEqual(localDescription.videoPort(), videoPort);
-}
+  function holdSent(test) {
+    testUA.triggerOnIceCandidate(session);
+    holdMsg = testUA.popMessageSentAndClear(ua);
+    test.strictEqual(holdMsg.method, ExSIP_C.INVITE);
+    isMode(test, holdMsg.body, ExSIP_C.INACTIVE, "0", ExSIP_C.INACTIVE, "0");
+    test.strictEqual(holdMsg.getHeader("Content-Type"), "application/sdp");
+  }
+
+  function byeRequestFor(request, options) {
+    options = testUA.mergeOptions(request, options);
+    ua.transport.onMessage({
+      data: testUA.byeRequest(ua, options)
+    });
+  }
+
+  function notifyRequestFor(request, body, options) {
+    options = testUA.mergeOptions(request, options);
+    ua.transport.onMessage({
+      data: testUA.notifyRequest(ua, body, options)
+    });
+  }
+
+  function isMode(test, body, audioMode, audioPort, videoMode, videoPort) {
+    var localDescription = new WebRTC.RTCSessionDescription({
+      sdp: body,
+      type: "offer"
+    });
+    test.strictEqual(localDescription.getVideoMode(), videoMode);
+    test.strictEqual(localDescription.getAudioMode(), audioMode);
+    test.strictEqual(localDescription.audioPort(), audioPort);
+    test.strictEqual(localDescription.videoPort(), videoPort);
+  }

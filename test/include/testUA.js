@@ -7,13 +7,13 @@ var Parser = require('../../src/Parser');
 module.exports = {
 
   UA_CONFIGURATION: {
-    uri: 'sip:f%61keUA@jssip.net',
+    uri: 'sip:f%61keUA@exsip.net',
     password: '1234ññññ',
     ws_servers: 'ws://localhost:12345',
     display_name: 'Fake UA ð→€ł !!!',
     authorization_user: 'fakeUA',
     instance_id: 'uuid:8f1fa16a-1165-4a96-8341-785b1ef24f12',
-    registrar_server: 'registrar.jssip.NET:6060;TRansport=TCP',
+    registrar_server: 'registrar.exsip.NET:6060;TRansport=TCP',
     register_expires: 600,
     register: false,
     connection_recovery_min_interval: 2,
@@ -31,13 +31,13 @@ module.exports = {
   },
 
   UA_CONFIGURATION_AFTER_START: {
-    uri: 'sip:fakeUA@jssip.net',
+    uri: 'sip:fakeUA@exsip.net',
     password: '1234ññññ',
     ws_servers: [{'ws_uri':'ws://localhost:12345','sip_uri':'<sip:localhost:12345;transport=ws;lr>','weight':0,'status':0,'scheme':'WS'}],
     display_name: 'Fake UA ð→€ł !!!',
     authorization_user: 'fakeUA',
     instance_id: '8f1fa16a-1165-4a96-8341-785b1ef24f12',  // Without 'uuid:'.
-    registrar_server: 'sip:registrar.jssip.net:6060;transport=tcp',
+    registrar_server: 'sip:registrar.exsip.net:6060;transport=tcp',
     register_expires: 600,
     register: false,
     connection_recovery_min_interval: 2,
@@ -73,14 +73,17 @@ module.exports = {
     return options;
   },
 
-  receiveInviteAndAnswer: function(inviteOptions){
+  receiveInviteAndAnswer: function(inviteOptions, test){
     ua.transport.onMessage({data: this.initialInviteRequest(ua, inviteOptions)});
 
     this.answer(session);
 
     var answerMsg = this.popMessageSentAndClear(ua);
-    strictEqual(answerMsg.status_code, 200);
+    if(test) {
+      test.strictEqual(answerMsg.status_code, 200);      
+    }
 
+    console.log('---------------------- before ACK')
     this.responseFor(answerMsg, {method: C.ACK});
 
     return answerMsg;
@@ -96,10 +99,12 @@ module.exports = {
     ua.transport.onMessage({data: this.notifyRequest(ua, body, options)});
   },
 
-  isMode: function(body, audioMode, videoMode) {
+  isMode: function(body, audioMode, videoMode, test) {
     var localDescription = new WebRTC.RTCSessionDescription({sdp: body, type: "offer"});
-    strictEqual(localDescription.getVideoMode(), videoMode);
-    strictEqual(localDescription.getAudioMode(), audioMode);
+    if(test) {
+      test.strictEqual(localDescription.getVideoMode(), videoMode);
+      test.strictEqual(localDescription.getAudioMode(), audioMode);      
+    }
   },
 
   merge: function(obj1,obj2){

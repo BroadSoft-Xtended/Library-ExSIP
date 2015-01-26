@@ -15,25 +15,25 @@ test('UA wrong configuration', function() {
 });
 
 test('UA no WS connection', function() {
-  var ua = TestExSIP.Helpers.createFakeUA();
+  var ua = testUA.createFakeUA();
   ok(ua instanceof(ExSIP.UA));
 
   ua.start();
 
-  strictEqual(ua.contact.toString(), '<sip:' + ua.contact.uri.user + '@' + ua.configuration.via_host + ';transport=ws>');
-  strictEqual(ua.contact.toString({outbound: false, anonymous: false, foo: true}), '<sip:' + ua.contact.uri.user + '@' + ua.configuration.via_host + ';transport=ws>');
-  strictEqual(ua.contact.toString({outbound: true}), '<sip:' + ua.contact.uri.user + '@' + ua.configuration.via_host + ';transport=ws;ob>');
-  strictEqual(ua.contact.toString({anonymous: true}), '<sip:anonymous@anonymous.invalid;transport=ws>');
-  strictEqual(ua.contact.toString({anonymous: true, outbound: true}), '<sip:anonymous@anonymous.invalid;transport=ws;ob>');
+  test.strictEqual(ua.contact.toString(), '<sip:' + ua.contact.uri.user + '@' + ua.configuration.via_host + ';transport=ws>');
+  test.strictEqual(ua.contact.toString({outbound: false, anonymous: false, foo: true}), '<sip:' + ua.contact.uri.user + '@' + ua.configuration.via_host + ';transport=ws>');
+  test.strictEqual(ua.contact.toString({outbound: true}), '<sip:' + ua.contact.uri.user + '@' + ua.configuration.via_host + ';transport=ws;ob>');
+  test.strictEqual(ua.contact.toString({anonymous: true}), '<sip:anonymous@anonymous.invalid;transport=ws>');
+  test.strictEqual(ua.contact.toString({anonymous: true, outbound: true}), '<sip:anonymous@anonymous.invalid;transport=ws;ob>');
 
-  for (parameter in TestExSIP.Helpers.DEFAULT_EXSIP_CONFIGURATION_AFTER_START) {
+  for (parameter in testUA.DEFAULT_EXSIP_CONFIGURATION_AFTER_START) {
     switch(parameter) {
       case 'uri':
       case 'registrar_server':
-        deepEqual(ua.configuration[parameter].toString(), TestExSIP.Helpers.DEFAULT_EXSIP_CONFIGURATION_AFTER_START[parameter], 'testing parameter ' + parameter);
+        deepEqual(ua.configuration[parameter].toString(), testUA.DEFAULT_EXSIP_CONFIGURATION_AFTER_START[parameter], 'testing parameter ' + parameter);
         break;
       default:
-        deepEqual(ua.configuration[parameter], TestExSIP.Helpers.DEFAULT_EXSIP_CONFIGURATION_AFTER_START[parameter], 'testing parameter ' + parameter);
+        deepEqual(ua.configuration[parameter], testUA.DEFAULT_EXSIP_CONFIGURATION_AFTER_START[parameter], 'testing parameter ' + parameter);
     }
   }
 
@@ -42,10 +42,10 @@ test('UA no WS connection', function() {
       sending: function(e) {
         var ruri = e.data.request.ruri;
         ok(ruri instanceof ExSIP.URI);
-        strictEqual(e.data.request.ruri.toString(), 'sip:test@' + ua.configuration.uri.host);
+        test.strictEqual(e.data.request.ruri.toString(), 'sip:test@' + ua.configuration.uri.host);
       },
       failed: function(e) {
-        strictEqual(e.data.cause, ExSIP.C.causes.CONNECTION_ERROR);
+        test.strictEqual(e.data.cause, ExSIP.C.causes.CONNECTION_ERROR);
       }
     }
   });
@@ -55,10 +55,10 @@ test('UA no WS connection', function() {
       sending: function(e) {
         var ruri = e.data.request.ruri;
         ok(ruri instanceof ExSIP.URI);
-        strictEqual(e.data.request.ruri.toString(), ExSIP.C.INVALID_TARGET_URI);
+        test.strictEqual(e.data.request.ruri.toString(), ExSIP.C.INVALID_TARGET_URI);
       },
       failed: function(e) {
-        strictEqual(e.data.cause, ExSIP.C.causes.INVALID_TARGET);
+        test.strictEqual(e.data.cause, ExSIP.C.causes.INVALID_TARGET);
 =======
 require('./include/common');
 var testUA = require('./include/testUA')
@@ -85,11 +85,11 @@ module.exports = {
 
     ua.start();
 
-    test.strictEqual(ua.contact.toString(), '<sip:' + ua.contact.uri.user + '@' + ua.configuration.via_host + ';transport=ws>');
-    test.strictEqual(ua.contact.toString({outbound: false, anonymous: false, foo: true}), '<sip:' + ua.contact.uri.user + '@' + ua.configuration.via_host + ';transport=ws>');
-    test.strictEqual(ua.contact.toString({outbound: true}), '<sip:' + ua.contact.uri.user + '@' + ua.configuration.via_host + ';transport=ws;ob>');
-    test.strictEqual(ua.contact.toString({anonymous: true}), '<sip:anonymous@anonymous.invalid;transport=ws>');
-    test.strictEqual(ua.contact.toString({anonymous: true, outbound: true}), '<sip:anonymous@anonymous.invalid;transport=ws;ob>');
+    test.test.strictEqual(ua.contact.toString(), '<sip:' + ua.contact.uri.user + '@' + ua.configuration.via_host + ';transport=ws>');
+    test.test.strictEqual(ua.contact.toString({outbound: false, anonymous: false, foo: true}), '<sip:' + ua.contact.uri.user + '@' + ua.configuration.via_host + ';transport=ws>');
+    test.test.strictEqual(ua.contact.toString({outbound: true}), '<sip:' + ua.contact.uri.user + '@' + ua.configuration.via_host + ';transport=ws;ob>');
+    test.test.strictEqual(ua.contact.toString({anonymous: true}), '<sip:anonymous@anonymous.invalid;transport=ws>');
+    test.test.strictEqual(ua.contact.toString({anonymous: true, outbound: true}), '<sip:anonymous@anonymous.invalid;transport=ws;ob>');
 
     for (var parameter in testUA.UA_CONFIGURATION_AFTER_START) {
       switch(parameter) {
@@ -105,7 +105,7 @@ module.exports = {
     ua.sendMessage('test', 'FAIL WITH CONNECTION_ERROR PLEASE', {
       eventHandlers: {
         failed: function(e) {
-          test.strictEqual(e.data.cause, ExSIP.C.causes.CONNECTION_ERROR);
+          test.test.strictEqual(e.data.cause, ExSIP.C.causes.CONNECTION_ERROR);
         }
 >>>>>>> jssip050
       }

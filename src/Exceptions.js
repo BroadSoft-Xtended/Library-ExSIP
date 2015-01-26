@@ -10,6 +10,7 @@ var Exceptions = {
    */
   ConfigurationError: (function(){
     var exception = function(parameter, value) {
+      console.trace('----------------------ConfigurationError : '+parameter+', '+value);
       this.code = 1;
       this.name = 'CONFIGURATION_ERROR';
       this.parameter = parameter;
@@ -22,6 +23,7 @@ var Exceptions = {
 
   InvalidStateError: (function(){
     var exception = function(status) {
+      console.trace('----------------------InvalidStateError : '+status);
       this.code = 2;
       this.name = 'INVALID_STATE_ERROR';
       this.status = status;
@@ -33,6 +35,7 @@ var Exceptions = {
 
   NotSupportedError: (function(){
     var exception = function(message) {
+      console.trace('----------------------NotSupportedError : '+message);
       this.code = 3;
       this.name = 'NOT_SUPPORTED_ERROR';
       this.message = message;
@@ -43,6 +46,7 @@ var Exceptions = {
 
   NotReadyError: (function(){
     var exception = function(message) {
+      console.trace('----------------------NotReadyError : '+message);
       this.code = 4;
       this.name = 'NOT_READY_ERROR';
       this.message = message;

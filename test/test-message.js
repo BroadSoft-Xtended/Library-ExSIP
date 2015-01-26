@@ -1,20 +1,39 @@
-module( "message", {
-  setup: function() {
-    ua = TestExSIP.Helpers.createFakeUA({trace_sip: true, use_preloaded_route: false});
-    ua.on('newRTCSession', function(e){ session = e.data.session; });
-    TestExSIP.Helpers.mockWebRTC();
-    TestExSIP.Helpers.startAndConnect(ua);
+require('./include/common');
+var testUA = require('./include/testUA');
+var ExSIP = require('../');
 
-    ua.transport.onMessage({data: TestExSIP.Helpers.ringingResponse(ua)});
-  }, teardown: function() {
+module.exports = {
+
+  setUp: function(callback) {
+    ua = testUA.createFakeUA({
+      trace_sip: true,
+      use_preloaded_route: false
+    });
+    ua.on('newRTCSession', function(e) {
+      session = e.data.session;
+    });
+    testUA.mockWebRTC();
+    testUA.startAndConnect(ua);
+
+    ua.transport.onMessage({
+      data: testUA.ringingResponse(ua)
+    });
+    callback();
+  },
+
+  'response with statusCode 606 not acceptable': function(test) {
+    var messageText;
+    session.on('failed', function(e) {
+      messageText = e.data.cause;
+    });
+    ua.transport.onMessage({
+      data: testUA.inviteResponse(ua, {
+        noSdp: true,
+        status_code: '606 Not Acceptable'
+      })
+    });
+    testUA.ackResponse(ua);
+    test.strictEqual('Not Acceptable', messageText);
+    test.done();
   }
-});
-test('response with statusCode 606 not acceptable', function() {
-  var messageText;
-  session.on('failed', function(e){
-    messageText = e.data.cause;
-  });
-  ua.transport.onMessage({data: TestExSIP.Helpers.inviteResponse(ua, {noSdp: true, status_code: '606 Not Acceptable'})});
-  TestExSIP.Helpers.ackResponse(ua);
-  strictEqual('Not Acceptable', messageText);
-});
+}

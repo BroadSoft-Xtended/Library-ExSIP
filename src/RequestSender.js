@@ -27,11 +27,14 @@ function RequestSender(applicant, ua) {
 
 
 /**
-* Create the client transaction and send the message.
-*/
+ * Create the client transaction and send the message.
+ */
 RequestSender.prototype = {
-  send: function() {
-    switch(this.method) {
+  send: function(callbacks) {
+    this.callbacks = callbacks || {};
+    this.logger.log('callbacks : ' + this.callbacks);
+
+    switch (this.method) {
       case "INVITE":
         this.clientTransaction = new Transactions.InviteClientTransaction(this, this.request, this.ua.transport);
         break;
@@ -45,33 +48,35 @@ RequestSender.prototype = {
   },
 
   /**
-  * Callback fired when receiving a request timeout error from the client transaction.
-  * To be re-defined by the applicant.
-  */
+   * Callback fired when receiving a request timeout error from the client transaction.
+   * To be re-defined by the applicant.
+   */
   onRequestTimeout: function() {
     this.applicant.onRequestTimeout();
   },
 
   /**
-  * Callback fired when receiving a transport error from the client transaction.
-  * To be re-defined by the applicant.
-  */
+   * Callback fired when receiving a transport error from the client transaction.
+   * To be re-defined by the applicant.
+   */
   onTransportError: function() {
     this.applicant.onTransportError();
   },
 
   /**
-  * Called from client transaction when receiving a correct response to the request.
-  * Authenticate request if needed or pass the response back to the applicant.
-  */
+   * Called from client transaction when receiving a correct response to the request.
+   * Authenticate request if needed or pass the response back to the applicant.
+   */
   receiveResponse: function(response) {
     var cseq, challenge, authorization_header_name,
       status_code = response.status_code;
-    console.log('response : '+response);
+    this.logger.log('receiveResponse: callbacks : ' + this.callbacks);
+
+
     /*
-    * Authentication
-    * Authenticate once. _challenged_ flag used to avoid infinite authentications.
-    */
+     * Authentication
+     * Authenticate once. _challenged_ flag used to avoid infinite authentications.
+     */
     if ((status_code === 401 || status_code === 407)) {
 
       // Get and parse the appropriate WWW-Authenticate or Proxy-Authenticate header.
@@ -84,7 +89,7 @@ RequestSender.prototype = {
       }
 
       // Verify it seems a valid challenge.
-      if (! challenge) {
+      if (!challenge) {
         this.logger.warn(response.status_code + ' with wrong or missing challenge, cannot authenticate');
         this.applicant.receiveResponse(response);
         return;
@@ -108,13 +113,13 @@ RequestSender.prototype = {
 
         if (response.method === ExSIP_C.REGISTER) {
           cseq = this.applicant.cseq += 1;
-        } else if (this.request.dialog){
+        } else if (this.request.dialog) {
           cseq = this.request.dialog.local_seqnum += 1;
         } else {
           cseq = this.request.cseq + 1;
           this.request.cseq = cseq;
         }
-        this.request.setHeader('cseq', cseq +' '+ this.method);
+        this.request.setHeader('cseq', cseq + ' ' + this.method);
 
         this.request.setHeader(authorization_header_name, this.credentials.toString());
         this.send();
@@ -124,5 +129,21 @@ RequestSender.prototype = {
     } else {
       this.applicant.receiveResponse(response);
     }
+
+    switch (true) {
+      case /^1[0-9]{2}$/.test(response.status_code):
+        break;
+      case /^2[0-9]{2}$/.test(response.status_code):
+        if (this.callbacks.success) {
+          this.callbacks.success();
+        }
+        break;
+      default:
+        if (this.callbacks.failure) {
+          this.callbacks.failure();
+        }
+        break;
+    }
+
   }
 };

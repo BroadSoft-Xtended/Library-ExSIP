@@ -65,10 +65,11 @@ RTCMediaHandler.prototype = {
 
     var setRemoteDescription = function(successCallback) {
       self.onMessage(
+        self.getSetRemoteLocationType(),
         options.remoteSdp,
         successCallback || connectSucceeded, function(e){
-          this.logger.error("setRemoteDescription failed");
-          this.logger.error(Utils.toString(e));
+          self.logger.error("setRemoteDescription failed");
+          self.logger.error(Utils.toString(e));
           connectFailed();
         }
       );
@@ -91,7 +92,7 @@ RTCMediaHandler.prototype = {
     var streamAdditionSucceeded = function() {
       var hasRemoteSdp = options.remoteSdp && options.remoteSdp.length > 0;
       var isRemote = options.isAnswer && hasRemoteSdp;
-      this.logger.log("isRemote : "+isRemote+", isAnswer : "+options.isAnswer+", hasRemoteSdp :"+hasRemoteSdp, self.session.ua);
+      self.logger.log("isRemote : "+isRemote+", isAnswer : "+options.isAnswer+", hasRemoteSdp :"+hasRemoteSdp, self.session.ua);
       if(isRemote) {
         if(options.localDescription) {
           setRemoteDescription(setLocalDescription);
@@ -437,15 +438,15 @@ RTCMediaHandler.prototype = {
   * -param {Function} onFailure
   */
   onMessage: function(type, body, onSuccess, onFailure) {
-    var description = new WebRTC.RTCSessionDescription({type: this.getSetRemoteLocationType(), sdp:body});
+    var description = new WebRTC.RTCSessionDescription({type: type, sdp:body});
     if(this.session.ua.rtcMediaHandlerOptions.videoBandwidth) {
       description.setVideoBandwidth(this.session.ua.rtcMediaHandlerOptions.videoBandwidth);
-      this.logger.log("Modifying SDP with videoBandwidth : "+this.session.ua.rtcMediaHandlerOptions.videoBandwidth, this.session.ua);
+      this.logger.log("Modifying SDP with videoBandwidth : "+this.session.ua.rtcMediaHandlerOptions.videoBandwidth);
     }
 
     if(this.peerConnection) {
       if(!description.sdp) {
-        this.logger.log('empty sdp on setRemoteDescription - calling success', this.session.ua);
+        this.logger.log('empty sdp on setRemoteDescription - calling success');
         onSuccess();
         return;
       }
@@ -455,12 +456,14 @@ RTCMediaHandler.prototype = {
         this.logger.log('removed unsupported media : '+unsupportedMedia);
         this.peerConnection.remoteUnsupportedMedia = unsupportedMedia;
       }
-      this.logger.log('peerConnection.setRemoteDescription for type '+description.type+' : '+description.sdp, this.session.ua);
+
+      this.logger.log('peerConnection.setRemoteDescription : description : '+Utils.toString(description));
+      this.logger.log('peerConnection.setRemoteDescription for type '+description.type+' : '+description.sdp);
       this.peerConnection.setRemoteDescription(
         description,
         onSuccess,
         function(e){
-          console.log("----------setRemoteDescription with error : "+JSON.stringify(e));
+          self.logger.log("----------setRemoteDescription with error : "+JSON.stringify(e));
           onFailure(e);
         }
       );

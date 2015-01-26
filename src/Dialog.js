@@ -19,6 +19,7 @@ Dialog.C = C;
 var SIPMessage = require('./SIPMessage');
 var ExSIP_C = require('./Constants');
 var Transactions = require('./Transactions');
+var Utils = require('./Utils');
 var Dialog_RequestSender = require('./Dialog/RequestSender');
 
 
@@ -134,6 +135,8 @@ Dialog.prototype = {
         'route_set': this.route_set
       }, extraHeaders, body);
 
+  this.logger.debug('createRequest : dialog.request_sender.request.extraHeaders : '+Utils.toString(request.extraHeaders));
+
     request.dialog = this;
 
     return request;
@@ -203,7 +206,7 @@ Dialog.prototype = {
     return true;
   },
 
-  sendRequest: function(applicant, method, options) {
+  createRequestSender: function(applicant, method, options) {
     options = options || {};
 
     var
@@ -211,7 +214,13 @@ Dialog.prototype = {
       body = options.body || null,
       request = this.createRequest(method, extraHeaders, body),
       request_sender = new Dialog_RequestSender(this, applicant, request);
+  this.logger.debug('dialog.request_sender.request.extraHeaders : '+Utils.toString(request.extraHeaders));
 
+    return request_sender;  
+  },
+
+  sendRequest: function(applicant, method, options) {
+      var request_sender = this.createRequestSender(applicant, method, options);
       request_sender.send();
   },
 

@@ -7,6 +7,7 @@ var ExSIP_C = require('../Constants');
 var Transactions = require('../Transactions');
 var RTCSession = require('../RTCSession');
 var RequestSender = require('../RequestSender');
+var Utils = require('../Utils');
 
 
 function DialogRequestSender(dialog, applicant, request) {
@@ -15,6 +16,8 @@ function DialogRequestSender(dialog, applicant, request) {
   this.applicant = applicant;
   this.request = request;
 
+  this.logger = dialog.owner.ua.getLogger('ExSIP.dialog.requestsender', dialog.id);
+
   // RFC3261 14.1 Modifying an Existing Session. UAC Behavior.
   this.reattempt = false;
   this.reattemptTimer = null;
@@ -22,20 +25,20 @@ function DialogRequestSender(dialog, applicant, request) {
 
 
 DialogRequestSender.prototype = {
-  send: function() {
+  send: function(callbacks) {
     var
       self = this,
       request_sender = new RequestSender(this, this.dialog.owner.ua);
 
-    request_sender.send();
+    request_sender.send(callbacks);
 
     // RFC3261 14.2 Modifying an Existing Session -UAC BEHAVIOR-
     if (this.request.method === ExSIP_C.INVITE && request_sender.clientTransaction.state !== Transactions.C.STATUS_TERMINATED) {
       this.dialog.uac_pending_reply = true;
-      request_sender.clientTransaction.on('stateChanged', function stateChanged(e){
+      request_sender.clientTransaction.on('stateChanged', function stateChanged(e) {
         if (e.sender.state === Transactions.C.STATUS_ACCEPTED ||
-            e.sender.state === Transactions.C.STATUS_COMPLETED ||
-            e.sender.state === Transactions.C.STATUS_TERMINATED) {
+          e.sender.state === Transactions.C.STATUS_COMPLETED ||
+          e.sender.state === Transactions.C.STATUS_TERMINATED) {
 
           request_sender.clientTransaction.removeListener('stateChanged', stateChanged);
           self.dialog.uac_pending_reply = false;
@@ -58,6 +61,8 @@ DialogRequestSender.prototype = {
 
   receiveResponse: function(response) {
     var self = this;
+
+    this.logger.debug('receiveResponse : ' + response);
 
     // RFC3261 12.2.1.2 408 or 481 is received for a request within a dialog.
     if (response.status_code === 408 || response.status_code === 481) {

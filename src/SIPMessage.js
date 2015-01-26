@@ -33,19 +33,21 @@ function OutgoingRequest(method, ruri, ua, params, extraHeaders, body) {
 
   params = params || {};
 
+  this.logger = ua.getLogger('ExSIP.sipmessage');
+
+  this.logger.debug('OutgoingRequest.extraHeaders : '+method+', '+ruri+', '+extraHeaders);
   // Mandatory parameters check
   if(!method || !ruri || !ua) {
     return null;
   }
 
-  this.logger = ua.getLogger('ExSIP.sipmessage');
   this.ua = ua;
   this.headers = {};
   this.method = method;
   this.ruri = ruri;
   this.body = body;
   this.extraHeaders = extraHeaders && extraHeaders.slice() || [];
-
+this.logger.debug('OutgoingRequest.extraHeaders 2 : '+this.extraHeaders);
   // Fill the Common SIP Request Headers
 
   // Route
@@ -198,7 +200,7 @@ OutgoingRequest.prototype = {
     var msg = '', header, length, idx,
       supported = [];
 
-    msg += this.method + ' ' + this.ruri + ' SIP/2.0\r\n';
+    msg += this.method + ' ' + (this.ua.configuration.enable_ims && this.ruri.isPhoneNumber() ? this.ruri + ";user=phone" : this.ruri) + ' SIP/2.0\r\n';
 
     for (header in this.headers) {
       length = this.headers[header].length;

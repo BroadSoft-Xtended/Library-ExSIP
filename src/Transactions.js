@@ -136,7 +136,6 @@ NonInviteClientTransaction.prototype.receiveResponse = function(response) {
         if(status_code === 408) {
           this.request_sender.onRequestTimeout();
         } else {
-          console.log(this.request_sender);
           this.request_sender.receiveResponse(response);
         }
 
@@ -306,6 +305,7 @@ InviteClientTransaction.prototype.receiveResponse = function(response) {
   status_code = response.status_code;
 
   if(status_code >= 100 && status_code <= 199) {
+    this.logger.debug('received 1xx : '+this.state);
     switch(this.state) {
       case C.STATUS_CALLING:
         this.stateChanged(C.STATUS_PROCEEDING);

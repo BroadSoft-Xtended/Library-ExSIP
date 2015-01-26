@@ -1,295 +1,358 @@
-module( "ExSIP.WebRTC.RTCSessionDescription", {
-  setup: function() {
-    createDescription();
-  }, teardown: function() {
-  }
-});
+require('./include/common');
+var testUA = require('./include/testUA');
+var ExSIP = require('../');
+var WebRTC = require('../src/WebRTC');
+var ExSIP_C = require('../src/Constants');
 
-test('getCodecs', function() {
-  deepEqual(description.getAudioCodecs(), ["9", "126"]);
-  deepEqual(description.getVideoCodecs(), ["99", "109", "34"]);
-});
-test('getCodecs without video', function() {
+module.exports = {
+
+setUp: function(callback) {
+  createDescription();
+  callback();
+},
+
+'getCodecs': function(test) {
+  test.deepEqual(description.getAudioCodecs(), ["9", "126"]);
+  test.deepEqual(description.getVideoCodecs(), ["99", "109", "34"]);
+  test.done();
+},
+'getCodecs without video': function(test) {
   createDescription({withoutVideo: true});
-  deepEqual(description.getVideoCodecs(), null);
-});
-test('getCodecs without audio', function() {
+  test.deepEqual(description.getVideoCodecs(), null);
+  test.done();
+},
+'getCodecs without audio': function(test) {
   createDescription({withoutAudio: true});
-  deepEqual(description.getAudioCodecs(), null);
-});
+  test.deepEqual(description.getAudioCodecs(), null);
+  test.done();
+},
 
-test('getIceUfrag', function() {
-  deepEqual(description.getAudioIceUfrag(), "pXHmklEbg7WBL95R");
-  deepEqual(description.getVideoIceUfrag(), "Q8QVGvJo7iPUnNoG");
-});
-test('getIceUfrag without video', function() {
+'getIceUfrag': function(test) {
+  test.deepEqual(description.getAudioIceUfrag(), "pXHmklEbg7WBL95R");
+  test.deepEqual(description.getVideoIceUfrag(), "Q8QVGvJo7iPUnNoG");
+  test.done();
+},
+'getIceUfrag without video': function(test) {
   createDescription({withoutVideoIceUfrag: true});
-  deepEqual(description.getVideoIceUfrag(), null);
-});
-test('getIceUfrag without audio', function() {
+  test.deepEqual(description.getVideoIceUfrag(), null);
+  test.done();
+},
+'getIceUfrag without audio': function(test) {
   createDescription({withoutAudioIceUfrag: true});
-  deepEqual(description.getAudioIceUfrag(), null);
-});
+  test.deepEqual(description.getAudioIceUfrag(), null);
+  test.done();
+},
 
-test('getIcePwd', function() {
-  deepEqual(description.getAudioIcePwd(), "KJa5PdOffxkQ7NtyroEPwzZY");
-  deepEqual(description.getVideoIcePwd(), "Tnws80Vq98O3THLRXLqjWnOf");
-});
-test('getIceUfrag without video', function() {
+'getIcePwd': function(test) {
+  test.deepEqual(description.getAudioIcePwd(), "KJa5PdOffxkQ7NtyroEPwzZY");
+  test.deepEqual(description.getVideoIcePwd(), "Tnws80Vq98O3THLRXLqjWnOf");
+  test.done();
+},
+'getIceUfrag without video': function(test) {
   createDescription({withoutVideoIcePwd: true});
-  deepEqual(description.getVideoIcePwd(), null);
-});
-test('getIceUfrag without audio', function() {
+  test.deepEqual(description.getVideoIcePwd(), null);
+  test.done();
+},
+'getIceUfrag without audio': function(test) {
   createDescription({withoutAudioIcePwd: true});
-  deepEqual(description.getAudioIcePwd(), null);
-});
+  test.deepEqual(description.getAudioIcePwd(), null);
+  test.done();
+},
 
-test('getCodecRtpmap', function() {
-  deepEqual(description.getAudioCodecRtpmap("9"), "G722/8000");
-  deepEqual(description.getAudioCodecRtpmap("126"), "telephone-event/8000");
-  deepEqual(description.getVideoCodecRtpmap("99"), "H264/90000");
-  deepEqual(description.getVideoCodecRtpmap("109"), "H264/90000");
-  deepEqual(description.getVideoCodecRtpmap("34"), "H263/90000");
-});
-test('getCodecRtpmap without video', function() {
+'getCodecRtpmap': function(test) {
+  test.deepEqual(description.getAudioCodecRtpmap("9"), "G722/8000");
+  test.deepEqual(description.getAudioCodecRtpmap("126"), "telephone-event/8000");
+  test.deepEqual(description.getVideoCodecRtpmap("99"), "H264/90000");
+  test.deepEqual(description.getVideoCodecRtpmap("109"), "H264/90000");
+  test.deepEqual(description.getVideoCodecRtpmap("34"), "H263/90000");
+  test.done();
+},
+'getCodecRtpmap without video': function(test) {
   createDescription({withoutVideoCodecRtpmap: true});
-  deepEqual(description.getVideoCodecRtpmap("99"), null);
-});
-test('getCodecRtpmap without audio', function() {
+  test.deepEqual(description.getVideoCodecRtpmap("99"), null);
+  test.done();
+},
+'getCodecRtpmap without audio': function(test) {
   createDescription({withoutAudioCodecRtpmap: true});
-  deepEqual(description.getAudioCodecRtpmap("9"), null);
-});
+  test.deepEqual(description.getAudioCodecRtpmap("9"), null);
+  test.done();
+},
 
-test('getCodecFmtp', function() {
-  deepEqual(description.getAudioCodecFmtp("9"), null);
-  deepEqual(description.getAudioCodecFmtp("126"), "0-15");
-  deepEqual(description.getVideoCodecFmtp("99"), "profile-level-id=42801E; packetization-mode=0");
-  deepEqual(description.getVideoCodecFmtp("109"), "profile-level-id=42801E; packetization-mode=0");
-  deepEqual(description.getVideoCodecFmtp("34"), "CIF=1;QCIF=1;SQCIF=1");
-});
-test('getCodecFmtp without video', function() {
+'getCodecFmtp': function(test) {
+  test.deepEqual(description.getAudioCodecFmtp("9"), null);
+  test.deepEqual(description.getAudioCodecFmtp("126"), "0-15");
+  test.deepEqual(description.getVideoCodecFmtp("99"), "profile-level-id=42801E; packetization-mode=0");
+  test.deepEqual(description.getVideoCodecFmtp("109"), "profile-level-id=42801E; packetization-mode=0");
+  test.deepEqual(description.getVideoCodecFmtp("34"), "CIF=1;QCIF=1;SQCIF=1");
+  test.done();
+},
+'getCodecFmtp without video': function(test) {
   createDescription({withoutVideoCodecFmtp: true});
-  deepEqual(description.getVideoCodecFmtp("99"), null);
-});
-test('getCodecFmtp without audio', function() {
+  test.deepEqual(description.getVideoCodecFmtp("99"), null);
+  test.done();
+},
+'getCodecFmtp without audio': function(test) {
   createDescription({withoutAudioCodecFmtp: true});
-  deepEqual(description.getAudioCodecFmtp("9"), null);
-});
+  test.deepEqual(description.getAudioCodecFmtp("9"), null);
+  test.done();
+},
 
-test('getConnections', function() {
-  strictEqual(description.getConnection(), "IN IP4 10.48.1.13");
-  strictEqual(description.getAudioConnection(), "IN IP4 10.48.1.23");
-  strictEqual(description.getVideoConnection(), "IN IP4 10.48.1.33");
-});
-test('getConnections without video connection', function() {
+'getConnections': function(test) {
+  test.strictEqual(description.getConnection(), "IN IP4 10.48.1.13");
+  test.strictEqual(description.getAudioConnection(), "IN IP4 10.48.1.23");
+  test.strictEqual(description.getVideoConnection(), "IN IP4 10.48.1.33");
+  test.done();
+},
+'getConnections without video connection': function(test) {
   createDescription({withoutVideoConnection: true});
-  strictEqual(description.getConnection(), "IN IP4 10.48.1.13");
-  strictEqual(description.getAudioConnection(), "IN IP4 10.48.1.23");
-  strictEqual(description.getVideoConnection(), "IN IP4 10.48.1.13");
-});
-test('getConnections without audio connection', function() {
+  test.strictEqual(description.getConnection(), "IN IP4 10.48.1.13");
+  test.strictEqual(description.getAudioConnection(), "IN IP4 10.48.1.23");
+  test.strictEqual(description.getVideoConnection(), "IN IP4 10.48.1.13");
+  test.done();
+},
+'getConnections without audio connection': function(test) {
   createDescription({withoutAudioConnection: true});
-  strictEqual(description.getConnection(), "IN IP4 10.48.1.13");
-  strictEqual(description.getAudioConnection(), "IN IP4 10.48.1.13");
-  strictEqual(description.getVideoConnection(), "IN IP4 10.48.1.33");
-});
-test('getConnections without audio and video connection', function() {
+  test.strictEqual(description.getConnection(), "IN IP4 10.48.1.13");
+  test.strictEqual(description.getAudioConnection(), "IN IP4 10.48.1.13");
+  test.strictEqual(description.getVideoConnection(), "IN IP4 10.48.1.33");
+  test.done();
+},
+'getConnections without audio and video connection': function(test) {
   createDescription({withoutAudioConnection: true, withoutVideoConnection: true});
-  strictEqual(description.getConnection(), "IN IP4 10.48.1.13");
-  strictEqual(description.getAudioConnection(), "IN IP4 10.48.1.13");
-  strictEqual(description.getVideoConnection(), "IN IP4 10.48.1.13");
-});
+  test.strictEqual(description.getConnection(), "IN IP4 10.48.1.13");
+  test.strictEqual(description.getAudioConnection(), "IN IP4 10.48.1.13");
+  test.strictEqual(description.getVideoConnection(), "IN IP4 10.48.1.13");
+  test.done();
+},
 
-test('setConnections', function() {
+'setConnections': function(test) {
   description.setAudioConnection("IN IP4 10.48.1.43");
   description.setVideoConnection("IN IP4 10.48.1.53");
-  strictEqual(description.getConnection(), "IN IP4 10.48.1.13");
-  strictEqual(description.getAudioConnection(), "IN IP4 10.48.1.43");
-  strictEqual(description.getVideoConnection(), "IN IP4 10.48.1.53");
-});
+  test.strictEqual(description.getConnection(), "IN IP4 10.48.1.13");
+  test.strictEqual(description.getAudioConnection(), "IN IP4 10.48.1.43");
+  test.strictEqual(description.getVideoConnection(), "IN IP4 10.48.1.53");
+  test.done();
+},
 
-test('setRtcp', function() {
-  strictEqual(description.getAudioRtcp(), "55761 IN IP4 181.189.138.18");
-  strictEqual(description.getVideoRtcp(), "55762 IN IP4 181.189.138.18");
+'setRtcp': function(test) {
+  test.strictEqual(description.getAudioRtcp(), "55761 IN IP4 181.189.138.18");
+  test.strictEqual(description.getVideoRtcp(), "55762 IN IP4 181.189.138.18");
   description.setAudioRtcp("12345 IN IP4 10.0.1.2");
   description.setVideoRtcp("23456 IN IP4 11.1.2.3");
-  strictEqual(description.getAudioRtcp(), "12345 IN IP4 10.0.1.2");
-  strictEqual(description.getVideoRtcp(), "23456 IN IP4 11.1.2.3");
-});
+  test.strictEqual(description.getAudioRtcp(), "12345 IN IP4 10.0.1.2");
+  test.strictEqual(description.getVideoRtcp(), "23456 IN IP4 11.1.2.3");
+  test.done();
+},
 
-test('getCandidates', function() {
-  deepEqual(description.getAudioCandidates(), ["3355351182 1 udp 2113937151 10.0.2.1 59436 typ host generation 0",
+'getCandidates': function(test) {
+  test.deepEqual(description.getAudioCandidates(), ["3355351182 1 udp 2113937151 10.0.2.1 59436 typ host generation 0",
                                                "3355351182 2 udp 2113937151 10.0.2.1 59436 typ host generation 0"]);
-});
+  test.done();
+},
 
-test('hasActiveVideo', function() {
-  ok(description.hasActiveVideo());
-});
-test('hasActiveVideo without m=video', function() {
+'hasActiveVideo': function(test) {
+  test.ok(description.hasActiveVideo());
+  test.done();
+},
+'hasActiveVideo without m=video': function(test) {
   createDescription({withoutVideo: true});
-  ok(!description.hasActiveVideo());
-});
-test('hasActiveVideo with 0 video port', function() {
+  test.ok(!description.hasActiveVideo());
+  test.done();
+},
+'hasActiveVideo with 0 video port': function(test) {
   createDescription({videoPort: "0"});
-  ok(!description.hasActiveVideo());
-});
-test('hasActiveVideo with 0.0.0.0 video IP', function() {
+  test.ok(!description.hasActiveVideo());
+  test.done();
+},
+'hasActiveVideo with 0.0.0.0 video IP': function(test) {
   createDescription({videoIP: "0.0.0.0"});
-  ok(!description.hasActiveVideo());
-});
+  test.ok(!description.hasActiveVideo());
+  test.done();
+},
 
-test('hasActiveAudio', function() {
-  ok(description.hasActiveAudio());
-});
-test('hasActiveAudio without m=audio', function() {
+'hasActiveAudio': function(test) {
+  test.ok(description.hasActiveAudio());
+  test.done();
+},
+'hasActiveAudio without m=audio': function(test) {
   createDescription({withoutAudio: true});
-  ok(!description.hasActiveAudio());
-});
-test('hasActiveAudio with 0 audio port', function() {
+  test.ok(!description.hasActiveAudio());
+  test.done();
+},
+'hasActiveAudio with 0 audio port': function(test) {
   createDescription({audioPort: "0"});
-  ok(!description.hasActiveAudio());
-});
-test('hasActiveAudio with 0.0.0.0 audio IP', function() {
+  test.ok(!description.hasActiveAudio());
+  test.done();
+},
+'hasActiveAudio with 0.0.0.0 audio IP': function(test) {
   createDescription({audioIP: "0.0.0.0"});
-  ok(!description.hasActiveAudio());
-});
+  test.ok(!description.hasActiveAudio());
+  test.done();
+},
 
-test('setVideoBandwidth', function() {
+'setVideoBandwidth': function(test) {
   description.setVideoBandwidth("123");
-  strictEqual(description.getVideoBandwidth(), "123");
-});
-test('setVideoPort', function() {
-  strictEqual(description.videoPort(), "16930");
+  test.strictEqual(description.getVideoBandwidth(), "123");
+  test.done();
+},
+'setVideoPort': function(test) {
+  test.strictEqual(description.videoPort(), "16930");
   description.setVideoPort("0");
-  strictEqual(description.videoPort(), "0");
-});
-test('setVideoBandwidth without video bandwidth', function() {
+  test.strictEqual(description.videoPort(), "0");
+  test.done();
+},
+'setVideoBandwidth without video bandwidth': function(test) {
   createDescription({withoutVideoBandwidth: true});
   description.setVideoBandwidth("123");
-  strictEqual(description.getVideoBandwidth(), "123");
-});
-test('setVideoBandwidth without video bandwidth', function() {
+  test.strictEqual(description.getVideoBandwidth(), "123");
+  test.done();
+},
+'setVideoBandwidth without video bandwidth': function(test) {
   createDescription({withoutVideoBandwidth: true});
   description.setVideoBandwidth("123");
-  strictEqual(description.getVideoBandwidth(), "123");
-});
-test('setVideoBandwidth without video connection', function() {
+  test.strictEqual(description.getVideoBandwidth(), "123");
+  test.done();
+},
+'setVideoBandwidth without video connection': function(test) {
   createDescription({withoutVideoConnection: true});
   description.setVideoBandwidth("123");
-  strictEqual(description.getVideoBandwidth(), "123");
-  ok(description.sdp.indexOf('m=video 16930 RTP/AVP 99 109 34\r\nb=AS:123\r\n') !== -1);
-});
+  test.strictEqual(description.getVideoBandwidth(), "123");
+  test.ok(description.sdp.indexOf('m=video 16930 RTP/AVP 99 109 34\r\nb=AS:123\r\n') !== -1);
+  test.done();
+},
 
-test('getVideoMode', function() {
-  strictEqual(description.getVideoMode(), ExSIP.C.SENDRECV);
-});
-test('getVideoMode without video mode', function() {
+'getVideoMode': function(test) {
+  test.strictEqual(description.getVideoMode(), ExSIP_C.SENDRECV);
+  test.done();
+},
+'getVideoMode without video mode': function(test) {
   createDescription({withoutVideoMode: true});
-  strictEqual(description.getVideoMode(), null);
-});
-test('getVideoMode with video mode inactive', function() {
-  createDescription({videoMode: ExSIP.C.INACTIVE});
-  strictEqual(description.getVideoMode(), ExSIP.C.INACTIVE);
-});
-test('getVideoMode with video mode recvonly', function() {
-  createDescription({videoMode: ExSIP.C.RECVONLY});
-  strictEqual(description.getVideoMode(), ExSIP.C.RECVONLY);
-});
-test('getVideoMode with video mode sendonly', function() {
-  createDescription({videoMode: ExSIP.C.INACTIVE});
-  strictEqual(description.getVideoMode(), ExSIP.C.INACTIVE);
-});
+  test.strictEqual(description.getVideoMode(), null);
+  test.done();
+},
+'getVideoMode with video mode inactive': function(test) {
+  createDescription({videoMode: ExSIP_C.INACTIVE});
+  test.strictEqual(description.getVideoMode(), ExSIP_C.INACTIVE);
+  test.done();
+},
+'getVideoMode with video mode recvonly': function(test) {
+  createDescription({videoMode: ExSIP_C.RECVONLY});
+  test.strictEqual(description.getVideoMode(), ExSIP_C.RECVONLY);
+  test.done();
+},
+'getVideoMode with video mode sendonly': function(test) {
+  createDescription({videoMode: ExSIP_C.INACTIVE});
+  test.strictEqual(description.getVideoMode(), ExSIP_C.INACTIVE);
+  test.done();
+},
 
-test('setVideoMode', function() {
-  createDescription({videoMode: ExSIP.C.SENDRECV});
-  description.setVideoMode(ExSIP.C.INACTIVE);
-  strictEqual(description.getVideoMode(), ExSIP.C.INACTIVE);
-  strictEqual(description.getAudioMode(), ExSIP.C.SENDRECV);
-});
-test('setVideoMode without video mode', function() {
+'setVideoMode': function(test) {
+  createDescription({videoMode: ExSIP_C.SENDRECV});
+  description.setVideoMode(ExSIP_C.INACTIVE);
+  test.strictEqual(description.getVideoMode(), ExSIP_C.INACTIVE);
+  test.strictEqual(description.getAudioMode(), ExSIP_C.SENDRECV);
+  test.done();
+},
+'setVideoMode without video mode': function(test) {
   createDescription({withoutVideoMode: true});
-  description.setVideoMode(ExSIP.C.INACTIVE);
-  strictEqual(description.getVideoMode(), ExSIP.C.INACTIVE);
-  strictEqual(description.getAudioMode(), ExSIP.C.SENDRECV);
-});
-test('setVideoMode without video mode and withoutVideoConnection', function() {
+  description.setVideoMode(ExSIP_C.INACTIVE);
+  test.strictEqual(description.getVideoMode(), ExSIP_C.INACTIVE);
+  test.strictEqual(description.getAudioMode(), ExSIP_C.SENDRECV);
+  test.done();
+},
+'setVideoMode without video mode and withoutVideoConnection': function(test) {
   createDescription({withoutVideoMode: true, withoutVideoConnection: true});
-  description.setVideoMode(ExSIP.C.INACTIVE);
-  strictEqual(description.getVideoMode(), ExSIP.C.INACTIVE);
-  strictEqual(description.getAudioMode(), ExSIP.C.SENDRECV);
-});
+  description.setVideoMode(ExSIP_C.INACTIVE);
+  test.strictEqual(description.getVideoMode(), ExSIP_C.INACTIVE);
+  test.strictEqual(description.getAudioMode(), ExSIP_C.SENDRECV);
+  test.done();
+},
 
-test('getAudioMode', function() {
-  strictEqual(description.getAudioMode(), ExSIP.C.SENDRECV);
-});
-test('getAudioMode without audio mode', function() {
+'getAudioMode': function(test) {
+  test.strictEqual(description.getAudioMode(), ExSIP_C.SENDRECV);
+  test.done();
+},
+'getAudioMode without audio mode': function(test) {
   createDescription({withoutAudioMode: true});
-  strictEqual(description.getAudioMode(), null);
-});
-test('getAudioMode with audio mode inactive', function() {
-  createDescription({audioMode: ExSIP.C.INACTIVE});
-  strictEqual(description.getAudioMode(), ExSIP.C.INACTIVE);
-});
-test('getAudioMode with audio mode recvonly', function() {
-  createDescription({audioMode: ExSIP.C.RECVONLY});
-  strictEqual(description.getAudioMode(), ExSIP.C.RECVONLY);
-});
-test('getAudioMode with audio mode sendonly', function() {
-  createDescription({audioMode: ExSIP.C.SENDONLY});
-  strictEqual(description.getAudioMode(), ExSIP.C.SENDONLY);
-});
+  test.strictEqual(description.getAudioMode(), null);
+  test.done();
+},
+'getAudioMode with audio mode inactive': function(test) {
+  createDescription({audioMode: ExSIP_C.INACTIVE});
+  test.strictEqual(description.getAudioMode(), ExSIP_C.INACTIVE);
+  test.done();
+},
+'getAudioMode with audio mode recvonly': function(test) {
+  createDescription({audioMode: ExSIP_C.RECVONLY});
+  test.strictEqual(description.getAudioMode(), ExSIP_C.RECVONLY);
+  test.done();
+},
+'getAudioMode with audio mode sendonly': function(test) {
+  createDescription({audioMode: ExSIP_C.SENDONLY});
+  test.strictEqual(description.getAudioMode(), ExSIP_C.SENDONLY);
+  test.done();
+},
 
-test('setAudioPort', function() {
-  strictEqual(description.audioPort(), "16550");
+'setAudioPort': function(test) {
+  test.strictEqual(description.audioPort(), "16550");
   description.setAudioPort("0");
-  strictEqual(description.audioPort(), "0");
-});
-test('setAudioMode', function() {
-  createDescription({videoMode: ExSIP.C.SENDRECV});
-  description.setAudioMode(ExSIP.C.INACTIVE);
-  strictEqual(description.getAudioMode(), ExSIP.C.INACTIVE);
-  strictEqual(description.getVideoMode(), ExSIP.C.SENDRECV);
-});
-test('setAudioMode without audio mode', function() {
+  test.strictEqual(description.audioPort(), "0");
+  test.done();
+},
+'setAudioMode': function(test) {
+  createDescription({videoMode: ExSIP_C.SENDRECV});
+  description.setAudioMode(ExSIP_C.INACTIVE);
+  test.strictEqual(description.getAudioMode(), ExSIP_C.INACTIVE);
+  test.strictEqual(description.getVideoMode(), ExSIP_C.SENDRECV);
+  test.done();
+},
+'setAudioMode without audio mode': function(test) {
   createDescription({withoutAudioMode: true});
-  description.setAudioMode(ExSIP.C.INACTIVE);
-  strictEqual(description.getAudioMode(), ExSIP.C.INACTIVE);
-  strictEqual(description.getVideoMode(), ExSIP.C.SENDRECV);
-});
-test('setAudioMode without audio mode and withoutAudioConnection', function() {
+  description.setAudioMode(ExSIP_C.INACTIVE);
+  test.strictEqual(description.getAudioMode(), ExSIP_C.INACTIVE);
+  test.strictEqual(description.getVideoMode(), ExSIP_C.SENDRECV);
+  test.done();
+},
+'setAudioMode without audio mode and withoutAudioConnection': function(test) {
   createDescription({withoutAudioMode: true, withoutAudioConnection: true});
-  description.setAudioMode(ExSIP.C.INACTIVE);
-  strictEqual(description.getAudioMode(), ExSIP.C.INACTIVE);
-  strictEqual(description.getVideoMode(), ExSIP.C.SENDRECV);
-});
+  description.setAudioMode(ExSIP_C.INACTIVE);
+  test.strictEqual(description.getAudioMode(), ExSIP_C.INACTIVE);
+  test.strictEqual(description.getVideoMode(), ExSIP_C.SENDRECV);
+  test.done();
+},
 
-test('getAudioFingerprint', function() {
-  strictEqual(description.getAudioFingerprint(), "sha-256 B1:1D:38:90:8F:72:85:60:AD:10:9F:BB:F5:78:47:AB:A8:DF:01:FA:50:D3:73:C9:20:3D:B4:C0:36:C2:08:29");
-});
-test('getVideoFingerprint', function() {
-  strictEqual(description.getVideoFingerprint(), "sha-256 B1:1D:38:90:8F:72:85:60:AD:10:9F:BB:F5:78:47:AB:A8:DF:01:FA:50:D3:73:C9:20:3D:B4:C0:36:C2:08:30");
-});
+'getAudioFingerprint': function(test) {
+  test.strictEqual(description.getAudioFingerprint(), "sha-256 B1:1D:38:90:8F:72:85:60:AD:10:9F:BB:F5:78:47:AB:A8:DF:01:FA:50:D3:73:C9:20:3D:B4:C0:36:C2:08:29");
+  test.done();
+},
+'getVideoFingerprint': function(test) {
+  test.strictEqual(description.getVideoFingerprint(), "sha-256 B1:1D:38:90:8F:72:85:60:AD:10:9F:BB:F5:78:47:AB:A8:DF:01:FA:50:D3:73:C9:20:3D:B4:C0:36:C2:08:30");
+  test.done();
+},
 
-test('removeVideoFingerprint', function() {
+'removeVideoFingerprint': function(test) {
   description.removeVideoFingerprint();
-  strictEqual(description.getAudioFingerprint(), "sha-256 B1:1D:38:90:8F:72:85:60:AD:10:9F:BB:F5:78:47:AB:A8:DF:01:FA:50:D3:73:C9:20:3D:B4:C0:36:C2:08:29");
-  strictEqual(description.getVideoFingerprint(), null);
-  strictEqual(description.sdp.indexOf('\r\n\r\n'), -1, "should not generate empty sdp lines");
-});
-test('removeAudioFingerprint', function() {
+  test.strictEqual(description.getAudioFingerprint(), "sha-256 B1:1D:38:90:8F:72:85:60:AD:10:9F:BB:F5:78:47:AB:A8:DF:01:FA:50:D3:73:C9:20:3D:B4:C0:36:C2:08:29");
+  test.strictEqual(description.getVideoFingerprint(), null);
+  test.strictEqual(description.sdp.indexOf('\r\n\r\n'), -1, "should not generate empty sdp lines");
+  test.done();
+},
+'removeAudioFingerprint': function(test) {
   description.removeAudioFingerprint();
-  strictEqual(description.getAudioFingerprint(), null);
-  strictEqual(description.getVideoFingerprint(), "sha-256 B1:1D:38:90:8F:72:85:60:AD:10:9F:BB:F5:78:47:AB:A8:DF:01:FA:50:D3:73:C9:20:3D:B4:C0:36:C2:08:30");
-  strictEqual(description.sdp.indexOf('\r\n\r\n'), -1, "should not generate empty sdp lines");
-});
+  test.strictEqual(description.getAudioFingerprint(), null);
+  test.strictEqual(description.getVideoFingerprint(), "sha-256 B1:1D:38:90:8F:72:85:60:AD:10:9F:BB:F5:78:47:AB:A8:DF:01:FA:50:D3:73:C9:20:3D:B4:C0:36:C2:08:30");
+  test.strictEqual(description.sdp.indexOf('\r\n\r\n'), -1, "should not generate empty sdp lines");
+  test.done();
+},
 
-test('mediaChanges with same sdp', function() {
-  var otherSdp = TestExSIP.Helpers.createDescription();
-  deepEqual(description.mediaChanges(otherSdp), []);
-});
-test('mediaChanges without video', function() {
-  var otherSdp = TestExSIP.Helpers.createDescription({withoutVideo: true});
-  deepEqual(description.mediaChanges(otherSdp), ["video has changed",
+'mediaChanges with same sdp': function(test) {
+  var otherSdp = testUA.createDescription();
+  test.deepEqual(description.mediaChanges(otherSdp), []);
+  test.done();
+},
+'mediaChanges without video': function(test) {
+  var otherSdp = testUA.createDescription({withoutVideo: true});
+  test.deepEqual(description.mediaChanges(otherSdp), ["video has changed",
     "video port has changed : 16930 - null",
     "video connection has changed : IN IP4 10.48.1.33 - IN IP4 10.48.1.13",
     "video codecs has changed : 99,109,34 - null",
@@ -297,75 +360,91 @@ test('mediaChanges without video', function() {
     "video codec rtpmap for 109 has changed : H264/90000 - null",
     "video codec rtpmap for 34 has changed : H263/90000 - null",
     ]);
-});
-test('mediaChanges without audio', function() {
-  var otherSdp = TestExSIP.Helpers.createDescription({withoutAudio: true});
-  deepEqual(description.mediaChanges(otherSdp), ["audio has changed",
+  test.done();
+},
+'mediaChanges without audio': function(test) {
+  var otherSdp = testUA.createDescription({withoutAudio: true});
+  test.deepEqual(description.mediaChanges(otherSdp), ["audio has changed",
     "audio port has changed : 16550 - null",
     "audio connection has changed : IN IP4 10.48.1.23 - IN IP4 10.48.1.13",
     "audio codecs has changed : 9,126 - null",
     "audio codec rtpmap for 9 has changed : G722/8000 - null",
     "audio codec rtpmap for 126 has changed : telephone-event/8000 - null"
     ]);
-});
-test('mediaChanges with different audio port ', function() {
-  var otherSdp = TestExSIP.Helpers.createDescription({audioPort: "123"});
-  deepEqual(description.mediaChanges(otherSdp), ["audio port has changed : 16550 - 123"]);
-});
-test('mediaChanges with different video port ', function() {
-  var otherSdp = TestExSIP.Helpers.createDescription({videoPort: "123"});
-  deepEqual(description.mediaChanges(otherSdp), ["video port has changed : 16930 - 123"]);
-});
-test('mediaChanges with different audio connection', function() {
-  var otherSdp = TestExSIP.Helpers.createDescription({audioIP: "1.2.3.4"});
-  deepEqual(description.mediaChanges(otherSdp), ["audio connection has changed : IN IP4 10.48.1.23 - IN IP4 1.2.3.4"]);
-});
-test('mediaChanges with different video connection', function() {
-  var otherSdp = TestExSIP.Helpers.createDescription({videoIP: "1.2.3.4"});
-  deepEqual(description.mediaChanges(otherSdp), ["video connection has changed : IN IP4 10.48.1.33 - IN IP4 1.2.3.4"]);
-});
-test('mediaChanges with different audio mode', function() {
-  var otherSdp = TestExSIP.Helpers.createDescription({audioMode: ExSIP.C.RECVONLY});
-  deepEqual(description.mediaChanges(otherSdp), []);
-});
-test('mediaChanges with different video mode', function() {
-  var otherSdp = TestExSIP.Helpers.createDescription({videoMode: ExSIP.C.RECVONLY});
-  deepEqual(description.mediaChanges(otherSdp), []);
-});
-test('mediaChanges with same audio codecs in different order', function() {
-  var otherSdp = TestExSIP.Helpers.createDescription({audioCodecs: "126 9"});
-  deepEqual(description.mediaChanges(otherSdp), []);
-});
-test('mediaChanges with different audio codecs', function() {
-  var otherSdp = TestExSIP.Helpers.createDescription({audioCodecs: "1 2 3 4"});
-  deepEqual(description.mediaChanges(otherSdp), ["audio codecs has changed : 9,126 - 1,2,3,4"]);
-});
-test('mediaChanges with same video codecs in different order', function() {
-  var otherSdp = TestExSIP.Helpers.createDescription({videoCodecs: "34 99 109"});
-  deepEqual(description.mediaChanges(otherSdp), []);
-});
-test('mediaChanges with different video codecs', function() {
-  var otherSdp = TestExSIP.Helpers.createDescription({videoCodecs: "1 2 3 4"});
-  deepEqual(description.mediaChanges(otherSdp), ["video codecs has changed : 99,109,34 - 1,2,3,4"]);
-});
-test('mediaChanges with different audio codec rtpmap', function() {
-  var otherSdp = TestExSIP.Helpers.createDescription({audioCodec9Rtpmap: "difference"});
-  deepEqual(description.mediaChanges(otherSdp), ["audio codec rtpmap for 9 has changed : G722/8000 - difference"]);
-});
-test('mediaChanges with different video codec rtpmap', function() {
-  var otherSdp = TestExSIP.Helpers.createDescription({videoCodec99Rtpmap: "difference"});
-  deepEqual(description.mediaChanges(otherSdp), ["video codec rtpmap for 99 has changed : H264/90000 - difference"]);
-});
-test('mediaChanges with different audio codec fmtp', function() {
-  var otherSdp = TestExSIP.Helpers.createDescription({audioCodec126Fmtp: "difference"});
-  deepEqual(description.mediaChanges(otherSdp), []);
-});
-test('mediaChanges with different video codec fmtp', function() {
-  var otherSdp = TestExSIP.Helpers.createDescription({videoCodec99Fmtp: "difference"});
-  deepEqual(description.mediaChanges(otherSdp), []);
-});
-test('same media in sdps', function() {
-  var sdp1 = new ExSIP.WebRTC.RTCSessionDescription({type: "answer",
+  test.done();
+},
+'mediaChanges with different audio port ': function(test) {
+  var otherSdp = testUA.createDescription({audioPort: "123"});
+  test.deepEqual(description.mediaChanges(otherSdp), ["audio port has changed : 16550 - 123"]);
+  test.done();
+},
+'mediaChanges with different video port ': function(test) {
+  var otherSdp = testUA.createDescription({videoPort: "123"});
+  test.deepEqual(description.mediaChanges(otherSdp), ["video port has changed : 16930 - 123"]);
+  test.done();
+},
+'mediaChanges with different audio connection': function(test) {
+  var otherSdp = testUA.createDescription({audioIP: "1.2.3.4"});
+  test.deepEqual(description.mediaChanges(otherSdp), ["audio connection has changed : IN IP4 10.48.1.23 - IN IP4 1.2.3.4"]);
+  test.done();
+},
+'mediaChanges with different video connection': function(test) {
+  var otherSdp = testUA.createDescription({videoIP: "1.2.3.4"});
+  test.deepEqual(description.mediaChanges(otherSdp), ["video connection has changed : IN IP4 10.48.1.33 - IN IP4 1.2.3.4"]);
+  test.done();
+},
+'mediaChanges with different audio mode': function(test) {
+  var otherSdp = testUA.createDescription({audioMode: ExSIP_C.RECVONLY});
+  test.deepEqual(description.mediaChanges(otherSdp), []);
+  test.done();
+},
+'mediaChanges with different video mode': function(test) {
+  var otherSdp = testUA.createDescription({videoMode: ExSIP_C.RECVONLY});
+  test.deepEqual(description.mediaChanges(otherSdp), []);
+  test.done();
+},
+'mediaChanges with same audio codecs in different order': function(test) {
+  var otherSdp = testUA.createDescription({audioCodecs: "126 9"});
+  test.deepEqual(description.mediaChanges(otherSdp), []);
+  test.done();
+},
+'mediaChanges with different audio codecs': function(test) {
+  var otherSdp = testUA.createDescription({audioCodecs: "1 2 3 4"});
+  test.deepEqual(description.mediaChanges(otherSdp), ["audio codecs has changed : 9,126 - 1,2,3,4"]);
+  test.done();
+},
+'mediaChanges with same video codecs in different order': function(test) {
+  var otherSdp = testUA.createDescription({videoCodecs: "34 99 109"});
+  test.deepEqual(description.mediaChanges(otherSdp), []);
+  test.done();
+},
+'mediaChanges with different video codecs': function(test) {
+  var otherSdp = testUA.createDescription({videoCodecs: "1 2 3 4"});
+  test.deepEqual(description.mediaChanges(otherSdp), ["video codecs has changed : 99,109,34 - 1,2,3,4"]);
+  test.done();
+},
+'mediaChanges with different audio codec rtpmap': function(test) {
+  var otherSdp = testUA.createDescription({audioCodec9Rtpmap: "difference"});
+  test.deepEqual(description.mediaChanges(otherSdp), ["audio codec rtpmap for 9 has changed : G722/8000 - difference"]);
+  test.done();
+},
+'mediaChanges with different video codec rtpmap': function(test) {
+  var otherSdp = testUA.createDescription({videoCodec99Rtpmap: "difference"});
+  test.deepEqual(description.mediaChanges(otherSdp), ["video codec rtpmap for 99 has changed : H264/90000 - difference"]);
+  test.done();
+},
+'mediaChanges with different audio codec fmtp': function(test) {
+  var otherSdp = testUA.createDescription({audioCodec126Fmtp: "difference"});
+  test.deepEqual(description.mediaChanges(otherSdp), []);
+  test.done();
+},
+'mediaChanges with different video codec fmtp': function(test) {
+  var otherSdp = testUA.createDescription({videoCodec99Fmtp: "difference"});
+  test.deepEqual(description.mediaChanges(otherSdp), []);
+  test.done();
+},
+'same media in sdps': function(test) {
+  var sdp1 = new WebRTC.RTCSessionDescription({type: "answer",
     sdp: "v=0\r\n"+
     "o=- 1391106329 1 IN IP4 127.0.0.1\r\n"+
       "s=-\r\n"+
@@ -408,7 +487,7 @@ test('same media in sdps', function() {
     "a=ssrc:4282520567 mslabel:default\r\n"+
       "a=ssrc:4282520567 label:Lf9OhWbx"});
 
-  var sdp2 = new ExSIP.WebRTC.RTCSessionDescription({type: "answer",
+  var sdp2 = new WebRTC.RTCSessionDescription({type: "answer",
     sdp: "v=0\r\n"+
       "o=BroadWorks 1391106387 2 IN IP4 204.117.64.113\r\n"+
   "s=V79Z4YK9HdshXdoMNcHW\r\n"+
@@ -440,11 +519,12 @@ test('same media in sdps', function() {
   "a=candidate:0 1 udp 2113929216 204.117.64.113 1026 typ host"
   });
 
-  deepEqual(sdp1.mediaChanges(sdp2), []);
+  test.deepEqual(sdp1.mediaChanges(sdp2), []);
 
-});
-test('remove unsupported media', function() {
-  var sdp = new ExSIP.WebRTC.RTCSessionDescription({type: "answer",
+  test.done();
+},
+'remove unsupported media': function(test) {
+  var sdp = new WebRTC.RTCSessionDescription({type: "answer",
     sdp: "v=0\r\n"+
       "o=BroadWorks 1403000323 2 IN IP4 50.205.128.35\r\n"+
   "s=3QZDfXi3npfdoo8JD5cK\r\n"+
@@ -517,10 +597,12 @@ test('remove unsupported media', function() {
       "a=candidate:0 1 udp 2113929216 50.205.128.35 20002 typ host\r\n";
 
   sdp.removeUnsupportedMedia();
-  strictEqual(sdp.sdp, expectedSdp);
+  test.strictEqual(sdp.sdp, expectedSdp);
 
-});
+  test.done();
+}
+}
 
 function createDescription(options){
-  description = TestExSIP.Helpers.createDescription(options);
+  description = testUA.createDescription(options);
 }

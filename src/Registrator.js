@@ -285,6 +285,10 @@ Registrator.prototype = {
     });
   },
 
+  onTransportConnected: function() {
+    this.register();
+  },
+
   onTransportClosed: function() {
     if (this.registrationTimer !== null) {
       clearTimeout(this.registrationTimer);

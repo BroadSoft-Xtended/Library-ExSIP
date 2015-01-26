@@ -5,7 +5,7 @@ var TestExSIP = (function() {
 }());
 
 
-TestExSIP.Helpers = {
+test = {
 
   DEFAULT_EXSIP_CONFIGURATION_AFTER_START: {
     password: null,
@@ -41,12 +41,12 @@ TestExSIP.Helpers = {
   sendMsgs: [],
 
   responseFor: function(request, options) {
-    options = TestExSIP.Helpers.mergeOptions(request, options);
+    options = test.mergeOptions(request, options);
     ua.transport.onMessage({data: this.inviteResponse(ua, options)});
   },
 
   requestFor: function(request, options) {
-    options = TestExSIP.Helpers.mergeOptions(request, options);
+    options = test.mergeOptions(request, options);
     ua.transport.onMessage({data: this.inviteRequest(ua, options)});
   },
 
@@ -63,7 +63,7 @@ TestExSIP.Helpers = {
     this.answer(session);
 
     var answerMsg = this.popMessageSentAndClear(ua);
-    strictEqual(answerMsg.status_code, 200);
+    test.strictEqual(answerMsg.status_code, 200);
 
     this.responseFor(answerMsg, {method: ExSIP.C.ACK});
 
@@ -82,8 +82,8 @@ TestExSIP.Helpers = {
 
   isMode: function(body, audioMode, videoMode) {
     var localDescription = new ExSIP.WebRTC.RTCSessionDescription({sdp: body, type: "offer"});
-    strictEqual(localDescription.getVideoMode(), videoMode);
-    strictEqual(localDescription.getAudioMode(), audioMode);
+    test.strictEqual(localDescription.getVideoMode(), videoMode);
+    test.strictEqual(localDescription.getAudioMode(), audioMode);
   },
 
   merge: function(obj1,obj2){
@@ -202,7 +202,7 @@ TestExSIP.Helpers = {
   },
 
   mockWebRTC: function(){
-    TestExSIP.Helpers.isIceCandidateReadyFunction = TestExSIP.Helpers.isIceCandidateReadyFunction || ExSIP.WebRTC.RTCPeerConnection.prototype.isIceCandidateReady;
+    test.isIceCandidateReadyFunction = test.isIceCandidateReadyFunction || ExSIP.WebRTC.RTCPeerConnection.prototype.isIceCandidateReady;
     ExSIP.WebRTC.RTCPeerConnection = function(){
       console.log('-- RTCPeerConnection.new()');
       return {
@@ -212,25 +212,25 @@ TestExSIP.Helpers = {
         setRemoteDescription: function(description, success, failure){
           console.log("-- RTCPeerConnection.setRemoteDescription() : "+ExSIP.Utils.toString(description));
           this.remoteDescription = description;
-          TestExSIP.Helpers.setRemoteDescription(description);
+          test.setRemoteDescription(description);
           if(success){success();
         }},
         addStream: function(){console.log("-- RTCPeerConnection.addStream()")},
         createOffer: function(success, failure, options){
           console.log("-- RTCPeerConnection.createOffer() : ", JSON.stringify(options));
-          TestExSIP.Helpers.createOffer(options);
+          test.createOffer(options);
           this.signalingState = 'have-local-offer';
-          success(TestExSIP.Helpers.createDescription(this.createDescriptionOptions()));
+          success(test.createDescription(this.createDescriptionOptions()));
         },
         createAnswer: function(success, failure){
           console.log("-- RTCPeerConnection.createAnswer()");
           this.signalingState = 'have-remote-offer';
-          TestExSIP.Helpers.createAnswer();
+          test.createAnswer();
           if(!this.remoteDescription) {
             throw new Error("CreateAnswer can't be called before SetRemoteDescription");
           }
           else {
-            var description = TestExSIP.Helpers.createDescription(this.createDescriptionOptions({type: "answer"}));
+            var description = test.createDescription(this.createDescriptionOptions({type: "answer"}));
             success(description);
           }
         },
@@ -240,7 +240,7 @@ TestExSIP.Helpers = {
         },
         setLocalDescription: function(description, success, failure){
           console.log("-- RTCPeerConnection.setLocalDescription() : "+ExSIP.Utils.toString(description));
-          this.localDescription = description; TestExSIP.Helpers.setLocalDescription(description);
+          this.localDescription = description; test.setLocalDescription(description);
           if(success){
             success();
           }
@@ -249,7 +249,7 @@ TestExSIP.Helpers = {
           return options;
         },
         isIceCandidateReady: function(candidate) {
-          return TestExSIP.Helpers.isIceCandidateReadyFunction(candidate);
+          return test.isIceCandidateReadyFunction(candidate);
         }
       }
     };
@@ -290,7 +290,7 @@ TestExSIP.Helpers = {
       "Content-Length: 0\r\n"+
       "\r\n"+
       "\r\n";
-    return TestExSIP.Helpers.createSIPMessage(ua, sip);
+    return test.createSIPMessage(ua, sip);
   },
 
   sipResponseMessage: function(options, sdp) {
@@ -310,7 +310,7 @@ TestExSIP.Helpers = {
       "Content-Length: "+sdp.length+"\r\n"+
       "\r\n"+
       sdp;
-    return TestExSIP.Helpers.createSIPMessage(ua, sip, options);
+    return test.createSIPMessage(ua, sip, options);
   },
 
   sipRequestMessage: function(options, sdp) {
@@ -331,7 +331,7 @@ TestExSIP.Helpers = {
       "Content-Length: "+sdp.length+"\r\n"+
       "\r\n"+
       sdp;
-    return TestExSIP.Helpers.createSIPMessage(ua, sip);
+    return test.createSIPMessage(ua, sip);
   },
 
   getSdp: function(options) {
@@ -375,7 +375,7 @@ TestExSIP.Helpers = {
   ackResponse: function(ua, options) {
     options = options || {};
     options["method"] = ExSIP.C.ACK;
-    return TestExSIP.Helpers.sipRequestMessage(options, "");
+    return test.sipRequestMessage(options, "");
 
   },
 

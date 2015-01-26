@@ -36,6 +36,7 @@ var WebRTC = require('./WebRTC');
 var Exceptions = require('./Exceptions');
 var URI = require('./URI');
 var Grammar = require('./Grammar');
+var Utils = require('./Utils');
 
 
 
@@ -57,7 +58,8 @@ function UA(configuration) {
     'unregistered',
     'registrationFailed',
     'newRTCSession',
-    'newMessage'
+    'newMessage',
+    'onReInvite'
   ];
 
   this.log = new LoggerFactory();
@@ -206,36 +208,34 @@ UA.prototype.isConnected = function() {
 
 UA.prototype.transfer = function(transferTarget, sessionToTransfer, options) {
   var self = this;
-  this.logger.log('transfer options : ' + Utils.toString(options), this);
-  try {
-    transferTarget = Utils.normalizeURI(transferTarget, this.configuration.hostport_params);
-  } catch (e) {
+  this.logger.log('transfer : ' + transferTarget + ' : options : ' + Utils.toString(options));
+  transferTarget = Utils.normalizeTarget(transferTarget, this.configuration.hostport_params);
+  if(!transferTarget) {
     sessionToTransfer.failed('local', null, ExSIP_C.causes.INVALID_TARGET);
-    this.logger.warn("invalid transfer target", this);
+    this.logger.warn("invalid transfer target");
     return;
   }
 
   var holdFailed = function() {
-    this.logger.log("transfer : hold failed", self);
+    self.logger.log("transfer : hold failed");
   };
 
   var holdSuccess = function() {
-    this.logger.log("transfer : hold success - sending refer to transferee", self);
+    self.logger.log("transfer : hold success - sending refer to transferee");
     self.sendReferBasic(sessionToTransfer, transferTarget, options);
   };
 
-  this.logger.log("transfer : holding session to transfer", self);
+  self.logger.log("transfer : holding session to transfer");
   sessionToTransfer.hold(holdSuccess, holdFailed);
 };
 
 UA.prototype.attendedTransfer = function(transferTarget, sessionToTransfer, options) {
   var self = this;
-  this.logger.log('attended transfer options : ' + Utils.toString(options), this);
-  try {
-    transferTarget = Utils.normalizeURI(transferTarget, this.configuration.hostport_params);
-  } catch (e) {
+  this.logger.log('attended transfer : ' + transferTarget + ' : options : ' + Utils.toString(options));
+  transferTarget = Utils.normalizeTarget(transferTarget, this.configuration.hostport_params);
+  if(!transferTarget) {
+    this.logger.warn('invalid transfer target : ' + e);
     sessionToTransfer.failed('local', null, ExSIP_C.causes.INVALID_TARGET);
-    this.logger.warn("invalid transfer target", this);
     return;
   }
 
@@ -244,39 +244,39 @@ UA.prototype.attendedTransfer = function(transferTarget, sessionToTransfer, opti
   targetSession.rtcMediaHandler.copy(sessionToTransfer.rtcMediaHandler);
 
   var holdTargetSuccess = function() {
-    this.logger.log("transfer : hold target success - sending attended refer", self);
+    self.logger.log("transfer : hold target success - sending attended refer");
     self.sendReferAttended(sessionToTransfer, targetSession, transferTarget, options);
   };
 
   var holdTargetFailed = function() {
-    this.logger.log("transfer : hold target failed", self);
+    self.logger.log("transfer : hold target failed");
   };
 
   var sendTargetInviteSuccess = function() {
-    this.logger.log("transfer : send invite to target success - putting target on hold", self);
+    self.logger.log("transfer : send invite to target success - putting target on hold");
     targetSession.hold(holdTargetSuccess, holdTargetFailed);
   };
 
   var sendTargetInviteFailed = function(response) {
-    this.logger.log("transfer : send invite to target failed - sending basic refer", self);
+    self.logger.log("transfer : send invite to target failed - sending basic refer");
     if (response.status_code === 420) {
       self.sendReferBasic(sessionToTransfer, transferTarget, options);
     }
   };
 
   var holdFailed = function() {
-    this.logger.log("transfer : hold failed", self);
+    self.logger.log("transfer : hold failed");
   };
 
   var holdSuccess = function() {
-    this.logger.log("transfer : hold success - sending invite to target", self);
+    self.logger.log("transfer : hold success - sending invite to target");
     targetSession.sendInviteRequest(transferTarget, {
         extraHeaders: ["Require: replaces"]
       },
       sendTargetInviteSuccess, sendTargetInviteFailed);
   };
 
-  this.logger.log("transfer : holding session to transfer", self);
+  self.logger.log("transfer : holding session to transfer");
   sessionToTransfer.hold(holdSuccess, holdFailed);
 };
 
@@ -292,12 +292,13 @@ UA.prototype.sendReferAttended = function(sessionToTransfer, targetSession, tran
 };
 
 UA.prototype.processRefer = function(sessionToTransfer, referRequest) {
+  var self = this;
   referRequest.reply(202);
   var notifySuccess = function() {
-    this.logger.log("Notify successful");
+    self.logger.log("Notify successful");
   };
   var notifyFailure = function() {
-    this.logger.log("Notify failed");
+    self.logger.log("Notify failed");
   };
   sessionToTransfer.sendNotifyRequest({
     sdp: "SIP/2.0 100 Trying"
@@ -308,6 +309,7 @@ UA.prototype.sendReferBasic = function(sessionToTransfer, transferTarget, option
   var referSession = this.getReferSession(sessionToTransfer, options);
   options = this.getReferOptions(sessionToTransfer, sessionToTransfer, options);
   options.extraHeaders.push('Refer-To: <' + transferTarget + '>');
+  this.logger.debug('refer options : '+JSON.stringify(options));
   referSession.sendReferRequest(sessionToTransfer, options);
 };
 
@@ -678,13 +680,13 @@ UA.prototype.onTransportConnected = function(transport) {
 
   if (this.dynConfiguration.register) {
     if (this.registrator) {
-      this.registrator.onTransportConnected();
+      this._registrator.onTransportConnected();
     } else {
-      this.registrator = new Registrator(this, transport);
+      this._registrator = new Registrator(this, transport);
       this.register();
     }
   } else if (!this.registrator) {
-    this.registrator = new Registrator(this, transport);
+    this._registrator = new Registrator(this, transport);
   }
 };
 
@@ -1455,6 +1457,22 @@ UA.configuration_check = {
       if (typeof hack_ip_in_contact === 'boolean') {
         return hack_ip_in_contact;
       }
+    },
+
+    enable_ims: function(enable_ims) {
+        if (typeof enable_ims === 'boolean') {
+            return enable_ims;
+        }
+    },
+
+    p_asserted_identity: function(p_asserted_identity) {
+      return String(p_asserted_identity);
+    },
+
+    enable_datachannel: function(enable_datachannel) {
+        if (typeof enable_datachannel === 'boolean') {
+            return enable_datachannel;
+        }
     },
 
     instance_id: function(instance_id) {
