@@ -53,3 +53,23 @@ test('INFO received after INVITE', function() {
   strictEqual(infoAnswerMsg.status_code, 200);
   strictEqual(started, true, "should trigger started in order to update video streams");
 });
+test('reINVITE received after INVITE and before ACK', function() {
+  var answerMsg = TestExSIP.Helpers.receiveInviteAndAnswer();
+  var reinviteMsg = TestExSIP.Helpers.initialInviteRequest(ua, {
+    branch: 'z9hG4bK-524287-1---ab6ff8065ea5f163', 
+    to_tag: ';tag='+answerMsg.to_tag,
+    cseq: '33333',
+    noSdp: true, 
+    withoutContentType: true, 
+    supported: 'replaces'
+  });
+  ua.transport.onMessage({data: reinviteMsg});
+
+  var reinviteAnswerMsg = TestExSIP.Helpers.popMessageSentAndClear(ua);
+  strictEqual(reinviteAnswerMsg.status_code, 500);
+  notStrictEqual(reinviteAnswerMsg.getHeader('Retry-After'), undefined);
+  strictEqual(session.status, ExSIP.RTCSession.C.STATUS_WAITING_FOR_ACK);
+
+  TestExSIP.Helpers.ackResponseFor(answerMsg, {branch: 'z9hG4bK-524287-1---e126e35bf46fb226', cseq: answerMsg.cseq});
+  strictEqual(session.status, ExSIP.RTCSession.C.STATUS_CONFIRMED);
+});

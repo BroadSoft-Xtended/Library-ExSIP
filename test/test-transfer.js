@@ -415,6 +415,7 @@ function byeRequestFor(request, options) {
 
 function notifyRequestFor(request, body, options) {
   options = TestExSIP.Helpers.mergeOptions(request, options);
+  options.cseq = '637827301';
   ua.transport.onMessage({data: TestExSIP.Helpers.notifyRequest(ua, body, options)});
 }
 

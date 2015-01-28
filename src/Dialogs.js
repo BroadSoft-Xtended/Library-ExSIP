@@ -15,8 +15,8 @@ var Dialog,
   logger = new ExSIP.Logger(ExSIP.name +' | '+ 'DIALOG'),
   C = {
     // Dialog states
-    STATUS_EARLY:       1,
-    STATUS_CONFIRMED:   2
+    STATUS_EARLY:        1,
+    STATUS_CONFIRMED:    2
   };
 
 // RFC 3261 12.1
@@ -37,6 +37,7 @@ Dialog = function(session, message, type, state) {
 
   contact = message.parseHeader('contact');
 
+  this.is_acknowledged = false;
   this.type = type;
   // RFC 3261 12.1.1
   if(type === 'UAS') {
@@ -147,24 +148,12 @@ Dialog.prototype = {
 
   // RFC 3261 12.2.2
   checkInDialogRequest: function(request) {
-    if(!this.remote_seqnum) {
-      this.remote_seqnum = request.cseq;
-    } else if(request.method !== ExSIP.C.INVITE && request.cseq < this.remote_seqnum) {
-        //Do not try to reply to an ACK request.
-        if (request.method !== ExSIP.C.ACK) {
-          request.reply(500);
-        }
-        return false;
-    } else if(request.cseq > this.remote_seqnum) {
-      this.remote_seqnum = request.cseq;
-    }
-
     switch(request.method) {
       // RFC3261 14.2 Modifying an Existing Session -UAS BEHAVIOR-
       case ExSIP.C.INVITE:
+        var retryAfter = (Math.random() * 10 | 0) + 1;
         if(request.cseq < this.remote_seqnum) {
           if(this.state === C.STATUS_EARLY) {
-            var retryAfter = (Math.random() * 10 | 0) + 1;
             request.reply(500, null, ['Retry-After:'+ retryAfter]);
           } else {
             request.reply(500);
@@ -174,6 +163,10 @@ Dialog.prototype = {
         // RFC3261 14.2
         if(this.state === C.STATUS_EARLY) {
           request.reply(491);
+          return false;
+        }
+        if(this.type === 'UAS' && !this.is_acknowledged) {
+          request.reply(500, null, ['Retry-After:'+ retryAfter]);
           return false;
         }
         // RFC3261 12.2.2 Replace the dialog`s remote target URI
@@ -187,6 +180,21 @@ Dialog.prototype = {
           this.remote_target = request.parseHeader('contact').uri;
         }
         break;
+      case ExSIP.C.ACK:
+        this.is_acknowledged = true;
+        break;
+    }
+
+    if(!this.remote_seqnum) {
+      this.remote_seqnum = request.cseq;
+    } else if(request.method !== ExSIP.C.INVITE && request.cseq < this.remote_seqnum) {
+        //Do not try to reply to an ACK request.
+        if (request.method !== ExSIP.C.ACK) {
+          request.reply(500);
+        }
+        return false;
+    } else if(request.cseq > this.remote_seqnum) {
+      this.remote_seqnum = request.cseq;
     }
 
     return true;
