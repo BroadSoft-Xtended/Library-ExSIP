@@ -62,7 +62,7 @@ Transport.prototype = {
   send: function(msg) {
     var message = msg.toString();
 
-    if(this.ws && this.ws.readyState === WebSocket.OPEN) {
+    if(this.ws && this.readyState() === WebSocket.OPEN) {
       if (this.ua.configuration.trace_sip === true) {
         this.logger.debug('sending WebSocket message:\n\n' + message + '\n');
       }
@@ -110,7 +110,7 @@ Transport.prototype = {
   connect: function() {
     var transport = this;
 
-    if(this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+    if(this.ws && (this.readyState() === WebSocket.OPEN || this.readyState() === WebSocket.CONNECTING)) {
       this.logger.log('WebSocket ' + this.server.ws_uri + ' is already connected');
       return false;
     }
@@ -131,6 +131,7 @@ Transport.prototype = {
       else {
         this.ws = new WebSocket(this.server.ws_uri, this.ws_options);
       }
+      this.ua.usedServers.push(this.server);
 
       this.ws.onopen = function() {
         transport.onOpen();
@@ -298,12 +299,16 @@ Transport.prototype = {
       this.logger.warn('maximum reconnection attempts for WebSocket ' + this.server.ws_uri);
       this.ua.onTransportError(this);
     } else {
-      this.logger.log('trying to reconnect to WebSocket ' + this.server.ws_uri + ' (reconnection attempt ' + this.reconnection_attempts + ')');
+      this.logger.log('trying to reconnect to WebSocket ' + this.server.ws_uri + ' (reconnection attempt ' + this.reconnection_attempts + ')'+ ' (reconnection timeout '+this.ua.configuration.ws_server_reconnection_timeout+')');
 
-      this.reconnectTimer = setTimeout(function() {
+      if(this.ua.configuration.ws_server_reconnection_timeout === 0) {
         transport.connect();
-        transport.reconnectTimer = null;
-      }, this.ua.configuration.ws_server_reconnection_timeout * 1000);
+      } else {
+        this.reconnectTimer = setTimeout(function() {
+          transport.connect();
+          transport.reconnectTimer = null;
+        }, this.ua.configuration.ws_server_reconnection_timeout * 1000);
+      }
     }
   }
 };

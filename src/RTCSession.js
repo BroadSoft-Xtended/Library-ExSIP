@@ -53,6 +53,8 @@ function RTCSession(ua) {
     'ended',
     'newDTMF',
     'hold',
+    'held',
+    'resumed',
     'unhold',
     'muted',
     'unmuted',
@@ -61,7 +63,7 @@ function RTCSession(ua) {
   ];
 
   this.ua = ua;
-  this.status = C.STATUS_NULL;
+  this.setStatus(C.STATUS_NULL);
   this.dialog = null;
   this.earlyDialogs = {};
   this.rtcMediaHandler = null;
@@ -207,7 +209,7 @@ RTCSession.prototype.terminate = function(options) {
         this.request.cancel(cancel_reason);
       }
 
-      this.status = C.STATUS_CANCELED;
+      this.setStatus(C.STATUS_CANCELED);
 
       this.failed('local', null, ExSIP_C.causes.CANCELED);
       break;
@@ -337,7 +339,7 @@ RTCSession.prototype.answer = function(options) {
       var
       // run for reply success callback
         replySucceeded = function() {
-          self.status = C.STATUS_WAITING_FOR_ACK;
+          self.setStatus(C.STATUS_WAITING_FOR_ACK);
 
           self.setInvite2xxTimer(request, body);
           self.setACKTimer();
@@ -374,7 +376,7 @@ RTCSession.prototype.answer = function(options) {
     throw new Exceptions.InvalidStateError(this.status);
   }
 
-  this.status = C.STATUS_ANSWERED;
+  this.setStatus(C.STATUS_ANSWERED);
 
   // An error on dialog creation will fire 'failed' event
   if (!this.createDialog(request, 'UAS')) {
@@ -531,7 +533,7 @@ RTCSession.prototype.acceptReInvite = function(options) {
   var replySucceeded = function() {
     var timeout = Timers.T1;
 
-    self.status = C.STATUS_WAITING_FOR_ACK;
+    self.setStatus(C.STATUS_WAITING_FOR_ACK);
 
     /**
      * RFC3261 13.3.1.4
@@ -954,7 +956,7 @@ RTCSession.prototype.init_incoming = function(request) {
     contentType = request.getHeader('Content-Type'),
 
     waitForAnswer = function() {
-      self.status = C.STATUS_WAITING_FOR_ANSWER;
+      self.setStatus(C.STATUS_WAITING_FOR_ANSWER);
 
       // Set userNoAnswerTimer
       self.timers.userNoAnswerTimer = setTimeout(function() {
@@ -993,7 +995,7 @@ RTCSession.prototype.init_incoming = function(request) {
   }
 
   // Session parameter initialization
-  this.status = C.STATUS_INVITE_RECEIVED;
+  this.setStatus(C.STATUS_INVITE_RECEIVED);
   this.from_tag = request.from_tag;
   this.id = request.call_id + this.from_tag;
   this.request = request;
@@ -1098,7 +1100,7 @@ RTCSession.prototype.close = function() {
     delete this.earlyDialogs[idx];
   }
 
-  this.status = C.STATUS_TERMINATED;
+  this.setStatus(C.STATUS_TERMINATED);
 
   delete this.ua.sessions[this.id];
 };
@@ -1364,7 +1366,7 @@ RTCSession.prototype.hold = function(inviteSuccessCallback, inviteFailureCallbac
 };
 
 RTCSession.prototype.unhold = function(inviteSuccessCallback, inviteFailureCallback) {
-  var self = this;
+  var self = this
   this.changeSession({audioMode: ExSIP_C.SENDRECV, videoMode: ExSIP_C.SENDRECV}, function(){
       self.resumed();
       if(inviteSuccessCallback) {
@@ -1379,7 +1381,10 @@ RTCSession.prototype.changeSession = function(sdpOptions, inviteSuccessCallback,
   this.logger.debug('changeSession : '+JSON.stringify(sdpOptions));
   this.reconnectRtcMediaHandler(function() {
     self.logger.debug('changeSession : reconnectRtcMediaHandler : success');
-    self.sendInviteRequest(undefined, undefined, inviteSuccessCallback, inviteFailureCallback);
+    self.receiveResponse = self.receiveReinviteResponse;
+    self.reinviteSucceeded = inviteSuccessCallback;
+    self.reinviteFailed = inviteFailureCallback;
+    self.sendInviteRequest(undefined, undefined);
   }, function() {
     self.logger.error("Could not change local mode");
   }, sdpOptions);
@@ -1480,7 +1485,7 @@ RTCSession.prototype.receiveInviteResponse = function(response) {
         }
       }
 
-      this.status = C.STATUS_1XX_RECEIVED;
+      this.setStatus(C.STATUS_1XX_RECEIVED);
       this.progress('remote', response);
 
       if (!response.body) {
@@ -1506,7 +1511,7 @@ RTCSession.prototype.receiveInviteResponse = function(response) {
       );
       break;
     case /^2[0-9]{2}$/.test(response.status_code):
-      this.status = C.STATUS_CONFIRMED;
+      this.setStatus(C.STATUS_CONFIRMED);
 
       if (!response.body) {
         this.acceptAndTerminate(response, 400, ExSIP_C.causes.MISSING_SDP);
@@ -1628,7 +1633,7 @@ RTCSession.prototype.receiveReinvite = function(request) {
         function(body) {
           request.reply(200, null, ['Contact: ' + self.contact], body,
             function() {
-              self.status = C.STATUS_WAITING_FOR_ACK;
+              self.setStatus(C.STATUS_WAITING_FOR_ACK);
               self.setInvite2xxTimer(request, body);
               self.setACKTimer();
 
@@ -1776,7 +1781,7 @@ RTCSession.prototype.receiveRequest = function(request) {
      * nor reject the request opening the session.
      */
     if (this.status === C.STATUS_WAITING_FOR_ANSWER || this.status === C.STATUS_ANSWERED) {
-      this.status = C.STATUS_CANCELED;
+      this.setStatus(C.STATUS_CANCELED);
       this.request.reply(487);
       this.failed('remote', request, ExSIP_C.causes.CANCELED);
     }
@@ -1787,7 +1792,7 @@ RTCSession.prototype.receiveRequest = function(request) {
         if (this.status === C.STATUS_WAITING_FOR_ACK) {
           clearTimeout(this.timers.ackTimer);
           clearTimeout(this.timers.invite2xxTimer);
-          this.status = C.STATUS_CONFIRMED;
+          this.setStatus(C.STATUS_CONFIRMED);
           if(request.body.length > 0) {
             this.logger.log('set remoteDescription for late offer ACK');
             this.rtcMediaHandler.onMessage(self.rtcMediaHandler.getSetRemoteLocationType(), request.body, function(){
@@ -1866,12 +1871,49 @@ RTCSession.prototype.receiveRequest = function(request) {
           request.reply(403, 'Wrong Status');
         }
         break;
+      case ExSIP_C.REFER:
+        if(this.status === C.STATUS_CONFIRMED) {
+          this.ua.processRefer(this, request);
+        }
+        break;
+      case ExSIP_C.NOTIFY:
+        if(this.status === C.STATUS_REFER_SENT) {
+          request.reply(200);
+          this.logger.log('received NOTIFY with body : ' + request.body);
+          var status = parseInt(request.body.match(/SIP\/2.0\s(.*)\s/)[1], 10);
+          this.logger.log('NOTIFY status : ' + status);
+
+          if(!this.sessionToTransfer) {
+            this.logger.warn('no transferred session for REFER session : ' + this.id);
+            return;
+          }
+
+          if(status >= 200 && status <= 299) {
+            this.logger.log('terminate transferred session : ' + this.sessionToTransfer.id);
+            this.sessionToTransfer.terminate();
+          } else if(status >= 400 && status <= 699) {
+            this.logger.warn('resuming session : ' + this.sessionToTransfer.id);
+            this.sessionToTransfer.unhold(function(){
+              self.logger.log('resumed session : ' + self.sessionToTransfer.id);
+            });
+          }
+        }
+        break;
       default:
         request.reply(501);
     }
   }
 };
 
+
+RTCSession.prototype.setStatus = function(status) {
+  if(this.logger) {
+    this.logger.debug('setStatus : '+Object.keys(C)[status]);    
+  } else {
+    console.log('setStatus : '+Object.keys(C)[status]);
+  }
+  this.status = status;
+};
 
 RTCSession.prototype.supports = function(name) {
   var supported = this.request.getHeader("Supported");
@@ -1937,15 +1979,15 @@ RTCSession.prototype.sendRequest = function(method, options, requestCallbacks) {
   }
 
   if (options.status) {
-    this.status = options.status;
+    this.setStatus(options.status);
   }
   request_sender.request.body = options.sdp;
 
-  this.logger.debug('request_sender.request.extraHeaders : ' + Utils.toString(request_sender.request.extraHeaders));
   var hasSdp = request_sender.request.body && request_sender.request.body.length > 0;
   if (!Utils.containsHeader(request_sender.request.extraHeaders, "Content-Type") && hasSdp) {
     request_sender.request.extraHeaders.push('Content-Type: application/sdp');
   }
+  this.logger.debug('request_sender.request.extraHeaders : ' + Utils.toString(request_sender.request.extraHeaders));
 
   request_sender.send(requestCallbacks);
 };
@@ -2113,21 +2155,6 @@ RTCSession.prototype.sendReinvite = function(options) {
 
 
 /**
- * Callback to be called from UA instance when RequestTimeout occurs
- * @private
- */
-RTCSession.prototype.onRequestTimeout = function() {
-  if (this.status !== C.STATUS_TERMINATED) {
-    if (this.status === C.STATUS_CONFIRMED) {
-      this.ended('system', null, ExSIP_C.causes.REQUEST_TIMEOUT);
-    } else {
-      this.ua.reconnect();
-      this.failed('system', null, ExSIP_C.causes.CONNECTION_ERROR);
-    }
-  }
-};
-
-/**
  * Reception of Response for in-dialog INVITE
  */
 RTCSession.prototype.receiveReinviteResponse = function(response) {
@@ -2143,7 +2170,7 @@ RTCSession.prototype.receiveReinviteResponse = function(response) {
     case /^1[0-9]{2}$/.test(response.status_code):
       break;
     case /^2[0-9]{2}$/.test(response.status_code):
-      this.status = C.STATUS_CONFIRMED;
+      this.setStatus(C.STATUS_CONFIRMED);
       this.sendRequest(ExSIP_C.ACK);
 
       if (!response.body) {
@@ -2162,19 +2189,25 @@ RTCSession.prototype.receiveReinviteResponse = function(response) {
          * SDP Answer fits with Offer.
          */
         function() {
-          self.reinviteSucceeded();
+          if(self.reinviteSucceeded) {
+            self.reinviteSucceeded();
+          }
         },
         /*
          * onFailure
          * SDP Answer does not fit the Offer.
          */
         function() {
-          self.reinviteFailed();
+          if(self.reinviteFailed) {
+            self.reinviteFailed();            
+          }
         }
       );
       break;
     default:
-      this.reinviteFailed();
+      if(this.reinviteFailed) {
+        this.reinviteFailed();        
+      }
   }
 };
 
@@ -2198,7 +2231,7 @@ RTCSession.prototype.acceptAndTerminate = function(response, status_code, reason
   }
 
   // Update session status.
-  this.status = C.STATUS_TERMINATED;
+  this.setStatus(C.STATUS_TERMINATED)
 };
 
 
@@ -2240,12 +2273,17 @@ RTCSession.prototype.onTransportError = function() {
   }
 };
 
+/**
+ * Callback to be called from UA instance when RequestTimeout occurs
+ * @private
+ */
 RTCSession.prototype.onRequestTimeout = function() {
   if (this.status !== C.STATUS_TERMINATED) {
     if (this.status === C.STATUS_CONFIRMED) {
       this.ended('system', null, ExSIP_C.causes.REQUEST_TIMEOUT);
     } else {
-      this.failed('system', null, ExSIP_C.causes.REQUEST_TIMEOUT);
+      this.ua.reconnect();
+      this.failed('system', null, ExSIP_C.causes.CONNECTION_ERROR);
     }
   }
 };

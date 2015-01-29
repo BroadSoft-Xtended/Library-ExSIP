@@ -3,6 +3,7 @@ var testUA = require('./include/testUA');
 var ExSIP = require('../');
 var WebRTC = require('../src/WebRTC');
 var ExSIP_C = require('../src/Constants');
+var Utils = require('../src/Utils');
 
 module.exports = {
 
@@ -100,9 +101,11 @@ module.exports = {
   },
 
   'basic with tdialog supported': function(test) {
-    receiveInviteAndAnswer(test, {
+    var inviteCSeq = 1;
+    var inviteMsg = receiveInviteAndAnswer(test, {
       allow: "INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY",
-      supported: "replaces, gruu, tdialog"
+      supported: "replaces, gruu, tdialog",
+      cseq: inviteCSeq
     });
     test.strictEqual(session.supports('tdialog'), true, "Should support tdialog");
 
@@ -113,11 +116,12 @@ module.exports = {
     test.strictEqual(referMsg.getHeader("Require"), "tdialog", "Should contain 'Require: tdialog' header");
     test.strictEqual(referMsg.getHeader("Target-Dialog"), answerMsg.call_id + ";local-tag=" + answerMsg.from_tag + ";remote-tag=" + answerMsg.to_tag, "Should contain 'Target-Dialog' header");
 
-    receiveNotify100(test);
+    receiveNotify100(test, {cseq: inviteCSeq+1});
 
     receiveNotify(test, {
       status_code: 200,
-      status_msg: "OK"
+      status_msg: "OK",
+      cseq: inviteCSeq+2
     });
     test.done();
   },
@@ -199,20 +203,20 @@ module.exports = {
   },
 
   'basic as transferee': function(test) {
-    sendInviteAndReceiveAnswer(test);
+    var inviteMsg = sendInviteAndReceiveAnswer(test);
 
-    receiveHold(test);
+    receiveHold(test, inviteMsg);
 
-    receiveRefer(test);
+    receiveRefer(test, inviteMsg);
     test.done();
   },
 
   'attended as transferee': function(test) {
-    sendInviteAndReceiveAnswer(test);
+    var inviteMsg = sendInviteAndReceiveAnswer(test);
 
-    receiveHold(test);
+    receiveHold(test, inviteMsg);
 
-    receiveRefer(test, {
+    receiveRefer(test, inviteMsg, {
       referRequest: {
         referTo: "<sip:" + transferTarget + "?Replaces=592435881734450904%3Bto-tag%3D9m2n3wq%3Bfrom-tag%3D763231>"
       }
@@ -222,20 +226,19 @@ module.exports = {
 }
 
   function receiveInviteAndAnswer(test, inviteOptions) {
-    ua.transport.onMessage({
-      data: testUA.initialInviteRequest(ua, inviteOptions)
-    });
+    var inviteMsg = testUA.initialInviteRequest(ua, inviteOptions);
+    ua.transport.onMessage({data: inviteMsg});
 
     answer(test);
 
-    testUA.responseFor(answerMsg, {
-      method: ExSIP_C.ACK
-    });
+    testUA.ackResponseFor(answerMsg);
+
+    return inviteMsg;
   }
 
   function sendInviteAndReceiveAnswer(test) {
     testUA.connect(ua);
-    inviteMsg = testUA.popMessageSentAndClear(ua);
+    var inviteMsg = testUA.popMessageSentAndClear(ua);
 
     ua.transport.onMessage({
       data: testUA.ringingResponse(ua)
@@ -245,6 +248,8 @@ module.exports = {
     });
 
     ackSent(test);
+
+    return inviteMsg;
   }
 
   function basicTransfer(test) {
@@ -277,7 +282,7 @@ module.exports = {
   }
 
   function receiveTransferTargetBye(test) {
-    byeRequestFor(test, holdTargetMsg);
+    byeRequestFor(holdTargetMsg);
 
     okTargetSent(test);
   }
@@ -286,17 +291,17 @@ module.exports = {
     options = options || {};
     responseForRefer(options.refer);
 
-    notify100Request(test);
+    notify100Request(test, options);
   }
 
   function receiveNotify(test, options) {
     options = options || {};
-    notifyRequest(options);
+    notifyRequest(test, options);
 
     byeSent(test);
   }
 
-  function notifySent(options) {
+  function notifySent(test, options) {
     var notifyMsg = testUA.popMessageSentAndClear(ua);
     test.strictEqual(notifyMsg.method, "NOTIFY");
     test.strictEqual(notifyMsg.body, options["sdp"] || "SIP/2.0 200 OK");
@@ -307,7 +312,7 @@ module.exports = {
 
   function notifySentAndReceivedBye(test, options) {
     options = options || {};
-    var notifyMsg = notifySent(options);
+    var notifyMsg = notifySent(test, options);
     test.strictEqual(notifyMsg.getHeader('Subscription-State'), "terminated;reason=noresource");
 
     testUA.responseFor(notifyMsg, {
@@ -319,16 +324,16 @@ module.exports = {
     okSent(test);
   }
 
-  function receiveRefer(test, options) {
+  function receiveRefer(test, inviteMsg, options) {
     options = options || {};
-    referRequest(inviteMsg, options.referRequest);
+    referRequest(test, inviteMsg, options.referRequest);
 
     okSent(test, {
       penultimate: true,
       statusCode: 202
     });
 
-    var notifyMsg = notifySent({
+    var notifyMsg = notifySent(test, {
       sdp: "SIP/2.0 100 Trying"
     });
     test.strictEqual(notifyMsg.getHeader('Subscription-State'), "active;expires=60");
@@ -338,12 +343,12 @@ module.exports = {
     });
   }
 
-  function receiveHold(test) {
+  function receiveHold(test, inviteMsg) {
     holdRequest(test, inviteMsg);
 
     okSent(test);
 
-    receiveAck(test, inviteMsg);
+    receiveAck(test, inviteMsg, inviteMsg);
   }
 
   function receiveNotifyFailure(test, options) {
@@ -413,6 +418,7 @@ module.exports = {
   function notifyRequest(test, options) {
     options = options || {};
     notifyRequestFor(referMsg, "SIP/2.0 " + options.status_code + " " + options.status_msg, {
+      cseq: options.cseq,
       subscription_state: "terminated;reason=noresource"
     });
     var notify200OkMsg = testUA.popPenultimateMessageSent(ua);
@@ -443,8 +449,8 @@ module.exports = {
     testUA.triggerOnIceCandidate(session);
   }
 
-  function notify100Request(test) {
-    notifyRequestFor(referMsg, "SIP/2.0 100 Trying");
+  function notify100Request(test, options) {
+    notifyRequestFor(referMsg, "SIP/2.0 100 Trying", options);
     var notify100OkMsg = testUA.popMessageSentAndClear(ua);
     test.strictEqual(notify100OkMsg.status_code, 200);
   }
@@ -462,7 +468,7 @@ module.exports = {
 
   function okSent(test, options) {
     options = options || {};
-    var okMsg = options["penultimate"] ? testUA.popPenultimateMessageSent() : testUA.popMessageSentAndClear(ua);
+    var okMsg = options["penultimate"] ? testUA.popPenultimateMessageSent(ua) : testUA.popMessageSentAndClear(ua);
     test.strictEqual(okMsg.status_code, options["statusCode"] || 200);
   }
 
@@ -477,7 +483,7 @@ module.exports = {
     testUA.triggerOnIceCandidate(session);
     holdTargetMsg = testUA.popMessageSent(ua);
     test.strictEqual(holdTargetMsg.method, ExSIP_C.INVITE);
-    isMode(holdTargetMsg.body, ExSIP_C.INACTIVE, "0", ExSIP_C.INACTIVE, "0");
+    isMode(test, holdTargetMsg.body, ExSIP_C.INACTIVE, "0", ExSIP_C.INACTIVE, "0");
     test.ok(holdTargetMsg.call_id === inviteTargetMsg.call_id, "Should be same dialog");
     test.strictEqual(holdTargetMsg.getHeader("Content-Type"), "application/sdp");
   }
@@ -542,9 +548,11 @@ module.exports = {
   }
 
   function notifyRequestFor(request, body, options) {
-    options = testUA.mergeOptions(request, options);
+    var notifyOptions = testUA.mergeOptions(request, options);
+    notifyOptions.cseq = options.cseq || '637827301';
+    notifyOptions.branch = 'z9hG4bKnas615';
     ua.transport.onMessage({
-      data: testUA.notifyRequest(ua, body, options)
+      data: testUA.notifyRequest(ua, body, notifyOptions)
     });
   }
 

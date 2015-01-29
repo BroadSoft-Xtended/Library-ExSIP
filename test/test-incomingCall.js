@@ -1,6 +1,7 @@
 require('./include/common');
 var testUA = require('./include/testUA');
 var ExSIP = require('../');
+var RTCSession = require('../src/RTCSession');
 
 module.exports = {
 
@@ -77,5 +78,26 @@ module.exports = {
     test.strictEqual(infoAnswerMsg.status_code, 200);
     test.strictEqual(started, true, "should trigger started in order to update video streams");
     test.done();    
+  },
+  'reINVITE received after INVITE and before ACK': function(test) {
+    var answerMsg = testUA.receiveInviteAndAnswer();
+    var reinviteMsg = testUA.initialInviteRequest(ua, {
+      branch: 'z9hG4bK-524287-1---ab6ff8065ea5f163', 
+      to_tag: ';tag='+answerMsg.to_tag,
+      cseq: '33333',
+      noSdp: true, 
+      withoutContentType: true, 
+      supported: 'replaces'
+    });
+    ua.transport.onMessage({data: reinviteMsg});
+
+    var reinviteAnswerMsg = testUA.popMessageSentAndClear(ua);
+    test.strictEqual(reinviteAnswerMsg.status_code, 500);
+    test.notStrictEqual(reinviteAnswerMsg.getHeader('Retry-After'), undefined);
+    test.strictEqual(session.status, RTCSession.C.STATUS_WAITING_FOR_ACK);
+
+    testUA.ackResponseFor(answerMsg, {branch: 'z9hG4bK-524287-1---e126e35bf46fb226', cseq: answerMsg.cseq});
+    test.strictEqual(session.status, RTCSession.C.STATUS_CONFIRMED);
+    test.done();
   }
 }

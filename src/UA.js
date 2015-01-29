@@ -187,7 +187,7 @@ UA.prototype.isDebug = function() {
  * @param {Boolean}
  */
 UA.prototype.isRegistered = function() {
-  if (this.registrator && this.registrator.registered) {
+  if (this._registrator && this._registrator.registered) {
     return true;
   } else {
     return false;
@@ -210,7 +210,7 @@ UA.prototype.transfer = function(transferTarget, sessionToTransfer, options) {
   var self = this;
   this.logger.log('transfer : ' + transferTarget + ' : options : ' + Utils.toString(options));
   transferTarget = Utils.normalizeTarget(transferTarget, this.configuration.hostport_params);
-  if(!transferTarget) {
+  if (!transferTarget) {
     sessionToTransfer.failed('local', null, ExSIP_C.causes.INVALID_TARGET);
     this.logger.warn("invalid transfer target");
     return;
@@ -233,7 +233,7 @@ UA.prototype.attendedTransfer = function(transferTarget, sessionToTransfer, opti
   var self = this;
   this.logger.log('attended transfer : ' + transferTarget + ' : options : ' + Utils.toString(options));
   transferTarget = Utils.normalizeTarget(transferTarget, this.configuration.hostport_params);
-  if(!transferTarget) {
+  if (!transferTarget) {
     this.logger.warn('invalid transfer target : ' + e);
     sessionToTransfer.failed('local', null, ExSIP_C.causes.INVALID_TARGET);
     return;
@@ -309,7 +309,7 @@ UA.prototype.sendReferBasic = function(sessionToTransfer, transferTarget, option
   var referSession = this.getReferSession(sessionToTransfer, options);
   options = this.getReferOptions(sessionToTransfer, sessionToTransfer, options);
   options.extraHeaders.push('Refer-To: <' + transferTarget + '>');
-  this.logger.debug('refer options : '+JSON.stringify(options));
+  this.logger.debug('refer options : ' + JSON.stringify(options));
   referSession.sendReferRequest(sessionToTransfer, options);
 };
 
@@ -393,9 +393,9 @@ UA.prototype.stop = function() {
   clearTimeout(this.transportRecoveryTimer);
 
   // Close registrator
-  if (this.registrator) {
+  if (this._registrator) {
     this.logger.debug('closing registrator');
-    this.registrator.close();
+    this._registrator.close();
   }
 
   // If there are session wait a bit so CANCEL/BYE can be sent and their responses received.
@@ -425,6 +425,7 @@ UA.prototype.stop = function() {
 };
 
 UA.prototype.reconnect = function() {
+  this.logger.debug('************** reconnect');
   this.stop();
   this.status = C.STATUS_INIT;
   this.start();
@@ -437,7 +438,7 @@ UA.prototype.reconnect = function() {
 UA.prototype.start = function() {
   var server;
 
-  this.logger.debug('user requested startup...');
+  this.logger.debug('user requested startup... : ', this.status);
 
   if (this.status === C.STATUS_INIT) {
     server = this.getNextWsServer({
@@ -679,13 +680,13 @@ UA.prototype.onTransportConnected = function(transport) {
   });
 
   if (this.dynConfiguration.register) {
-    if (this.registrator) {
+    if (this._registrator) {
       this._registrator.onTransportConnected();
     } else {
       this._registrator = new Registrator(this, transport);
       this.register();
     }
-  } else if (!this.registrator) {
+  } else if (!this._registrator) {
     this._registrator = new Registrator(this, transport);
   }
 };
@@ -953,37 +954,6 @@ UA.prototype.closeSessionsOnTransportError = function() {
   this._registrator.onTransportClosed();
 };
 
-UA.prototype.recoverTransport = function(ua) {
-  var idx, length, k, nextRetry, count, server;
-
-  ua = ua || this;
-  count = ua.transportRecoverAttempts;
-
-  length = ua.configuration.ws_servers.length;
-  for (idx = 0; idx < length; idx++) {
-    ua.configuration.ws_servers[idx].status = 0;
-  }
-
-  server = ua.getNextWsServer();
-
-  k = Math.floor((Math.random() * Math.pow(2, count)) + 1);
-  nextRetry = k * ua.configuration.connection_recovery_min_interval;
-
-  if (nextRetry > ua.configuration.connection_recovery_max_interval) {
-    this.logger.log('time for next connection attempt exceeds connection_recovery_max_interval, resetting counter');
-    nextRetry = ua.configuration.connection_recovery_min_interval;
-    count = 0;
-  }
-
-  this.logger.log('next connection attempt in ' + nextRetry + ' seconds');
-
-  this.transportRecoveryTimer = setTimeout(function() {
-    ua.transportRecoverAttempts = count + 1;
-    ua.transport = new Transport(ua, server);
-    ua.transport.connect();
-  }, nextRetry * 1000);
-};
-
 UA.prototype.loadConfig = function(configuration) {
   // Settings and default values
   var parameter, value, checked_value, hostport_params, registrar_server,
@@ -1195,7 +1165,7 @@ UA.prototype.retry = function(nextRetry, server, callback) {
   if (nextRetry === 0) {
     retryCallback();
   } else {
-    window.setTimeout(retryCallback, nextRetry * 1000);
+    setTimeout(retryCallback, nextRetry * 1000);
   }
 };
 
@@ -1246,59 +1216,60 @@ UA.prototype.recoverTransport = function(options) {
   server = this.getNextWsServer({
     force: true
   });
-  this.logger.log('resetting ws server list - next connection attempt in ' + nextRetry + ' seconds to ' + server.ws_uri, this);
   this.transportRecoverAttempts = count + 1;
+  this.logger.log('resetting ws server list - next connection attempt in ' + nextRetry + ' seconds to ' + server.ws_uri + ' : ' + this.transportRecoverAttempts);
   this.retry(nextRetry, server, options.retryCallback);
 };
 
 /**
  * Configuration Object skeleton.
  */
- /**
+/**
  * Configuration Object skeleton.
  */
 UA.configuration_skeleton = (function() {
-  var idx,  parameter,
-  skeleton = {},
-  parameters = [
-    // Internal parameters
-    "exsip_id",
-    "ws_server_max_reconnection",
-    "ws_server_reconnection_timeout",
-    "hostport_params",
+  var idx, parameter,
+    skeleton = {},
+    parameters = [
+      // Internal parameters
+      "exsip_id",
+      "ws_server_max_reconnection",
+      "ws_server_reconnection_timeout",
+      "hostport_params",
 
-    // Mandatory user configurable parameters
-    "uri",
-    "ws_servers",
+      // Mandatory user configurable parameters
+      "uri",
+      "ws_servers",
 
-    // Optional user configurable parameters
-    "authorization_user",
-    "connection_recovery_max_interval",
-    "connection_recovery_min_interval",
-    "display_name",
-    "hack_via_tcp", // false
-    "hack_via_ws", // false
-    "hack_ip_in_contact", //false
-    "instance_id",
-    "no_answer_timeout", // 30 seconds
-    "node_ws_options",
-    "password",
-    "register_expires", // 600 seconds
-    "registrar_server",
-    "stun_servers",
-    "trace_sip",
-    "turn_servers",
-    "use_preloaded_route",
-    "enable_datachannel",
-    "enable_ims",
-    "p_asserted_identity",
+      // Optional user configurable parameters
+      "authorization_user",
+      "connection_recovery_max_interval",
+      "connection_recovery_min_interval",
+      "max_transport_recovery_attempts",
+      "display_name",
+      "hack_via_tcp", // false
+      "hack_via_ws", // false
+      "hack_ip_in_contact", //false
+      "instance_id",
+      "no_answer_timeout", // 30 seconds
+      "node_ws_options",
+      "password",
+      "register_expires", // 600 seconds
+      "registrar_server",
+      "stun_servers",
+      "trace_sip",
+      "turn_servers",
+      "use_preloaded_route",
+      "enable_datachannel",
+      "enable_ims",
+      "p_asserted_identity",
 
-    // Post-configuration generated parameters
-    "via_core_value",
-    "via_host"
-  ];
+      // Post-configuration generated parameters
+      "via_core_value",
+      "via_host"
+    ];
 
-  for(idx in parameters) {
+  for (idx in parameters) {
     parameter = parameters[idx];
     skeleton[parameter] = {
       value: '',
@@ -1427,7 +1398,8 @@ UA.configuration_check = {
       var value;
       if (Utils.isDecimal(connection_recovery_min_interval)) {
         value = Number(connection_recovery_min_interval);
-        if (value > 0) {
+        return value;
+        if (value >= 0) {
           return value;
         }
       }
@@ -1460,9 +1432,29 @@ UA.configuration_check = {
     },
 
     enable_ims: function(enable_ims) {
-        if (typeof enable_ims === 'boolean') {
-            return enable_ims;
+      if (typeof enable_ims === 'boolean') {
+        return enable_ims;
+      }
+    },
+
+    ws_server_reconnection_timeout: function(ws_server_reconnection_timeout) {
+      var value;
+      if (Utils.isDecimal(ws_server_reconnection_timeout)) {
+        value = Number(ws_server_reconnection_timeout);
+        if (value >= 0) {
+          return value;
         }
+      }
+    },
+
+    max_transport_recovery_attempts: function(max_transport_recovery_attempts) {
+      var value;
+      if (Utils.isDecimal(max_transport_recovery_attempts)) {
+        value = Number(max_transport_recovery_attempts);
+        if (value >= 0) {
+          return value;
+        }
+      }
     },
 
     p_asserted_identity: function(p_asserted_identity) {
@@ -1470,9 +1462,9 @@ UA.configuration_check = {
     },
 
     enable_datachannel: function(enable_datachannel) {
-        if (typeof enable_datachannel === 'boolean') {
-            return enable_datachannel;
-        }
+      if (typeof enable_datachannel === 'boolean') {
+        return enable_datachannel;
+      }
     },
 
     instance_id: function(instance_id) {

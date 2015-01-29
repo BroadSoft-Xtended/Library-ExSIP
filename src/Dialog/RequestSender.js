@@ -52,6 +52,7 @@ DialogRequestSender.prototype = {
   },
 
   onRequestTimeout: function() {
+    this.logger.log('********* onRequestTimeout : ', this.applicant);
     this.applicant.onRequestTimeout();
   },
 

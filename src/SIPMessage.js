@@ -229,9 +229,14 @@ OutgoingRequest.prototype = {
     supported.push('outbound');
 
     // Allow
-    msg += 'Allow: '+ ExSIP_C.ALLOWED_METHODS +'\r\n';
+    if(!this.hasHeader('Allow')) {
+      msg += 'Allow: '+ ExSIP_C.ALLOWED_METHODS +'\r\n';      
+    }
 
-    msg += 'Supported: ' +  supported +'\r\n';
+    if(!this.hasHeader('Supported')) {
+      msg += 'Supported: ' +  supported +'\r\n';
+    }
+    
     msg += 'User-Agent: ' + ExSIP_C.USER_AGENT +'\r\n';
 
     if(this.body) {
@@ -482,7 +487,9 @@ IncomingRequest.prototype.reply = function(code, reason, extraHeaders, body, onS
 
   if(body) {
     length = Utils.str_utf8_length(body);
-    response += 'Content-Type: application/sdp\r\n';
+    if(!this.hasHeader('Content-Type')) {
+      response += 'Content-Type: application/sdp\r\n';      
+    }
     response += 'Content-Length: ' + length + '\r\n\r\n';
     response += body;
   } else {

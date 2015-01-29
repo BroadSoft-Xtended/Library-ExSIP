@@ -29,6 +29,7 @@ function Dialog(owner, message, type, state) {
 
   this.uac_pending_reply = false;
   this.uas_pending_reply = false;
+  this.is_acknowledged = false;
   this.type = type;
 
   if(!message.hasHeader('contact')) {
@@ -146,23 +147,11 @@ Dialog.prototype = {
   checkInDialogRequest: function(request) {
     var self = this;
 
-    if(!this.remote_seqnum) {
-      this.remote_seqnum = request.cseq;
-    } else if(request.cseq < this.remote_seqnum) {
-        //Do not try to reply to an ACK request.
-        if (request.method !== ExSIP_C.ACK) {
-          request.reply(500);
-        }
-        return false;
-    } else if(request.cseq > this.remote_seqnum) {
-      this.remote_seqnum = request.cseq;
-    }
-
     // RFC3261 14.2 Modifying an Existing Session -UAS BEHAVIOR-
     if (request.method === ExSIP_C.INVITE || (request.method === ExSIP_C.UPDATE && request.body)) {
       if (this.uac_pending_reply === true) {
         request.reply(491);
-      } else if (this.uas_pending_reply === true) {
+      } else if (this.uas_pending_reply === true || (this.type === 'UAS' && !this.is_acknowledged)) {
         var retryAfter = (Math.random() * 10 | 0) + 1;
         request.reply(500, null, ['Retry-After:'+ retryAfter]);
         return false;
@@ -201,6 +190,21 @@ Dialog.prototype = {
           }
         });
       }
+    }
+    else if (request.method === ExSIP_C.ACK) {
+      this.is_acknowledged = true;
+    }
+
+    if(!this.remote_seqnum) {
+      this.remote_seqnum = request.cseq;
+    } else if(request.cseq < this.remote_seqnum) {
+        //Do not try to reply to an ACK request.
+        if (request.method !== ExSIP_C.ACK) {
+          request.reply(500);
+        }
+        return false;
+    } else if(request.cseq > this.remote_seqnum) {
+      this.remote_seqnum = request.cseq;
     }
 
     return true;

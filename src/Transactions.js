@@ -162,6 +162,7 @@ function InviteClientTransaction(request_sender, request, transport) {
 
   this.logger = request_sender.ua.getLogger('ExSIP.transaction.ict', this.id);
 
+  this.logger.log('******************** request_sender : ' + request_sender);
   if (request_sender.ua.configuration.hack_via_tcp) {
     via_transport = 'TCP';
   }
@@ -238,6 +239,7 @@ InviteClientTransaction.prototype.timer_B = function() {
   if(this.state === C.STATUS_CALLING) {
     this.stateChanged(C.STATUS_TERMINATED);
     this.request_sender.ua.destroyTransaction(this);
+    this.logger.debug('InviteClientTransaction.timer_B : ' + this.request_sender);
     this.request_sender.onRequestTimeout();
   }
 };
@@ -330,18 +332,29 @@ InviteClientTransaction.prototype.receiveResponse = function(response) {
         break;
     }
   } else if(status_code >= 300 && status_code <= 699) {
-    switch(this.state) {
-      case C.STATUS_CALLING:
-      case C.STATUS_PROCEEDING:
-        this.stateChanged(C.STATUS_COMPLETED);
-        this.sendACK(response);
-        this.request_sender.receiveResponse(response);
-        break;
-      case C.STATUS_COMPLETED:
-        this.sendACK(response);
-        break;
+      switch(this.state) {
+        case C.STATUS_CALLING:
+        case C.STATUS_PROCEEDING:
+          this.state = C.STATUS_COMPLETED;
+          this.sendACK(response);
+          if(status_code === 503) {
+            var options = {code: 503, reason: 'Service Unavailable', retryCallback: function(transport){
+              transport.ua.once("connected", function(e){
+                if(transport === e.data.transport) {
+                  tr.send();
+                }
+              });
+            }};
+            this.request_sender.ua.onTransportError(this.request_sender.ua.transport, options);
+          } else {
+            this.request_sender.receiveResponse(response);
+          }
+          break;
+        case C.STATUS_COMPLETED:
+          this.sendACK(response);
+          break;
+      }
     }
-  }
 };
 
 
@@ -465,9 +478,13 @@ NonInviteServerTransaction.prototype.receiveResponse = function(status_code, res
       case C.STATUS_PROCEEDING:
         this.stateChanged(C.STATUS_COMPLETED);
         this.last_response = response;
-        this.J = setTimeout(function() {
-          tr.timer_J();
-        }, Timers.TIMER_J);
+        if(Timers.TIMER_J === 0) {
+            tr.timer_J();
+        } else {
+          this.J = setTimeout(function() {
+            tr.timer_J();
+          }, Timers.TIMER_J);
+        }
         if(!this.transport.send(response)) {
           this.onTransportError();
           if (onFailure) {
@@ -676,7 +693,7 @@ function checkTransaction(ua, request) {
           case C.STATUS_ACCEPTED:
             break;
         }
-        this.logger.log("checkTransaction failed for INVITE request and server transaction in state : "+tr.state, ua);
+        console.log("checkTransaction failed for INVITE request and server transaction in state : "+tr.state);
         return true;
       }
       break;
@@ -705,18 +722,19 @@ function checkTransaction(ua, request) {
         if(tr.state === C.STATUS_PROCEEDING) {
           return false;
         } else {
-          this.logger.log("checkTransaction failed for CANCEL request and server transaction in state : "+tr.state, ua);
+          console.log("checkTransaction failed for CANCEL request and server transaction in state : "+tr.state);
           return true;
         }
       } else {
         request.reply_sl(481);
-        this.logger.log("checkTransaction failed for CANCEL request and no server transaction", ua);
+        console.log("checkTransaction failed for CANCEL request and no server transaction");
         return true;
       }
       break;
     default:
 
       // Non-INVITE Server Transaction RFC 3261 17.2.2
+      console.log('***************** nist : ', Object.keys(ua.transactions.nist));
       tr = ua.transactions.nist[request.via_branch];
       if(tr) {
         switch(tr.state) {
@@ -727,7 +745,7 @@ function checkTransaction(ua, request) {
             tr.transport.send(tr.last_response);
             break;
         }
-        this.logger.log("checkTransaction failed for non invite server transaction in state : "+tr.state, ua);
+        console.log("checkTransaction failed for non invite server transaction in state : "+tr.state);
         return true;
       }
       break;

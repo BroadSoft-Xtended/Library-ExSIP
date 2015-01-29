@@ -52,6 +52,7 @@ RequestSender.prototype = {
    * To be re-defined by the applicant.
    */
   onRequestTimeout: function() {
+    this.logger.log('******************** onRequestTimeout : '+this.applicant);
     this.applicant.onRequestTimeout();
   },
 
@@ -140,7 +141,7 @@ RequestSender.prototype = {
         break;
       default:
         if (this.callbacks.failure) {
-          this.callbacks.failure();
+          this.callbacks.failure(response);
         }
         break;
     }

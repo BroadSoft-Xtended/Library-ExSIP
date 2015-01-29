@@ -58,7 +58,7 @@ Utils.merge_options = function(obj1, obj2) {
 };
 
 Utils.containsHeader = function(headers, name) {
-  for (var i = 0; i < headers && headers.length; i++) {
+  for (var i = 0; i < headers.length; i++) {
     if (headers[i].indexOf(name) !== -1) {
       return true;
     }
