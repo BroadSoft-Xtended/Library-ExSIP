@@ -735,6 +735,7 @@ Dialog.C = C;
 var SIPMessage = require('./SIPMessage');
 var ExSIP_C = require('./Constants');
 var Transactions = require('./Transactions');
+var Utils = require('./Utils');
 var Dialog_RequestSender = require('./Dialog/RequestSender');
 
 
@@ -744,6 +745,7 @@ function Dialog(owner, message, type, state) {
 
   this.uac_pending_reply = false;
   this.uas_pending_reply = false;
+  this.is_acknowledged = false;
   this.type = type;
 
   if(!message.hasHeader('contact')) {
@@ -850,6 +852,8 @@ Dialog.prototype = {
         'route_set': this.route_set
       }, extraHeaders, body);
 
+  this.logger.debug('createRequest : dialog.request_sender.request.extraHeaders : '+Utils.toString(request.extraHeaders));
+
     request.dialog = this;
 
     return request;
@@ -859,23 +863,11 @@ Dialog.prototype = {
   checkInDialogRequest: function(request) {
     var self = this;
 
-    if(!this.remote_seqnum) {
-      this.remote_seqnum = request.cseq;
-    } else if(request.cseq < this.remote_seqnum) {
-        //Do not try to reply to an ACK request.
-        if (request.method !== ExSIP_C.ACK) {
-          request.reply(500);
-        }
-        return false;
-    } else if(request.cseq > this.remote_seqnum) {
-      this.remote_seqnum = request.cseq;
-    }
-
     // RFC3261 14.2 Modifying an Existing Session -UAS BEHAVIOR-
     if (request.method === ExSIP_C.INVITE || (request.method === ExSIP_C.UPDATE && request.body)) {
       if (this.uac_pending_reply === true) {
         request.reply(491);
-      } else if (this.uas_pending_reply === true) {
+      } else if (this.uas_pending_reply === true || (this.type === 'UAS' && !this.is_acknowledged)) {
         var retryAfter = (Math.random() * 10 | 0) + 1;
         request.reply(500, null, ['Retry-After:'+ retryAfter]);
         return false;
@@ -915,11 +907,26 @@ Dialog.prototype = {
         });
       }
     }
+    else if (request.method === ExSIP_C.ACK) {
+      this.is_acknowledged = true;
+    }
+
+    if(!this.remote_seqnum) {
+      this.remote_seqnum = request.cseq;
+    } else if(request.cseq < this.remote_seqnum) {
+        //Do not try to reply to an ACK request.
+        if (request.method !== ExSIP_C.ACK) {
+          request.reply(500);
+        }
+        return false;
+    } else if(request.cseq > this.remote_seqnum) {
+      this.remote_seqnum = request.cseq;
+    }
 
     return true;
   },
 
-  sendRequest: function(applicant, method, options) {
+  createRequestSender: function(applicant, method, options) {
     options = options || {};
 
     var
@@ -927,7 +934,13 @@ Dialog.prototype = {
       body = options.body || null,
       request = this.createRequest(method, extraHeaders, body),
       request_sender = new Dialog_RequestSender(this, applicant, request);
+  this.logger.debug('dialog.request_sender.request.extraHeaders : '+Utils.toString(request.extraHeaders));
 
+    return request_sender;  
+  },
+
+  sendRequest: function(applicant, method, options) {
+      var request_sender = this.createRequestSender(applicant, method, options);
       request_sender.send();
   },
 
@@ -941,7 +954,7 @@ Dialog.prototype = {
   }
 };
 
-},{"./Constants":7,"./Dialog/RequestSender":9,"./SIPMessage":27,"./Transactions":29}],9:[function(require,module,exports){
+},{"./Constants":7,"./Dialog/RequestSender":9,"./SIPMessage":26,"./Transactions":28,"./Utils":32}],9:[function(require,module,exports){
 module.exports = DialogRequestSender;
 
 /**
@@ -959,6 +972,8 @@ function DialogRequestSender(dialog, applicant, request) {
   this.applicant = applicant;
   this.request = request;
 
+  this.logger = dialog.owner.ua.getLogger('ExSIP.dialog.requestsender', dialog.id);
+
   // RFC3261 14.1 Modifying an Existing Session. UAC Behavior.
   this.reattempt = false;
   this.reattemptTimer = null;
@@ -966,20 +981,20 @@ function DialogRequestSender(dialog, applicant, request) {
 
 
 DialogRequestSender.prototype = {
-  send: function() {
+  send: function(callbacks) {
     var
       self = this,
       request_sender = new RequestSender(this, this.dialog.owner.ua);
 
-    request_sender.send();
+    request_sender.send(callbacks);
 
     // RFC3261 14.2 Modifying an Existing Session -UAC BEHAVIOR-
     if (this.request.method === ExSIP_C.INVITE && request_sender.clientTransaction.state !== Transactions.C.STATUS_TERMINATED) {
       this.dialog.uac_pending_reply = true;
-      request_sender.clientTransaction.on('stateChanged', function stateChanged(e){
+      request_sender.clientTransaction.on('stateChanged', function stateChanged(e) {
         if (e.sender.state === Transactions.C.STATUS_ACCEPTED ||
-            e.sender.state === Transactions.C.STATUS_COMPLETED ||
-            e.sender.state === Transactions.C.STATUS_TERMINATED) {
+          e.sender.state === Transactions.C.STATUS_COMPLETED ||
+          e.sender.state === Transactions.C.STATUS_TERMINATED) {
 
           request_sender.clientTransaction.removeListener('stateChanged', stateChanged);
           self.dialog.uac_pending_reply = false;
@@ -993,6 +1008,7 @@ DialogRequestSender.prototype = {
   },
 
   onRequestTimeout: function() {
+    this.logger.log('********* onRequestTimeout : ', this.applicant);
     this.applicant.onRequestTimeout();
   },
 
@@ -1002,6 +1018,8 @@ DialogRequestSender.prototype = {
 
   receiveResponse: function(response) {
     var self = this;
+
+    this.logger.debug('receiveResponse : ' + response);
 
     // RFC3261 12.2.1.2 408 or 481 is received for a request within a dialog.
     if (response.status_code === 408 || response.status_code === 481) {
@@ -1026,8 +1044,7 @@ DialogRequestSender.prototype = {
     }
   }
 };
-
-},{"../Constants":7,"../RTCSession":20,"../RequestSender":26,"../Transactions":29}],10:[function(require,module,exports){
+},{"../Constants":7,"../RTCSession":20,"../RequestSender":25,"../Transactions":28}],10:[function(require,module,exports){
 module.exports = DigestAuthentication;
 
 
@@ -1189,7 +1206,7 @@ DigestAuthentication.prototype.updateNcHex = function() {
   var hex = Number(this.nc).toString(16);
   this.ncHex = '00000000'.substr(0, 8-hex.length) + hex;
 };
-},{"./Utils":33}],11:[function(require,module,exports){
+},{"./Utils":32}],11:[function(require,module,exports){
 module.exports = EventEmitter;
 
 
@@ -1425,7 +1442,7 @@ Object.defineProperties(ExSIP, {
   }
 });
 
-},{"../package.json":6,"./Constants":7,"./Exceptions":13,"./Grammar":14,"./NameAddrHeader":18,"./UA":31,"./URI":32,"./Utils":33}],13:[function(require,module,exports){
+},{"../package.json":6,"./Constants":7,"./Exceptions":13,"./Grammar":14,"./NameAddrHeader":18,"./UA":30,"./URI":31,"./Utils":32}],13:[function(require,module,exports){
 /**
  * @namespace Exceptions
  * @memberOf ExSIP
@@ -1438,6 +1455,7 @@ var Exceptions = {
    */
   ConfigurationError: (function(){
     var exception = function(parameter, value) {
+      console.trace('----------------------ConfigurationError : '+parameter+', '+value);
       this.code = 1;
       this.name = 'CONFIGURATION_ERROR';
       this.parameter = parameter;
@@ -1450,6 +1468,7 @@ var Exceptions = {
 
   InvalidStateError: (function(){
     var exception = function(status) {
+      console.trace('----------------------InvalidStateError : '+status);
       this.code = 2;
       this.name = 'INVALID_STATE_ERROR';
       this.status = status;
@@ -1461,6 +1480,7 @@ var Exceptions = {
 
   NotSupportedError: (function(){
     var exception = function(message) {
+      console.trace('----------------------NotSupportedError : '+message);
       this.code = 3;
       this.name = 'NOT_SUPPORTED_ERROR';
       this.message = message;
@@ -1471,6 +1491,7 @@ var Exceptions = {
 
   NotReadyError: (function(){
     var exception = function(message) {
+      console.trace('----------------------NotReadyError : '+message);
       this.code = 4;
       this.name = 'NOT_READY_ERROR';
       this.message = message;
@@ -14006,7 +14027,7 @@ module.exports = (function(){
   return result;
 })();
 
-},{"./NameAddrHeader":18,"./URI":32}],15:[function(require,module,exports){
+},{"./NameAddrHeader":18,"./URI":31}],15:[function(require,module,exports){
 module.exports = Logger;
 
 function DateFmt(fstr) {
@@ -14058,23 +14079,23 @@ function Logger(logger, category, label) {
 }
 
 Logger.prototype.debug = function(content) {
-  this.logger.debug(this.category, this.label, this.formatMsg(content));
+  this.logger.debug(this.category, this.label, content);
 };
 
 Logger.prototype.log = function(content) {
-  this.logger.log(this.category, this.label, this.formatMsg(content));
+  this.logger.log(this.category, this.label, content);
 };
 
 Logger.prototype.warn = function(content) {
-  this.logger.warn(this.category, this.label, this.formatMsg(content));
+  this.logger.warn(this.category, this.label, content);
 };
 
 Logger.prototype.error = function(content) {
-  this.logger.error(this.category, this.label, this.formatMsg(content));
+  this.logger.error(this.category, this.label, content);
 };
 
 Logger.prototype.formatMsg = function(msg) {
-  return this.getTime()+' : '+this.prefix+' : '+msg;
+  return this.getTime()+' : '+msg;
 };
 Logger.prototype.getTime = function() {
   return this.getTimeFor(new Date());
@@ -14095,7 +14116,7 @@ var Logger = require('./Logger');
 function LoggerFactory() {
   var logger,
     levels = { 'error': 0, 'warn': 1, 'log': 2, 'debug': 3 },
-    level = 2,
+    level = 1,
     builtinEnabled = true,
     connector = null;
 
@@ -14170,7 +14191,7 @@ LoggerFactory.prototype.print = function(target, category, label, content) {
 LoggerFactory.prototype.debug = function(category, label, content) {
   if (this.level === 3) {
     if (this.builtinEnabled) {
-      this.print(console.debug, category, label, content);
+      this.print(console.info, category, label, content);
     }
 
     if (this.connector) {
@@ -14216,7 +14237,7 @@ LoggerFactory.prototype.error = function(category, label, content) {
 LoggerFactory.prototype.getLogger = function(category, label) {
   var logger;
 
-  if (label && this.level === 3) {
+  if (label && this.level === 1) {
     return new Logger(this, category, label);
   } else if (this.loggers[category]) {
     return this.loggers[category];
@@ -14456,7 +14477,7 @@ Message.prototype.newMessage = function(originator, request) {
     request: request
   });
 };
-},{"./Constants":7,"./EventEmitter":11,"./Exceptions":13,"./RequestSender":26,"./SIPMessage":27,"./Transactions":29,"./Utils":33}],18:[function(require,module,exports){
+},{"./Constants":7,"./EventEmitter":11,"./Exceptions":13,"./RequestSender":25,"./SIPMessage":26,"./Transactions":28,"./Utils":32}],18:[function(require,module,exports){
 module.exports = NameAddrHeader;
 
 
@@ -14565,7 +14586,7 @@ NameAddrHeader.parse = function(name_addr_header) {
     return undefined;
   }
 };
-},{"./Grammar":14,"./URI":32}],19:[function(require,module,exports){
+},{"./Grammar":14,"./URI":31}],19:[function(require,module,exports){
 var Parser = {};
 
 module.exports = Parser;
@@ -14823,24 +14844,24 @@ Parser.writeSDP = sdp_transform.write;
 Parser.parseFmtpConfig = sdp_transform.parseFmtpConfig;
 Parser.parsePayloads = sdp_transform.parsePayloads;
 Parser.parseRemoteCandidates = sdp_transform.parseRemoteCandidates;
-},{"./Grammar":14,"./SIPMessage":27,"sdp-transform":2}],20:[function(require,module,exports){
+},{"./Grammar":14,"./SIPMessage":26,"sdp-transform":2}],20:[function(require,module,exports){
 module.exports = RTCSession;
 
 
 var C = {
   // RTCSession states
-  STATUS_NULL:               0,
-  STATUS_INVITE_SENT:        1,
-  STATUS_1XX_RECEIVED:       2,
-  STATUS_INVITE_RECEIVED:    3,
+  STATUS_NULL: 0,
+  STATUS_INVITE_SENT: 1,
+  STATUS_1XX_RECEIVED: 2,
+  STATUS_INVITE_RECEIVED: 3,
   STATUS_WAITING_FOR_ANSWER: 4,
-  STATUS_ANSWERED:           5,
-  STATUS_WAITING_FOR_ACK:    6,
-  STATUS_CANCELED:           7,
-  STATUS_TERMINATED:         8,
-  STATUS_CONFIRMED:          9,
-  STATUS_REFER_SENT:         10,
-  STATUS_BYE_SENT:           11
+  STATUS_ANSWERED: 5,
+  STATUS_WAITING_FOR_ACK: 6,
+  STATUS_CANCELED: 7,
+  STATUS_TERMINATED: 8,
+  STATUS_CONFIRMED: 9,
+  STATUS_REFER_SENT: 10,
+  STATUS_BYE_SENT: 11
 };
 
 /**
@@ -14852,10 +14873,8 @@ RTCSession.C = C;
  * Dependencies.
  */
 var ExSIP_C = require('./Constants');
-var URI = require('./URI');
 var EventEmitter = require('./EventEmitter');
 var Exceptions = require('./Exceptions');
-var Transactions = require('./Transactions');
 var Parser = require('./Parser');
 var Utils = require('./Utils');
 var Timers = require('./Timers');
@@ -14865,7 +14884,6 @@ var SIPMessage = require('./SIPMessage');
 var Dialog = require('./Dialog');
 var RequestSender = require('./RequestSender');
 var RTCSession_RTCMediaHandler = require('./RTCSession/RTCMediaHandler');
-var RTCSession_Request = require('./RTCSession/Request');
 var RTCSession_DTMF = require('./RTCSession/DTMF');
 
 
@@ -14879,16 +14897,21 @@ function RTCSession(ua) {
     'ended',
     'newDTMF',
     'hold',
+    'held',
+    'resumed',
     'unhold',
     'muted',
-    'unmuted'
+    'unmuted',
+    'started',
+    'onReInvite'
   ];
 
   this.ua = ua;
-  this.status = C.STATUS_NULL;
+  this.setStatus(C.STATUS_NULL);
   this.dialog = null;
   this.earlyDialogs = {};
   this.rtcMediaHandler = null;
+  this.receiveResponse = this.receiveInviteResponse;
 
   // RTCSession confirmation flag
   this.is_confirmed = false;
@@ -14904,7 +14927,7 @@ function RTCSession(ua) {
     userNoAnswerTimer: null
   };
 
-    // Custom session empty object for high level use
+  // Custom session empty object for high level use
   this.data = {};
   this.dtmf = new RTCSession_DTMF(this);
 
@@ -14913,6 +14936,7 @@ function RTCSession(ua) {
    */
 
   // Mute/Hold state
+  this.isOnHold = false;
   this.audioMuted = false;
   this.videoMuted = false;
   this.local_hold = false;
@@ -14925,12 +14949,12 @@ function RTCSession(ua) {
       return this.actions.length;
     },
 
-    isPending: function(name){
+    isPending: function(name) {
       var
         idx = 0,
         length = this.actions.length;
 
-      for (idx; idx<length; idx++) {
+      for (idx; idx < length; idx++) {
         if (this.actions[idx].name === name) {
           return true;
         }
@@ -14953,9 +14977,9 @@ function RTCSession(ua) {
         idx = 0,
         length = this.actions.length;
 
-      for (idx; idx<length; idx++) {
+      for (idx; idx < length; idx++) {
         if (this.actions[idx].name === name) {
-          this.actions.splice(idx,1);
+          this.actions.splice(idx, 1);
         }
       }
     }
@@ -14975,20 +14999,20 @@ RTCSession.prototype = new EventEmitter();
 RTCSession.prototype.terminate = function(options) {
   options = options || {};
 
-  var cancel_reason, dialog,
-    cause = options.cause || ExSIP_C.causes.BYE,
+  var cancel_reason,
     status_code = options.status_code,
     reason_phrase = options.reason_phrase,
     extraHeaders = options.extraHeaders && options.extraHeaders.slice() || [],
-    body = options.body,
-    self = this;
+    body = options.body;
 
   // Check Session Status
   if (this.status === C.STATUS_TERMINATED) {
     throw new Exceptions.InvalidStateError(this.status);
   }
 
-  switch(this.status) {
+  this.logger.log('terminate with status : ' + this.status);
+
+  switch (this.status) {
     // - UAC -
     case C.STATUS_NULL:
     case C.STATUS_INVITE_SENT:
@@ -14996,7 +15020,7 @@ RTCSession.prototype.terminate = function(options) {
       this.logger.debug('canceling RTCSession');
 
       if (status_code && (status_code < 200 || status_code >= 700)) {
-        throw new TypeError('Invalid status_code: '+ status_code);
+        throw new TypeError('Invalid status_code: ' + status_code);
       } else if (status_code) {
         reason_phrase = reason_phrase || ExSIP_C.REASON_PHRASE[status_code] || '';
         cancel_reason = 'SIP ;cause=' + status_code + ' ;text="' + reason_phrase + '"';
@@ -15007,26 +15031,44 @@ RTCSession.prototype.terminate = function(options) {
         this.isCanceled = true;
         this.cancelReason = cancel_reason;
       } else if (this.status === C.STATUS_INVITE_SENT) {
+        if (this.received_100) {
+          this.logger.debug('canceling after received 100 response');
+          if (typeof(this.request.cancel) === 'undefined') {
+            this.sendBye(options);
+            this.ended('local', null, ExSIP_C.causes.BYE);
+          } else {
+            this.isCanceled = true;
+            this.logger.log('terminate on 100 - setting isCanceled = true', this.ua);
+            this.request.cancel(cancel_reason);
+          }
+        } else {
+          this.isCanceled = true;
+          this.cancelReason = cancel_reason;
+        }
+      } else if (this.status === C.STATUS_1XX_RECEIVED) {
         this.isCanceled = true;
-        this.cancelReason = cancel_reason;
-      } else if(this.status === C.STATUS_1XX_RECEIVED) {
+        this.logger.log('terminate on 1xx - setting isCanceled = true');
         this.request.cancel(cancel_reason);
       }
 
-      this.status = C.STATUS_CANCELED;
+      this.setStatus(C.STATUS_CANCELED);
 
       this.failed('local', null, ExSIP_C.causes.CANCELED);
       break;
 
       // - UAS -
     case C.STATUS_WAITING_FOR_ANSWER:
+      this.logger.log('rejecting RTCSession with 486 Busy Here', this.ua);
+      this.request.reply(486);
+      this.failed('local', null, ExSIP_C.causes.REJECTED);
+      break;
     case C.STATUS_ANSWERED:
       this.logger.debug('rejecting RTCSession');
 
       status_code = status_code || 480;
 
       if (status_code < 300 || status_code >= 700) {
-        throw new TypeError('Invalid status_code: '+ status_code);
+        throw new TypeError('Invalid status_code: ' + status_code);
       }
 
       this.request.reply(status_code, reason_phrase, extraHeaders, body);
@@ -15034,68 +15076,85 @@ RTCSession.prototype.terminate = function(options) {
       break;
 
     case C.STATUS_WAITING_FOR_ACK:
+    case C.STATUS_REFER_SENT:
     case C.STATUS_CONFIRMED:
       this.logger.debug('terminating RTCSession');
 
-      reason_phrase = options.reason_phrase || ExSIP_C.REASON_PHRASE[status_code] || '';
+      // Send Bye
+      this.sendBye(options);
+      return;
+      // reason_phrase = options.reason_phrase || ExSIP_C.REASON_PHRASE[status_code] || '';
 
-      if (status_code && (status_code < 200 || status_code >= 700)) {
-        throw new TypeError('Invalid status_code: '+ status_code);
-      } else if (status_code) {
-        extraHeaders.push('Reason: SIP ;cause=' + status_code + '; text="' + reason_phrase + '"');
-      }
+      // if (status_code && (status_code < 200 || status_code >= 700)) {
+      //   throw new TypeError('Invalid status_code: '+ status_code);
+      // } else if (status_code) {
+      //   extraHeaders.push('Reason: SIP ;cause=' + status_code + '; text="' + reason_phrase + '"');
+      // }
 
-      /* RFC 3261 section 15 (Terminating a session):
-        *
-        * "...the callee's UA MUST NOT send a BYE on a confirmed dialog
-        * until it has received an ACK for its 2xx response or until the server
-        * transaction times out."
-        */
-      if (this.status === C.STATUS_WAITING_FOR_ACK &&
-          this.direction === 'incoming' &&
-          this.request.server_transaction.state !== Transactions.C.STATUS_TERMINATED) {
+      // /* RFC 3261 section 15 (Terminating a session):
+      //   *
+      //   * "...the callee's UA MUST NOT send a BYE on a confirmed dialog
+      //   * until it has received an ACK for its 2xx response or until the server
+      //   * transaction times out."
+      //   */
+      // if (this.status === C.STATUS_WAITING_FOR_ACK &&
+      //     this.direction === 'incoming' &&
+      //     this.request.server_transaction.state !== Transactions.C.STATUS_TERMINATED) {
 
-        // Save the dialog for later restoration
-        dialog = this.dialog;
+      //   // Save the dialog for later restoration
+      //   dialog = this.dialog;
 
-        // Send the BYE as soon as the ACK is received...
-        this.receiveRequest = function(request) {
-          if(request.method === ExSIP_C.ACK) {
-            this.sendRequest(ExSIP_C.BYE, {
-              extraHeaders: extraHeaders,
-              body: body
-            });
-            dialog.terminate();
-          }
-        };
+      //   // Send the BYE as soon as the ACK is received...
+      //   this.receiveRequest = function(request) {
+      //     if(request.method === ExSIP_C.ACK) {
+      //       self.sendBye({
+      //         extraHeaders: extraHeaders,
+      //         body: body
+      //       });
+      //       // this.sendRequest(ExSIP_C.BYE, {
+      //       //   extraHeaders: extraHeaders,
+      //       //   body: body
+      //       // });
+      //       dialog.terminate();
+      //     }
+      //   };
 
-        // .., or when the INVITE transaction times out
-        this.request.server_transaction.on('stateChanged', function(e){
-          if (e.sender.state === Transactions.C.STATUS_TERMINATED) {
-            self.sendRequest(ExSIP_C.BYE, {
-              extraHeaders: extraHeaders,
-              body: body
-            });
-            dialog.terminate();
-          }
-        });
+      //   // .., or when the INVITE transaction times out
+      //   this.request.server_transaction.on('stateChanged', function(e){
+      //     if (e.sender.state === Transactions.C.STATUS_TERMINATED) {
+      //       self.sendBye({
+      //         extraHeaders: extraHeaders,
+      //         body: body
+      //       });
+      //       // self.sendRequest(ExSIP_C.BYE, {
+      //       //   extraHeaders: extraHeaders,
+      //       //   body: body
+      //       // });
+      //       dialog.terminate();
+      //     }
+      //   });
 
-        this.ended('local', null, cause);
+      //   this.ended('local', null, cause);
 
-        // Restore the dialog into 'this' in order to be able to send the in-dialog BYE :-)
-        this.dialog = dialog;
+      //   // Restore the dialog into 'this' in order to be able to send the in-dialog BYE :-)
+      //   this.dialog = dialog;
 
-        // Restore the dialog into 'ua' so the ACK can reach 'this' session
-        this.ua.dialogs[dialog.id.toString()] = dialog;
+      //   // Restore the dialog into 'ua' so the ACK can reach 'this' session
+      //   this.ua.dialogs[dialog.id.toString()] = dialog;
 
-      } else {
-        this.sendRequest(ExSIP_C.BYE, {
-          extraHeaders: extraHeaders,
-          body: body
-        });
+      // } else {
+      //   self.sendBye({
+      //     extraHeaders: extraHeaders,
+      //     body: body
+      //   });
+      //   return;
+      //   // this.sendRequest(ExSIP_C.BYE, {
+      //   //   extraHeaders: extraHeaders,
+      //   //   body: body
+      //   // });
 
-        this.ended('local', null, cause);
-      }
+      //   // this.ended('local', null, cause);
+      // }
   }
 
   this.close();
@@ -15114,88 +15173,40 @@ RTCSession.prototype.answer = function(options) {
     request = this.request,
     extraHeaders = options.extraHeaders && options.extraHeaders.slice() || [],
     mediaConstraints = options.mediaConstraints || {},
-    RTCAnswerConstraints = options.RTCAnswerConstraints || {},
     mediaStream = options.mediaStream || null,
 
-  // User media succeeded
-  userMediaSucceeded = function(stream) {
-    self.rtcMediaHandler.addStream(
-      stream,
-      streamAdditionSucceeded,
-      streamAdditionFailed
-    );
-  },
-
-  // User media failed
-  userMediaFailed = function() {
-    request.reply(480);
-    self.failed('local', null, ExSIP_C.causes.USER_DENIED_MEDIA_ACCESS);
-  },
-
-  // rtcMediaHandler.addStream successfully added
-  streamAdditionSucceeded = function() {
-    self.connecting(request);
-
-    if (self.status === C.STATUS_TERMINATED) {
-      return;
-    }
-
-    if (self.late_sdp) {
-      self.rtcMediaHandler.createOffer(
-        sdpCreationSucceeded,
-        sdpCreationFailed,
-        RTCAnswerConstraints
-      );
-    } else {
-      self.rtcMediaHandler.createAnswer(
-        sdpCreationSucceeded,
-        sdpCreationFailed,
-        RTCAnswerConstraints
-      );
-    }
-  },
-
-  // rtcMediaHandler.addStream failed
-  streamAdditionFailed = function() {
-    if (self.status === C.STATUS_TERMINATED) {
-      return;
-    }
-
-    self.failed('system', null, ExSIP_C.causes.WEBRTC_ERROR);
-  },
-
-  // rtcMediaHandler.createAnswer or rtcMediaHandler.createOffer succeeded
-  sdpCreationSucceeded = function(body) {
-    var
+    // rtcMediaHandler.createAnswer or rtcMediaHandler.createOffer succeeded
+    sdpCreationSucceeded = function(body) {
+      var
       // run for reply success callback
-      replySucceeded = function() {
-        self.status = C.STATUS_WAITING_FOR_ACK;
+        replySucceeded = function() {
+          self.setStatus(C.STATUS_WAITING_FOR_ACK);
 
-        self.setInvite2xxTimer(request, body);
-        self.setACKTimer();
-        self.accepted('local');
-      },
+          self.setInvite2xxTimer(request, body);
+          self.setACKTimer();
+          self.accepted('local');
+        },
 
-      // run for reply failure callback
-      replyFailed = function() {
-        self.failed('system', null, ExSIP_C.causes.CONNECTION_ERROR);
-      };
+        // run for reply failure callback
+        replyFailed = function() {
+          self.failed('system', null, ExSIP_C.causes.CONNECTION_ERROR);
+        };
 
-    request.reply(200, null, extraHeaders,
-      body,
-      replySucceeded,
-      replyFailed
-    );
-  },
+      request.reply(200, null, extraHeaders,
+        body,
+        replySucceeded,
+        replyFailed
+      );
+    },
 
-  // rtcMediaHandler.createAnswer or rtcMediaHandler.createOffer failed
-  sdpCreationFailed = function() {
-    if (self.status === C.STATUS_TERMINATED) {
-      return;
-    }
+    // rtcMediaHandler.createAnswer or rtcMediaHandler.createOffer failed
+    sdpCreationFailed = function() {
+      if (self.status === C.STATUS_TERMINATED) {
+        return;
+      }
 
-    self.failed('system', null, ExSIP_C.causes.WEBRTC_ERROR);
-  };
+      self.failed('system', null, ExSIP_C.causes.WEBRTC_ERROR);
+    };
 
   this.data = options.data || {};
 
@@ -15206,10 +15217,10 @@ RTCSession.prototype.answer = function(options) {
     throw new Exceptions.InvalidStateError(this.status);
   }
 
-  this.status = C.STATUS_ANSWERED;
+  this.setStatus(C.STATUS_ANSWERED);
 
   // An error on dialog creation will fire 'failed' event
-  if(!this.createDialog(request, 'UAS')) {
+  if (!this.createDialog(request, 'UAS')) {
     request.reply(500, 'Missing Contact header field');
     return;
   }
@@ -15223,29 +15234,29 @@ RTCSession.prototype.answer = function(options) {
   sdp = Parser.parseSDP(remoteDescription.sdp || '');
 
   // Make sure sdp is an array, not the case if there is only one media
-  if(!(sdp.media instanceof Array)) {
+  if (!(sdp.media instanceof Array)) {
     sdp.media = [sdp.media || []];
   }
 
   // Go through all medias in SDP to find offered capabilities to answer with
   idx = sdp.media.length;
-  while(idx--) {
-    if(sdp.media[idx].type === 'audio' &&
-        (sdp.media[idx].direction === 'sendrecv' ||
-         sdp.media[idx].direction === 'recvonly')) {
-      hasAudio=true;
+  while (idx--) {
+    if (sdp.media[idx].type === 'audio' &&
+      (sdp.media[idx].direction === 'sendrecv' ||
+        sdp.media[idx].direction === 'recvonly')) {
+      hasAudio = true;
     }
-    if(sdp.media[idx].type === 'video' &&
-        (sdp.media[idx].direction === 'sendrecv' ||
-         sdp.media[idx].direction === 'recvonly')) {
-      hasVideo=true;
+    if (sdp.media[idx].type === 'video' &&
+      (sdp.media[idx].direction === 'sendrecv' ||
+        sdp.media[idx].direction === 'recvonly')) {
+      hasVideo = true;
     }
   }
 
   // Remove audio from mediaStream if suggested by mediaConstraints
-   if (mediaStream && mediaConstraints.audio === false) {
+  if (mediaStream && mediaConstraints.audio === false) {
     length = mediaStream.getAudioTracks().length;
-    for (idx=0; idx<length; idx++) {
+    for (idx = 0; idx < length; idx++) {
       mediaStream.removeTrack(mediaStream.getAudioTracks()[idx]);
     }
   }
@@ -15253,39 +15264,32 @@ RTCSession.prototype.answer = function(options) {
   // Remove video from mediaStream if suggested by mediaConstraints
   if (mediaStream && mediaConstraints.video === false) {
     length = mediaStream.getVideoTracks().length;
-    for (idx=0; idx<length; idx++) {
+    for (idx = 0; idx < length; idx++) {
       mediaStream.removeTrack(mediaStream.getVideoTracks()[idx]);
     }
   }
 
   // Set audio constraints based on incoming stream if not supplied
   if (mediaConstraints.audio === undefined) {
-      mediaConstraints.audio = hasAudio;
+    mediaConstraints.audio = hasAudio;
   }
 
   // Set video constraints based on incoming stream if not supplied
   if (mediaConstraints.video === undefined) {
-      mediaConstraints.video = hasVideo;
+    mediaConstraints.video = hasVideo;
   }
 
-  if (mediaStream) {
-    userMediaSucceeded(mediaStream);
-  } else {
-    this.rtcMediaHandler.getUserMedia(
-      userMediaSucceeded,
-      userMediaFailed,
-      mediaConstraints
-    );
-  }
+  this.getUserMedia(mediaConstraints, sdpCreationSucceeded, sdpCreationFailed, {
+    isAnswer: true,
+    remoteSdp: request.body
+  });
 };
 
 /**
  * Send a DTMF
  */
 RTCSession.prototype.sendDTMF = function(tones, options) {
-  var duration, interToneGap,
-    position = 0,
-    self = this;
+  var duration, interToneGap;
 
   options = options || {};
   duration = options.duration || null;
@@ -15301,25 +15305,25 @@ RTCSession.prototype.sendDTMF = function(tones, options) {
   }
 
   // Convert to string
-  if(typeof tones === 'number') {
+  if (typeof tones === 'number') {
     tones = tones.toString();
   }
 
   // Check tones
   if (!tones || typeof tones !== 'string' || !tones.match(/^[0-9A-D#*,]+$/i)) {
-    throw new TypeError('Invalid tones: '+ tones);
+    throw new TypeError('Invalid tones: ' + tones);
   }
 
   // Check duration
   if (duration && !Utils.isDecimal(duration)) {
-    throw new TypeError('Invalid tone duration: '+ duration);
+    throw new TypeError('Invalid tone duration: ' + duration);
   } else if (!duration) {
     duration = RTCSession_DTMF.C.DEFAULT_DURATION;
   } else if (duration < RTCSession_DTMF.C.MIN_DURATION) {
-    this.logger.warn('"duration" value is lower than the minimum allowed, setting it to '+ RTCSession_DTMF.C.MIN_DURATION+ ' milliseconds');
+    this.logger.warn('"duration" value is lower than the minimum allowed, setting it to ' + RTCSession_DTMF.C.MIN_DURATION + ' milliseconds');
     duration = RTCSession_DTMF.C.MIN_DURATION;
   } else if (duration > RTCSession_DTMF.C.MAX_DURATION) {
-    this.logger.warn('"duration" value is greater than the maximum allowed, setting it to '+ RTCSession_DTMF.C.MAX_DURATION +' milliseconds');
+    this.logger.warn('"duration" value is greater than the maximum allowed, setting it to ' + RTCSession_DTMF.C.MAX_DURATION + ' milliseconds');
     duration = RTCSession_DTMF.C.MAX_DURATION;
   } else {
     duration = Math.abs(duration);
@@ -15328,80 +15332,155 @@ RTCSession.prototype.sendDTMF = function(tones, options) {
 
   // Check interToneGap
   if (interToneGap && !Utils.isDecimal(interToneGap)) {
-    throw new TypeError('Invalid interToneGap: '+ interToneGap);
+    throw new TypeError('Invalid interToneGap: ' + interToneGap);
   } else if (!interToneGap) {
     interToneGap = RTCSession_DTMF.C.DEFAULT_INTER_TONE_GAP;
   } else if (interToneGap < RTCSession_DTMF.C.MIN_INTER_TONE_GAP) {
-    this.logger.warn('"interToneGap" value is lower than the minimum allowed, setting it to '+ RTCSession_DTMF.C.MIN_INTER_TONE_GAP +' milliseconds');
+    this.logger.warn('"interToneGap" value is lower than the minimum allowed, setting it to ' + RTCSession_DTMF.C.MIN_INTER_TONE_GAP + ' milliseconds');
     interToneGap = RTCSession_DTMF.C.MIN_INTER_TONE_GAP;
   } else {
     interToneGap = Math.abs(interToneGap);
   }
 
-  if (this.tones) {
-    // Tones are already queued, just add to the queue
-    this.tones += tones;
-    return;
-  }
-
-  // New set of tones to start sending
-  this.tones = tones;
-
-  var sendDTMF = function () {
-    var tone, timeout,
-      tones = self.tones;
-
-    if (self.status === C.STATUS_TERMINATED || !tones || position >= tones.length) {
-      // Stop sending DTMF
-      self.tones = null;
-      return;
-    }
-
-    tone = tones[position];
-    position += 1;
-
-    if (tone === ',') {
-      timeout = 2000;
-    } else {
-      var dtmf = new RTCSession_DTMF(self);
-      dtmf.on('failed', function(){self.tones = null;});
-      dtmf.send(tone, options);
-      timeout = duration + interToneGap;
-    }
-
-    // Set timeout for the next tone
-    setTimeout(sendDTMF, timeout);
-  };
-
-  // Send the first tone
-  sendDTMF();
+  this.dtmf.send(tones, options);
 };
 
-  RTCSession.prototype.reconnectRtcMediaHandler = function(connectSuccess, connectFailed, options) {
-    var self = this;
-    options = options || {};
-    var localMedia = options.localMedia || this.rtcMediaHandler.localMedia;
-    options.createOfferConstraints = options.createOfferConstraints || this.rtcMediaHandler.createOfferConstraints;
-    this.rtcMediaHandler.close(!!options.localMedia);
+/**
+ * Accepts the reInvite.
+ * @param {Object} [options]
+ */
+RTCSession.prototype.rejectReInvite = function(options) {
+  options = options || {};
 
-    this.initRtcMediaHandler(options);
-    this.rtcMediaHandler.localMedia = localMedia;
-    this.rtcMediaHandler.createOfferConstraints = options.createOfferConstraints;
-    this.connectRtcMediaHandler(localMedia, function(){
-        self.started('local', undefined, true);
-        connectSuccess();
-      }, connectFailed, options
+  this.logger.log('rejecting re-INVITE');
+
+  this.request.reply(488);
+};
+
+/**
+ * Accepts the reInvite.
+ * @param {Object} [options]
+ */
+RTCSession.prototype.acceptReInvite = function(options) {
+  options = options || {};
+
+  var self = this,
+    extraHeaders = options.extraHeaders || [];
+
+  this.logger.log('accepting re-INVITE');
+
+  var replySucceeded = function() {
+    var timeout = Timers.T1;
+
+    self.setStatus(C.STATUS_WAITING_FOR_ACK);
+
+    /**
+     * RFC3261 13.3.1.4
+     * Response retransmissions cannot be accomplished by transaction layer
+     *  since it is destroyed when receiving the first 2xx answer
+     */
+    self.timers.invite2xxTimer = setTimeout(function invite2xxRetransmission() {
+        if (self.status !== C.STATUS_WAITING_FOR_ACK) {
+          return;
+        }
+
+        self.request.reply(200, null, extraHeaders, self.rtcMediaHandler.peerConnection.localDescription.sdp);
+
+        if (timeout < Timers.T2) {
+          timeout = timeout * 2;
+          if (timeout > Timers.T2) {
+            timeout = Timers.T2;
+          }
+        }
+        self.timers.invite2xxTimer = setTimeout(
+          invite2xxRetransmission, timeout
+        );
+      },
+      timeout
+    );
+
+    /**
+     * RFC3261 14.2
+     * If a UAS generates a 2xx response and never receives an ACK,
+     *  it SHOULD generate a BYE to terminate the dialog.
+     */
+    self.timers.ackTimer = setTimeout(function() {
+        if (self.status === C.STATUS_WAITING_FOR_ACK) {
+          self.logger.log('no ACK received');
+          //                window.clearTimeout(self.timers.invite2xxTimer);
+          //                self.sendBye();
+          //                self.ended('remote', null, ExSIP.C.causes.NO_ACK);
+        }
+      },
+      Timers.TIMER_H
+    );
+
+    self.started('local', undefined, true);
+  };
+
+  var replyFailed = function() {
+    self.failed('system', null, ExSIP_C.causes.CONNECTION_ERROR);
+  };
+
+  //    var previousRemoteDescription = self.rtcMediaHandler.peerConnection.remoteDescription;
+  var connectSuccess = function() {
+    self.logger.debug('onMessage success');
+    self.request.reply(200, null, extraHeaders,
+      self.rtcMediaHandler.peerConnection.localDescription.getSdp({
+        additionalSdp: self.rtcMediaHandler.peerConnection.remoteUnsupportedMedia
+      }),
+      replySucceeded,
+      replyFailed
     );
   };
 
-/**
- * Send a generic in-dialog Request
- */
-RTCSession.prototype.sendRequest = function(method, options) {
-  var request = new RTCSession_Request(this);
+  var connectFailed = function(e) {
+    self.logger.warn('invalid SDP');
+    self.logger.warn(e);
+    self.request.reply(488);
+  };
 
-  request.send(method, options);
+  this.initialRemoteSdp = this.initialRemoteSdp || self.rtcMediaHandler.peerConnection.remoteDescription.sdp;
+  var sdp = this.request.body;
+  if (sdp.length === 0) {
+    this.logger.debug('empty sdp');
+  }
+  this.reconnectRtcMediaHandler(connectSuccess, connectFailed, {
+    isAnswer: true,
+    remoteSdp: sdp,
+    isReconnect: true
+  });
 };
+
+RTCSession.prototype.reconnectRtcMediaHandler = function(connectSuccess, connectFailed, options) {
+  var self = this;
+  options = options || {};
+  var localMedia = options.localMedia || this.rtcMediaHandler.localMedia;
+  options.createOfferConstraints = options.createOfferConstraints || this.rtcMediaHandler.createOfferConstraints;
+  this.rtcMediaHandler.close(!!options.localMedia);
+
+  this.initRtcMediaHandler(options);
+  this.rtcMediaHandler.localMedia = localMedia;
+  this.rtcMediaHandler.createOfferConstraints = options.createOfferConstraints;
+  this.connectRtcMediaHandler(localMedia, function() {
+    self.started('local', undefined, true);
+    connectSuccess();
+  }, connectFailed, options);
+};
+
+// /**
+//  * Send a generic in-dialog Request
+//  */
+// RTCSession.prototype.sendRequest = function(method, options, callbacks) {
+//   var request = new RTCSession_Request(this, callbacks);
+
+//   if(options.status) {
+//     this.status = options.status;
+//   }
+//   request.body = options.sdp;
+
+//   request.send(method, options);
+// };
 
 /**
  * Check if RTCSession is ready for a re-INVITE
@@ -15425,7 +15504,10 @@ RTCSession.prototype.isReadyToReinvite = function() {
  * Mute
  */
 RTCSession.prototype.mute = function(options) {
-  options = options || {audio:true, video:false};
+  options = options || {
+    audio: true,
+    video: false
+  };
 
   var
     audioMuted = false,
@@ -15455,7 +15537,10 @@ RTCSession.prototype.mute = function(options) {
  * Unmute
  */
 RTCSession.prototype.unmute = function(options) {
-  options = options || {audio:true, video:true};
+  options = options || {
+    audio: true,
+    video: true
+  };
 
   var
     audioUnMuted = false,
@@ -15500,110 +15585,100 @@ RTCSession.prototype.isMuted = function() {
 /**
  * Hold
  */
-RTCSession.prototype.hold = function() {
+// RTCSession.prototype.hold = function() {
 
-  if (this.status !== C.STATUS_WAITING_FOR_ACK && this.status !== C.STATUS_CONFIRMED) {
-    throw new Exceptions.InvalidStateError(this.status);
-  }
+//   if (this.status !== C.STATUS_WAITING_FOR_ACK && this.status !== C.STATUS_CONFIRMED) {
+//     throw new Exceptions.InvalidStateError(this.status);
+//   }
 
-  this.toogleMuteAudio(true);
-  this.toogleMuteVideo(true);
+//   this.toogleMuteAudio(true);
+//   this.toogleMuteVideo(true);
 
-  if (!this.isReadyToReinvite()) {
-    /* If there is a pending 'unhold' action, cancel it and don't queue this one
-     * Else, if there isn't any 'hold' action, add this one to the queue
-     * Else, if there is already a 'hold' action, skip
-     */
-    if (this.pending_actions.isPending('unhold')) {
-      this.pending_actions.pop('unhold');
-      return;
-    } else if (!this.pending_actions.isPending('hold')) {
-      this.pending_actions.push('hold');
-      return;
-    } else {
-      return;
-    }
-  } else {
-    if (this.local_hold === true) {
-      return;
-    }
-  }
+//   if (!this.isReadyToReinvite()) {
+//     /* If there is a pending 'unhold' action, cancel it and don't queue this one
+//      * Else, if there isn't any 'hold' action, add this one to the queue
+//      * Else, if there is already a 'hold' action, skip
+//      */
+//     if (this.pending_actions.isPending('unhold')) {
+//       this.pending_actions.pop('unhold');
+//       return;
+//     } else if (!this.pending_actions.isPending('hold')) {
+//       this.pending_actions.push('hold');
+//       return;
+//     } else {
+//       return;
+//     }
+//   } else {
+//     if (this.local_hold === true) {
+//       return;
+//     }
+//   }
 
-  this.onhold('local');
+//   this.onhold('local');
 
-  this.sendReinvite({
-    mangle: function(body){
-      var idx, length;
+//   this.sendReinvite({
+//     mangle: function(body) {
+//       var idx, length;
 
-      body = Parser.parseSDP(body);
+//       body = Parser.parseSDP(body);
 
-      length = body.media.length;
-      for (idx=0; idx<length; idx++) {
-        if (body.media[idx].direction === undefined) {
-          body.media[idx].direction = 'sendonly';
-        } else if (body.media[idx].direction === 'sendrecv') {
-          body.media[idx].direction = 'sendonly';
-        } else if (body.media[idx].direction === 'sendonly') {
-          body.media[idx].direction = 'inactive';
-        }
-      }
+//       length = body.media.length;
+//       for (idx = 0; idx < length; idx++) {
+//         if (body.media[idx].direction === undefined) {
+//           body.media[idx].direction = 'sendonly';
+//         } else if (body.media[idx].direction === 'sendrecv') {
+//           body.media[idx].direction = 'sendonly';
+//         } else if (body.media[idx].direction === 'sendonly') {
+//           body.media[idx].direction = 'inactive';
+//         }
+//       }
 
-      return Parser.writeSDP(body);
-    }
-  });
-};
+//       return Parser.writeSDP(body);
+//     }
+//   });
+// };
 
-/**
- * Unhold
- */
-RTCSession.prototype.unhold = function() {
+// /**
+//  * Unhold
+//  */
+// RTCSession.prototype.unhold = function() {
 
-  if (this.status !== C.STATUS_WAITING_FOR_ACK && this.status !== C.STATUS_CONFIRMED) {
-    throw new Exceptions.InvalidStateError(this.status);
-  }
+//   if (this.status !== C.STATUS_WAITING_FOR_ACK && this.status !== C.STATUS_CONFIRMED) {
+//     throw new Exceptions.InvalidStateError(this.status);
+//   }
 
-  if (!this.audioMuted) {
-    this.toogleMuteAudio(false);
-  }
+//   if (!this.audioMuted) {
+//     this.toogleMuteAudio(false);
+//   }
 
-  if (!this.videoMuted) {
-    this.toogleMuteVideo(false);
-  }
+//   if (!this.videoMuted) {
+//     this.toogleMuteVideo(false);
+//   }
 
-  if (!this.isReadyToReinvite()) {
-    /* If there is a pending 'hold' action, cancel it and don't queue this one
-     * Else, if there isn't any 'unhold' action, add this one to the queue
-     * Else, if there is already an 'unhold' action, skip
-     */
-    if (this.pending_actions.isPending('hold')) {
-      this.pending_actions.pop('hold');
-      return;
-    } else if (!this.pending_actions.isPending('unhold')) {
-      this.pending_actions.push('unhold');
-      return;
-    } else {
-      return;
-    }
-  } else {
-    if (this.local_hold === false) {
-      return;
-    }
-  }
+//   if (!this.isReadyToReinvite()) {
+//     /* If there is a pending 'hold' action, cancel it and don't queue this one
+//      * Else, if there isn't any 'unhold' action, add this one to the queue
+//      * Else, if there is already an 'unhold' action, skip
+//      */
+//     if (this.pending_actions.isPending('hold')) {
+//       this.pending_actions.pop('hold');
+//       return;
+//     } else if (!this.pending_actions.isPending('unhold')) {
+//       this.pending_actions.push('unhold');
+//       return;
+//     } else {
+//       return;
+//     }
+//   } else {
+//     if (this.local_hold === false) {
+//       return;
+//     }
+//   }
 
-  this.onunhold('local');
+//   this.onunhold('local');
 
-  this.sendReinvite();
-};
-
-/**
- * isOnHold
- */
-RTCSession.prototype.isOnHold = function() {
-  return {
-    local: this.local_hold,
-    remote: this.remote_hold
-  };
-};
+//   this.sendReinvite();
+// };
 
 
 /**
@@ -15626,7 +15701,7 @@ RTCSession.prototype.setInvite2xxTimer = function(request, body) {
       return;
     }
 
-    request.reply(200, null, ['Contact: '+ self.contact], body);
+    request.reply(200, null, ['Contact: ' + self.contact], body);
 
     if (timeout < Timers.T2) {
       timeout = timeout * 2;
@@ -15650,89 +15725,94 @@ RTCSession.prototype.setACKTimer = function() {
   var self = this;
 
   this.timers.ackTimer = setTimeout(function() {
-    if(self.status === C.STATUS_WAITING_FOR_ACK) {
+    if (self.status === C.STATUS_WAITING_FOR_ACK) {
       self.logger.debug('no ACK received, terminating the call');
       clearTimeout(self.timers.invite2xxTimer);
-      self.sendRequest(ExSIP_C.BYE);
+      self.sendBye();
+      // self.sendRequest(ExSIP_C.BYE);
       self.ended('remote', null, ExSIP_C.causes.NO_ACK);
     }
   }, Timers.TIMER_H);
 };
 
 
-  /**
-   * RTCPeerconnection handlers
-   */
+/**
+ * RTCPeerconnection handlers
+ */
 // Modified to support Firefox 22
-  RTCSession.prototype.getLocalStreams = function() {
-    try {
-      if (this.rtcMediaHandler.peerConnection.localStreams) {
-        return this.rtcMediaHandler &&
-          this.rtcMediaHandler.peerConnection &&
-          this.rtcMediaHandler.peerConnection.localStreams || [];
-      }
-      else {
-        return this.rtcMediaHandler &&
-          this.rtcMediaHandler.peerConnection &&
-          this.rtcMediaHandler.peerConnection.getLocalStreams() || [];
-      }
-    } catch(ex) {
-      return [];
+RTCSession.prototype.getLocalStreams = function() {
+  try {
+    if (this.rtcMediaHandler.peerConnection.localStreams) {
+      return this.rtcMediaHandler &&
+        this.rtcMediaHandler.peerConnection &&
+        this.rtcMediaHandler.peerConnection.localStreams || [];
+    } else {
+      return this.rtcMediaHandler &&
+        this.rtcMediaHandler.peerConnection &&
+        this.rtcMediaHandler.peerConnection.getLocalStreams() || [];
     }
-  };
+  } catch (ex) {
+    return [];
+  }
+};
 
-  RTCSession.prototype.getRemoteStreams = function() {
-    try {
-      if (this.rtcMediaHandler.peerConnection.remoteStreams) {
-        return this.rtcMediaHandler &&
-          this.rtcMediaHandler.peerConnection &&
-          this.rtcMediaHandler.peerConnection.remoteStreams || [];
-      }
-      else {
-        return this.rtcMediaHandler &&
-          this.rtcMediaHandler.peerConnection &&
-          this.rtcMediaHandler.peerConnection.getRemoteStreams() || [];
-      }
-    } catch(ex) {
-      return [];
+RTCSession.prototype.getRemoteStreams = function() {
+  try {
+    if (this.rtcMediaHandler.peerConnection.remoteStreams) {
+      return this.rtcMediaHandler &&
+        this.rtcMediaHandler.peerConnection &&
+        this.rtcMediaHandler.peerConnection.remoteStreams || [];
+    } else {
+      return this.rtcMediaHandler &&
+        this.rtcMediaHandler.peerConnection &&
+        this.rtcMediaHandler.peerConnection.getRemoteStreams() || [];
     }
-  };
+  } catch (ex) {
+    return [];
+  }
+};
 
-RTCSession.prototype.initRtcMediaHandler = function() {
+RTCSession.prototype.initRtcMediaHandler = function(options) {
+  options = options || {};
+  var constraints = options.RTCConstraints || this.ua.rtcConstraints() || {
+    "optional": [{
+      'DtlsSrtpKeyAgreement': 'true'
+    }]
+  };
   this.rtcMediaHandler = new RTCSession_RTCMediaHandler(this, {
-    constraints: {"optional": [{'DtlsSrtpKeyAgreement': 'true'}]}
+    constraints: constraints,
+    stun_servers: options.stun_servers,
+    turn_servers: options.turn_servers
   });
 };
-  /**
-   * Session Management
-   */
+/**
+ * Session Management
+ */
 
 RTCSession.prototype.init_incoming = function(request) {
   var expires,
     self = this,
     contentType = request.getHeader('Content-Type'),
 
-    waitForAnswer =  function() {
-      self.status = C.STATUS_WAITING_FOR_ANSWER;
+    waitForAnswer = function() {
+      self.setStatus(C.STATUS_WAITING_FOR_ANSWER);
 
       // Set userNoAnswerTimer
       self.timers.userNoAnswerTimer = setTimeout(function() {
-          request.reply(408);
-          self.failed('local',null, ExSIP_C.causes.NO_ANSWER);
-        }, self.ua.configuration.no_answer_timeout
-      );
+        request.reply(408);
+        self.failed('local', null, ExSIP_C.causes.NO_ANSWER);
+      }, self.ua.configuration.no_answer_timeout);
 
       /* Set expiresTimer
        * RFC3261 13.3.1
        */
       if (expires) {
         self.timers.expiresTimer = setTimeout(function() {
-            if(self.status === C.STATUS_WAITING_FOR_ANSWER) {
-              request.reply(487);
-              self.failed('system', null, ExSIP_C.causes.EXPIRES);
-            }
-          }, expires
-        );
+          if (self.status === C.STATUS_WAITING_FOR_ANSWER) {
+            request.reply(487);
+            self.failed('system', null, ExSIP_C.causes.EXPIRES);
+          }
+        }, expires);
       }
 
       // Fire 'newRTCSession' event.
@@ -15748,13 +15828,13 @@ RTCSession.prototype.init_incoming = function(request) {
     };
 
   // Check body and content type
-  if(request.body && (contentType !== 'application/sdp')) {
+  if (request.body && (contentType !== 'application/sdp')) {
     request.reply(415);
     return;
   }
 
   // Session parameter initialization
-  this.status = C.STATUS_INVITE_RECEIVED;
+  this.setStatus(C.STATUS_INVITE_RECEIVED);
   this.from_tag = request.from_tag;
   this.id = request.call_id + this.from_tag;
   this.request = request;
@@ -15766,7 +15846,7 @@ RTCSession.prototype.init_incoming = function(request) {
   this.ua.sessions[this.id] = this;
 
   //Get the Expires header value if exists
-  if(request.hasHeader('expires')) {
+  if (request.hasHeader('expires')) {
     expires = request.getHeader('expires') * 1000;
   }
 
@@ -15776,7 +15856,7 @@ RTCSession.prototype.init_incoming = function(request) {
   request.to_tag = Utils.newTag();
 
   // An error on dialog creation will fire 'failed' event
-  if(!this.createDialog(request, 'UAS', true)) {
+  if (!this.createDialog(request, 'UAS', true)) {
     request.reply(500, 'Missing Contact header field');
     return;
   }
@@ -15810,25 +15890,189 @@ RTCSession.prototype.init_incoming = function(request) {
 };
 
 RTCSession.prototype.connect = function(target, options) {
+  var self = this;
+  options = options || {};
+
+  this.data = options.data || {};
+
+  this.initRtcMediaHandler(options);
+
+  this.connectLocalMedia(target, options, function() {
+    self.sendInviteRequest(target, options);
+  }, function() {
+
+  });
+};
+
+RTCSession.prototype.close = function() {
+  var idx;
+
+  if (this.status === C.STATUS_TERMINATED) {
+    return;
+  }
+
+  this.logger.debug('closing INVITE session ' + this.id);
+
+  // 1st Step. Terminate media.
+  if (this.rtcMediaHandler) {
+    this.rtcMediaHandler.close();
+  }
+
+  // 2nd Step. Terminate signaling.
+
+  // Clear session timers
+  for (idx in this.timers) {
+    clearTimeout(this.timers[idx]);
+  }
+
+  // Terminate dialogs
+
+  // Terminate confirmed dialog
+  if (this.dialog) {
+    this.dialog.terminate();
+    delete this.dialog;
+  }
+
+  // Terminate early dialogs
+  for (idx in this.earlyDialogs) {
+    this.earlyDialogs[idx].terminate();
+    delete this.earlyDialogs[idx];
+  }
+
+  this.setStatus(C.STATUS_TERMINATED);
+
+  delete this.ua.sessions[this.id];
+};
+
+/**
+ * Dialog Management
+ * @private
+ */
+RTCSession.prototype.createDialog = function(message, type, early) {
+  var dialog, early_dialog,
+    local_tag = (type === 'UAS') ? message.to_tag : message.from_tag,
+    remote_tag = (type === 'UAS') ? message.from_tag : message.to_tag,
+    id = message.call_id + local_tag + remote_tag;
+
+  early_dialog = this.earlyDialogs[id];
+
+  // Early Dialog
+  if (early) {
+    if (early_dialog) {
+      return true;
+    } else {
+      early_dialog = new Dialog(this, message, type, Dialog.C.STATUS_EARLY);
+
+      // Dialog has been successfully created.
+      if (early_dialog.id) {
+        this.earlyDialogs[id] = early_dialog;
+        return true;
+      }
+      // Dialog not created due to an error.
+      else {
+        this.failed('remote', message, ExSIP_C.causes.INTERNAL_ERROR);
+        return false;
+      }
+    }
+  }
+
+  // Confirmed Dialog
+  else {
+    // In case the dialog is in _early_ state, update it
+    if (early_dialog) {
+      early_dialog.update(message, type);
+      this.dialog = early_dialog;
+      delete this.earlyDialogs[id];
+      return true;
+    }
+
+    // Otherwise, create a _confirmed_ dialog
+    dialog = new Dialog(this, message, type);
+
+    if (dialog.id) {
+      this.to_tag = message.to_tag;
+      this.dialog = dialog;
+      return true;
+    }
+    // Dialog not created due to an error
+    else {
+      this.failed('remote', message, ExSIP_C.causes.INTERNAL_ERROR);
+      return false;
+    }
+  }
+};
+
+RTCSession.prototype.connectRtcMediaHandler = function(stream, creationSucceeded, creationFailed, options) {
+  this.rtcMediaHandler.connect(stream, creationSucceeded, creationFailed, options);
+  this.dtmf.enableDtmfSender(stream, this.rtcMediaHandler.peerConnection);
+};
+
+RTCSession.prototype.sendData = function(data) {
+  this.rtcMediaHandler.sendData(data);
+};
+
+/**
+ * Get User Media
+ * @private
+ */
+RTCSession.prototype.getUserMedia = function(constraints, creationSucceeded, creationFailed, options) {
+  var self = this;
+
+  var userMediaSucceeded = function(stream) {
+    self.ua.localMedia = stream;
+    self.connectRtcMediaHandler(stream, creationSucceeded, creationFailed, options);
+    //      self.reconnectRtcMediaHandler(creationSucceeded, creationFailed, {localMedia: stream});
+  };
+
+  var userMediaFailed = function() {
+    if (self.status === C.STATUS_TERMINATED) {
+      return;
+    }
+    self.failed('local', null, ExSIP_C.causes.USER_DENIED_MEDIA_ACCESS);
+  };
+
+
+  if (this.ua.reuseLocalMedia() && this.ua.localMedia) {
+    this.rtcMediaHandler.localMedia = this.ua.localMedia;
+    userMediaSucceeded(this.ua.localMedia);
+  } else {
+    this.rtcMediaHandler.getUserMedia(
+      userMediaSucceeded,
+      userMediaFailed,
+      constraints
+    );
+  }
+};
+
+RTCSession.prototype.sendInviteRequest = function(target, options, inviteSuccessCallback, inviteFailureCallback) {
+  options = options || {};
+  options.status = C.STATUS_INVITE_SENT;
+  options.sdp = this.rtcMediaHandler.peerConnection.localDescription.sdp;
+  options.target = target;
+  this.sendRequest(ExSIP_C.INVITE, options, {
+    success: inviteSuccessCallback,
+    failure: inviteFailureCallback
+  });
+};
+/**
+ * Initial Request Sender
+ * @private
+ */
+RTCSession.prototype.createOutgoingRequestSender = function(target, method, options) {
   options = options || {};
 
   var event, requestParams, iceServers,
     originalTarget = target,
     eventHandlers = options.eventHandlers || {},
     extraHeaders = options.extraHeaders && options.extraHeaders.slice() || [],
-    mediaConstraints = options.mediaConstraints || {audio: true, video: true},
-    mediaStream = options.mediaStream || null,
-    RTCConstraints = options.RTCConstraints || {},
-    RTCOfferConstraints = options.RTCOfferConstraints || {},
     stun_servers = options.stun_servers || null,
     turn_servers = options.turn_servers || null;
 
-  this.data = options.data || {};
 
   if (stun_servers) {
     iceServers = UA.configuration_check.optional.stun_servers(stun_servers);
     if (!iceServers) {
-      throw new TypeError('Invalid stun_servers: '+ stun_servers);
+      throw new TypeError('Invalid stun_servers: ' + stun_servers);
     } else {
       stun_servers = iceServers;
     }
@@ -15836,8 +16080,8 @@ RTCSession.prototype.connect = function(target, options) {
 
   if (turn_servers) {
     iceServers = UA.configuration_check.optional.turn_servers(turn_servers);
-    if (!iceServers){
-      throw new TypeError('Invalid turn_servers: '+ turn_servers);
+    if (!iceServers) {
+      throw new TypeError('Invalid turn_servers: ' + turn_servers);
     } else {
       turn_servers = iceServers;
     }
@@ -15855,7 +16099,7 @@ RTCSession.prototype.connect = function(target, options) {
   // Check target validity
   target = this.ua.normalizeTarget(target);
   if (!target) {
-    throw new TypeError('Invalid target: '+ originalTarget);
+    throw new TypeError('Invalid target: ' + originalTarget);
   }
 
   // Check Session Status
@@ -15877,7 +16121,9 @@ RTCSession.prototype.connect = function(target, options) {
   // OutgoingSession specific parameters
   this.isCanceled = false;
 
-  requestParams = {from_tag: this.from_tag};
+  requestParams = {
+    from_tag: this.from_tag
+  };
 
   this.contact = this.ua.contact.toString({
     anonymous: this.anonymous,
@@ -15888,418 +16134,100 @@ RTCSession.prototype.connect = function(target, options) {
     requestParams.from_display_name = 'Anonymous';
     requestParams.from_uri = 'sip:anonymous@anonymous.invalid';
 
-    extraHeaders.push('P-Preferred-Identity: '+ this.ua.configuration.uri.toString());
+    extraHeaders.push('P-Preferred-Identity: ' + this.ua.configuration.uri.toString());
     extraHeaders.push('Privacy: id');
   }
 
-  extraHeaders.push('Contact: '+ this.contact);
-  extraHeaders.push('Content-Type: application/sdp');
+  extraHeaders.push('Contact: ' + this.contact);
+  extraHeaders.push('Allow: '+ Utils.getAllowedMethods(this.ua));
 
-  this.request = new SIPMessage.OutgoingRequest(ExSIP_C.INVITE, target, this.ua, requestParams, extraHeaders);
+  this.request = new SIPMessage.OutgoingRequest(method, target, this.ua, requestParams, extraHeaders);
 
   this.id = this.request.call_id + this.from_tag;
 
   this.logger = this.ua.getLogger('rtcsession', this.id);
-
-  this.rtcMediaHandler = new RTCSession_RTCMediaHandler(this, {
-    constraints: RTCConstraints,
-    stun_servers: stun_servers,
-    turn_servers: turn_servers
-    });
 
   //Save the session into the ua sessions collection.
   this.ua.sessions[this.id] = this;
 
   this.newRTCSession('local', this.request);
 
-  this.sendInitialRequest(mediaConstraints, RTCOfferConstraints, mediaStream);
+  return new RequestSender(this, this.ua);
+
 };
 
-RTCSession.prototype.close = function() {
-  var idx;
-
-  if(this.status === C.STATUS_TERMINATED) {
-    return;
-  }
-
-  this.logger.debug('closing INVITE session ' + this.id);
-
-  // 1st Step. Terminate media.
-  if (this.rtcMediaHandler){
-    this.rtcMediaHandler.close();
-  }
-
-  // 2nd Step. Terminate signaling.
-
-  // Clear session timers
-  for(idx in this.timers) {
-    clearTimeout(this.timers[idx]);
-  }
-
-  // Terminate dialogs
-
-  // Terminate confirmed dialog
-  if(this.dialog) {
-    this.dialog.terminate();
-    delete this.dialog;
-  }
-
-  // Terminate early dialogs
-  for(idx in this.earlyDialogs) {
-    this.earlyDialogs[idx].terminate();
-    delete this.earlyDialogs[idx];
-  }
-
-  this.status = C.STATUS_TERMINATED;
-
-  delete this.ua.sessions[this.id];
+RTCSession.prototype.sendReferRequest = function(sessionToTransfer, options) {
+  this.sessionToTransfer = sessionToTransfer;
+  options = options || {};
+  options.status = C.STATUS_REFER_SENT;
+  options.target = sessionToTransfer.dialog.remote_target;
+  this.sendRequest(ExSIP_C.REFER, options);
 };
 
-  /**
-   * Dialog Management
-   * @private
-   */
-  RTCSession.prototype.createDialog = function(message, type, early) {
-    var dialog, early_dialog,
-      local_tag = (type === 'UAS') ? message.to_tag : message.from_tag,
-      remote_tag = (type === 'UAS') ? message.from_tag : message.to_tag,
-      id = message.call_id + local_tag + remote_tag;
+RTCSession.prototype.sendNotifyRequest = function(options, successCallback, failureCallback) {
+  options = options || {};
+  var extraHeaders = ['Content-Type: message/sipfrag',
+    'Subscription-State: ' + (options.subscriptionState || "active;expires=60"),
+    'Event: refer'
+  ];
+  options = Utils.merge_options({
+    extraHeaders: extraHeaders
+  }, options);
+  this.sendRequest(ExSIP_C.NOTIFY, options, {
+    success: successCallback,
+    failure: failureCallback
+  });
+};
 
-    early_dialog = this.earlyDialogs[id];
+RTCSession.prototype.isHeld = function() {
+  return this.isOnHold;
+};
 
-    // Early Dialog
-    if (early) {
-      if (early_dialog) {
-        return true;
-      } else {
-        early_dialog = new Dialog(this, message, type, Dialog.C.STATUS_EARLY);
+RTCSession.prototype.held = function() {
+  this.isOnHold = true;
+  this.emit('held', this);
+};
 
-        // Dialog has been successfully created.
-        if(early_dialog.id) {
-          this.earlyDialogs[id] = early_dialog;
-          return true;
-        }
-        // Dialog not created due to an error.
-        else {
-          this.failed('remote', message, ExSIP_C.causes.INTERNAL_ERROR);
-          return false;
-        }
+RTCSession.prototype.resumed = function() {
+  this.isOnHold = false;
+  this.emit('resumed', this);
+};
+
+RTCSession.prototype.hold = function(inviteSuccessCallback, inviteFailureCallback) {
+  var self = this;
+  this.changeSession({audioMode: ExSIP_C.INACTIVE, audioPort: "0", videoMode: ExSIP_C.INACTIVE, videoPort: "0"}, function(){
+      self.held();
+      if(inviteSuccessCallback) {
+        inviteSuccessCallback();
       }
-    }
+    },
+    inviteFailureCallback);
+};
 
-    // Confirmed Dialog
-    else {
-      // In case the dialog is in _early_ state, update it
-      if (early_dialog) {
-        early_dialog.update(message, type);
-        this.dialog = early_dialog;
-        delete this.earlyDialogs[id];
-        return true;
+RTCSession.prototype.unhold = function(inviteSuccessCallback, inviteFailureCallback) {
+  var self = this;
+  this.changeSession({audioMode: ExSIP_C.SENDRECV, videoMode: ExSIP_C.SENDRECV}, function(){
+      self.resumed();
+      if(inviteSuccessCallback) {
+        inviteSuccessCallback();
       }
+    },
+    inviteFailureCallback);
+};
 
-      // Otherwise, create a _confirmed_ dialog
-      dialog = new Dialog(this, message, type);
-
-      if(dialog.id) {
-        this.to_tag = message.to_tag;
-        this.dialog = dialog;
-        return true;
-      }
-      // Dialog not created due to an error
-      else {
-        this.failed('remote', message, ExSIP_C.causes.INTERNAL_ERROR);
-        return false;
-      }
-    }
-  };
-
-
-  /**
-   * In dialog Request Reception
-   * @private
-   */
-  RTCSession.prototype.receiveRequest = function(request) {
-    var contentType, self = this;
-
-    if(request.method === ExSIP_C.CANCEL) {
-      /* RFC3261 15 States that a UAS may have accepted an invitation while a CANCEL
-       * was in progress and that the UAC MAY continue with the session established by
-       * any 2xx response, or MAY terminate with BYE. ExSIP does continue with the
-       * established session. So the CANCEL is processed only if the session is not yet
-       * established.
-       */
-
-      /*
-       * Terminate the whole session in case the user didn't accept nor reject the
-       *request opening the session.
-       */
-      if(this.status === C.STATUS_WAITING_FOR_ANSWER) {
-        this.status = C.STATUS_CANCELED;
-        this.request.reply(487);
-        this.failed('remote', request, ExSIP_C.causes.CANCELED);
-      }
-    } else {
-      // Requests arriving here are in-dialog requests.
-      switch(request.method) {
-        case ExSIP_C.ACK:
-          if(this.status === C.STATUS_WAITING_FOR_ACK) {
-            window.clearTimeout(this.timers.ackTimer);
-            window.clearTimeout(this.timers.invite2xxTimer);
-            this.status = C.STATUS_CONFIRMED;
-            if(request.body.length > 0) {
-              this.logger.log("set remoteDescription for late offer ACK", this.ua);
-              this.rtcMediaHandler.onMessage(request.body, function(){
-                this.logger.log("late offer remoteDescription success", self.ua);
-                self.started('local', undefined, true);
-              }, function(){
-                this.logger.log("late offer remoteDescription failure", self.ua);
-              });
-            }
-          }
-          break;
-        case ExSIP_C.BYE:
-          if(this.status === C.STATUS_CONFIRMED) {
-            request.reply(200);
-            this.ended('remote', request, ExSIP_C.causes.BYE);
-          }
-          break;
-        case ExSIP_C.INVITE:
-          if(this.status === C.STATUS_CONFIRMED) {
-            this.logger.log('re-INVITE received', this.ua);
-            this.request = request;
-            // accept empty reinvites
-            if(!request.body || request.body.length === 0) {
-              this.acceptReInvite();
-              return;
-            }
-
-            var description = new WebRTC.RTCSessionDescription({type: "offer", sdp: request.body});
-            var oldDescription = this.rtcMediaHandler.peerConnection.remoteDescription;
-            var audioAdd = description.hasActiveAudio() && (!oldDescription || !oldDescription.hasActiveAudio());
-            var videoAdd = description.hasActiveVideo() && (!oldDescription || !oldDescription.hasActiveVideo());
-            if(audioAdd || videoAdd) {
-              this.ua.emit("onReInvite", this.ua, {
-                session: this,
-                request: request,
-                audioAdd: audioAdd,
-                videoAdd: videoAdd
-              });
-            } else {
-              this.acceptReInvite();
-            }
-          }
-          break;
-        case ExSIP_C.INFO:
-          if(this.status === C.STATUS_CONFIRMED || this.status === C.STATUS_WAITING_FOR_ACK) {
-            contentType = request.getHeader('content-type');
-            if (contentType && (contentType.match(/^application\/dtmf-relay/i))) {
-              new RTCSession_DTMF(this).init_incoming(request);
-            }
-            else if (contentType && (contentType.match(/^application\/media_control\+xml/i))) {
-              request.reply(200);
-              self.started('local', undefined, true);
-            }
-          }
-          break;
-        case ExSIP_C.REFER:
-          if(this.status === C.STATUS_CONFIRMED) {
-            this.ua.processRefer(this, request);
-          }
-          break;
-        case ExSIP_C.NOTIFY:
-          if(this.status === C.STATUS_REFER_SENT) {
-            request.reply(200);
-            this.logger.log('received NOTIFY with body : ' + request.body, this.ua);
-            var status = parseInt(request.body.match(/SIP\/2.0\s(.*)\s/)[1], 10);
-            this.logger.log('NOTIFY status : ' + status, this.ua);
-
-            if(!this.sessionToTransfer) {
-              this.logger.warn('no transferred session for REFER session : ' + this.id, this.ua);
-              return;
-            }
-
-            if(status >= 200 && status <= 299) {
-              this.logger.log('terminate transferred session : ' + this.sessionToTransfer.id, this.ua);
-              this.sessionToTransfer.terminate();
-            } else if(status >= 400 && status <= 699) {
-              this.logger.warn('resuming session : ' + this.sessionToTransfer.id, this.ua);
-              this.sessionToTransfer.unhold(function(){
-                self.logger.log('resumed session : ' + self.sessionToTransfer.id, self.ua);
-              });
-            }
-          }
-      }
-    }
-  };
-
-
-  RTCSession.prototype.connectRtcMediaHandler = function(stream, creationSucceeded, creationFailed, options) {
-    this.rtcMediaHandler.connect(stream, creationSucceeded, creationFailed, options);
-    this.dtmf.enableDtmfSender(stream, this.rtcMediaHandler.peerConnection);
-  };
-
-  RTCSession.prototype.sendData = function(data) {
-    this.rtcMediaHandler.sendData(data);
-  };
-
-  /**
-   * Get User Media
-   * @private
-   */
-  RTCSession.prototype.getUserMedia = function(constraints, creationSucceeded, creationFailed, options) {
-    var self = this;
-
-    console.log(options);
-    var userMediaSucceeded = function(stream) {
-      self.ua.localMedia = stream;
-      self.connectRtcMediaHandler(stream, creationSucceeded, creationFailed, options);
-//      self.reconnectRtcMediaHandler(creationSucceeded, creationFailed, {localMedia: stream});
-    };
-
-    var userMediaFailed = function() {
-      if (self.status === C.STATUS_TERMINATED) {
-        return;
-      }
-      self.failed('local', null, ExSIP_C.causes.USER_DENIED_MEDIA_ACCESS);
-    };
-
-
-    if(this.ua.reuseLocalMedia() && this.ua.localMedia) {
-      this.rtcMediaHandler.localMedia = this.ua.localMedia;
-      userMediaSucceeded(this.ua.localMedia);
-    } else {
-      this.rtcMediaHandler.getUserMedia(
-        userMediaSucceeded,
-        userMediaFailed,
-        constraints
-      );
-    }
-  };
-
-  RTCSession.prototype.sendInviteRequest = function(target, options, inviteSuccessCallback, inviteFailureCallback) {
-    options = options || {};
-    options.status = C.STATUS_INVITE_SENT;
-    options.sdp = this.rtcMediaHandler.peerConnection.localDescription.sdp;
-    options.target = target;
-    this.sendRequest(ExSIP_C.INVITE, options, {inviteSuccess: inviteSuccessCallback, inviteFailure: inviteFailureCallback});
-  };
-  /**
-   * Initial Request Sender
-   * @private
-   */
-  RTCSession.prototype.createOutgoingRequest = function(target, method, options) {
-    options = options || {};
-
-    var requestParams,
-      invalidTarget = false,
-      extraHeaders = options.extraHeaders || [];
-
-    // Check target validity
-    try {
-      target = Utils.normalizeURI(target, this.ua.configuration.hostport_params);
-    } catch(e) {
-      target = URI.parse(ExSIP_C.INVALID_TARGET_URI);
-      invalidTarget = true;
-    }
-
-    // Set anonymous property
-    this.anonymous = options.anonymous;
-
-    // OutgoingSession specific parameters
-    this.isCanceled = false;
-    this.logger.log('outgoing request - setting isCanceled = false', this.ua);
-
-    this.received_100 = false;
-
-    this.from_tag = this.from_tag || Utils.newTag();
-    requestParams = {from_tag: this.from_tag};
-
-    this.contact = this.ua.contact.toString({
-      anonymous: this.anonymous,
-      outbound: true
-    });
-
-    if (this.anonymous) {
-      requestParams.from_display_name = 'Anonymous';
-      requestParams.from_uri = 'sip:anonymous@anonymous.invalid';
-
-      extraHeaders.push('P-Preferred-Identity: '+ this.ua.configuration.uri.toString());
-      extraHeaders.push('Privacy: id');
-    }
-
-    extraHeaders.push('Contact: '+ this.contact);
-    extraHeaders.push('Allow: '+ Utils.getAllowedMethods(this.ua));
-
-    this.request = new SIPMessage.OutgoingRequest(method, target, this.ua, requestParams, extraHeaders);
-
-    this.id = this.request.call_id + this.from_tag;
-
-    //Save the session into the ua sessions collection.
-    this.ua.sessions[this.id] = this;
-
-    this.newRTCSession('local', this.request);
-
-    if (invalidTarget) {
-      this.failed('local', null, ExSIP_C.causes.INVALID_TARGET);
-      this.logger.warn("invalid target : "+target, this.ua);
-    } else {
-      if (this.isCanceled || this.status === C.STATUS_TERMINATED) {
-        this.logger.warn("canceled or terminated", this.ua);
-        return;
-      }
-
-      return this.request;
-    }
-
-  };
-
-  RTCSession.prototype.sendReferRequest = function(sessionToTransfer, options) {
-    this.sessionToTransfer = sessionToTransfer;
-    options = options || {};
-    options.status = C.STATUS_REFER_SENT;
-    options.target = sessionToTransfer.dialog.remote_target;
-    this.sendRequest(ExSIP_C.REFER, options);
-  };
-
-  RTCSession.prototype.sendNotifyRequest = function(options, successCallback, failureCallback) {
-    options = options || {};
-    var extraHeaders = ['Content-Type: message/sipfrag',
-      'Subscription-State: '+(options.subscriptionState || "active;expires=60"),
-      'Event: refer'];
-    options = Utils.merge_options({extraHeaders: extraHeaders},  options);
-    this.sendRequest(ExSIP_C.NOTIFY, options, {success: successCallback, failure: failureCallback});
-  };
-
-  // RTCSession.prototype.hold = function(inviteSuccessCallback, inviteFailureCallback) {
-  //   var self = this;
-  //   this.changeSession({audioMode: ExSIP_C.INACTIVE, audioPort: "0", videoMode: ExSIP_C.INACTIVE, videoPort: "0"}, function(){
-  //       self.held();
-  //       if(inviteSuccessCallback) {
-  //         inviteSuccessCallback();
-  //       }
-  //     },
-  //     inviteFailureCallback);
-  // };
-
-  // RTCSession.prototype.unhold = function(inviteSuccessCallback, inviteFailureCallback) {
-  //   var self = this;
-  //   this.changeSession({audioMode: ExSIP_C.SENDRECV, videoMode: ExSIP_C.SENDRECV}, function(){
-  //       self.resumed();
-  //       if(inviteSuccessCallback) {
-  //         inviteSuccessCallback();
-  //       }
-  //     },
-  //     inviteFailureCallback);
-  // };
-
-  RTCSession.prototype.changeSession = function(sdpOptions, inviteSuccessCallback, inviteFailureCallback) {
-    var self = this;
-    this.reconnectRtcMediaHandler(function(){
-      self.sendInviteRequest(undefined, undefined, inviteSuccessCallback, inviteFailureCallback);
-    }, function(){
-      self.logger.error("Could not change local mode");
-    }, sdpOptions);
-  };
+RTCSession.prototype.changeSession = function(sdpOptions, inviteSuccessCallback, inviteFailureCallback) {
+  var self = this;
+  this.logger.debug('changeSession : '+JSON.stringify(sdpOptions));
+  this.reconnectRtcMediaHandler(function() {
+    self.logger.debug('changeSession : reconnectRtcMediaHandler : success');
+    self.receiveResponse = self.receiveReinviteResponse;
+    self.reinviteSucceeded = inviteSuccessCallback;
+    self.reinviteFailed = inviteFailureCallback;
+    self.sendInviteRequest(undefined, undefined);
+  }, function() {
+    self.logger.error("Could not change local mode");
+  }, sdpOptions);
+};
 
 /**
  * Reception of Response for Initial INVITE
@@ -16309,21 +16237,21 @@ RTCSession.prototype.receiveInviteResponse = function(response) {
     session = this;
 
   // Handle 2XX retransmissions and responses from forked requests
-  if (this.dialog && (response.status_code >=200 && response.status_code <=299)) {
+  if (this.dialog && (response.status_code >= 200 && response.status_code <= 299)) {
 
     /*
      * If it is a retransmission from the endpoint that established
      * the dialog, send an ACK
      */
     if (this.dialog.id.call_id === response.call_id &&
-        this.dialog.id.local_tag === response.from_tag &&
-        this.dialog.id.remote_tag === response.to_tag) {
+      this.dialog.id.local_tag === response.from_tag &&
+      this.dialog.id.remote_tag === response.to_tag) {
       this.sendRequest(ExSIP_C.ACK);
       return;
     }
 
     // If not, send an ACK  and terminate
-    else  {
+    else {
       dialog = new Dialog(this, response, 'UAC');
 
       if (dialog.error !== undefined) {
@@ -16332,65 +16260,71 @@ RTCSession.prototype.receiveInviteResponse = function(response) {
       }
 
       dialog.sendRequest({
-          owner: {status: C.STATUS_TERMINATED},
-          onRequestTimeout: function(){},
-          onTransportError: function(){},
-          onDialogError: function(){},
-          receiveResponse: function(){}
-        }, ExSIP_C.ACK);
+        owner: {
+          status: C.STATUS_TERMINATED
+        },
+        onRequestTimeout: function() {},
+        onTransportError: function() {},
+        onDialogError: function() {},
+        receiveResponse: function() {}
+      }, ExSIP_C.ACK);
 
       dialog.sendRequest({
-          owner: {status: C.STATUS_TERMINATED},
-          onRequestTimeout: function(){},
-          onTransportError: function(){},
-          onDialogError: function(){},
-          receiveResponse: function(){}
-        }, ExSIP_C.BYE);
+        owner: {
+          status: C.STATUS_TERMINATED
+        },
+        onRequestTimeout: function() {},
+        onTransportError: function() {},
+        onDialogError: function() {},
+        receiveResponse: function() {}
+      }, ExSIP_C.BYE);
       return;
     }
 
   }
 
   // Proceed to cancellation if the user requested.
-  if(this.isCanceled) {
+  if (this.isCanceled) {
     // Remove the flag. We are done.
     this.isCanceled = false;
 
-    if(response.status_code >= 100 && response.status_code < 200) {
+    if (response.status_code >= 100 && response.status_code < 200) {
       this.request.cancel(this.cancelReason);
-    } else if(response.status_code >= 200 && response.status_code < 299) {
+    } else if (response.status_code >= 200 && response.status_code < 299) {
       this.acceptAndTerminate(response);
     }
     return;
   }
 
-  if(this.status !== C.STATUS_INVITE_SENT && this.status !== C.STATUS_1XX_RECEIVED) {
+  if (this.status !== C.STATUS_INVITE_SENT && this.status !== C.STATUS_1XX_RECEIVED) {
     return;
   }
 
-  switch(true) {
+  switch (true) {
     case /^100$/.test(response.status_code):
+      this.received_100 = true;
       break;
     case /^1[0-9]{2}$/.test(response.status_code):
-      if(this.status !== C.STATUS_INVITE_SENT && this.status !== C.STATUS_1XX_RECEIVED) {
+      this.received_100 = true;
+      if (this.status !== C.STATUS_INVITE_SENT && this.status !== C.STATUS_1XX_RECEIVED) {
         break;
       }
 
       // Do nothing with 1xx responses without To tag.
-      if(!response.to_tag) {
+      if (!response.to_tag) {
         this.logger.warn('1xx response received without to tag');
         break;
       }
 
       // Create Early Dialog if 1XX comes with contact
-      if(response.hasHeader('contact')) {
+      if (response.hasHeader('contact')) {
         // An error on dialog creation will fire 'failed' event
-        if(!this.createDialog(response, 'UAC', true)) {
+        if (!this.createDialog(response, 'UAC', true)) {
           break;
         }
       }
 
-      this.status = C.STATUS_1XX_RECEIVED;
+      this.setStatus(C.STATUS_1XX_RECEIVED);
       this.progress('remote', response);
 
       if (!response.body) {
@@ -16401,14 +16335,14 @@ RTCSession.prototype.receiveInviteResponse = function(response) {
         'pranswer',
         response.body,
         /*
-        * OnSuccess.
-        * SDP Answer fits with Offer.
-        */
-        function() { },
+         * OnSuccess.
+         * SDP Answer fits with Offer.
+         */
+        function() {},
         /*
-        * OnFailure.
-        * SDP Answer does not fit with Offer.
-        */
+         * OnFailure.
+         * SDP Answer does not fit with Offer.
+         */
         function(e) {
           session.logger.warn(e);
           session.earlyDialogs[response.call_id + response.from_tag + response.to_tag].terminate();
@@ -16416,9 +16350,9 @@ RTCSession.prototype.receiveInviteResponse = function(response) {
       );
       break;
     case /^2[0-9]{2}$/.test(response.status_code):
-      this.status = C.STATUS_CONFIRMED;
+      this.setStatus(C.STATUS_CONFIRMED);
 
-      if(!response.body) {
+      if (!response.body) {
         this.acceptAndTerminate(response, 400, ExSIP_C.causes.MISSING_SDP);
         this.failed('remote', response, ExSIP_C.causes.BAD_MEDIA_DESCRIPTION);
         break;
@@ -16467,7 +16401,7 @@ RTCSession.prototype.createDialog = function(message, type, early) {
     remote_tag = (type === 'UAS') ? message.from_tag : message.to_tag,
     id = message.call_id + local_tag + remote_tag;
 
-    early_dialog = this.earlyDialogs[id];
+  early_dialog = this.earlyDialogs[id];
 
   // Early Dialog
   if (early) {
@@ -16477,7 +16411,7 @@ RTCSession.prototype.createDialog = function(message, type, early) {
       early_dialog = new Dialog(this, message, type, Dialog.C.STATUS_EARLY);
 
       // Dialog has been successfully created.
-      if(early_dialog.error) {
+      if (early_dialog.error) {
         this.logger.error(dialog.error);
         this.failed('remote', message, ExSIP_C.causes.INTERNAL_ERROR);
         return false;
@@ -16501,7 +16435,7 @@ RTCSession.prototype.createDialog = function(message, type, early) {
     // Otherwise, create a _confirmed_ dialog
     dialog = new Dialog(this, message, type);
 
-    if(dialog.error) {
+    if (dialog.error) {
       this.logger.error(dialog.error);
       this.failed('remote', message, ExSIP_C.causes.INTERNAL_ERROR);
       return false;
@@ -16532,13 +16466,13 @@ RTCSession.prototype.receiveReinvite = function(request) {
       }
     },
 
-    answer =  function() {
+    answer = function() {
       createSdp(
         // onSuccess
         function(body) {
           request.reply(200, null, ['Contact: ' + self.contact], body,
             function() {
-              self.status = C.STATUS_WAITING_FOR_ACK;
+              self.setStatus(C.STATUS_WAITING_FOR_ACK);
               self.setInvite2xxTimer(request, body);
               self.setACKTimer();
 
@@ -16567,7 +16501,7 @@ RTCSession.prototype.receiveReinvite = function(request) {
 
     sdp = Parser.parseSDP(request.body);
 
-    for (idx=0; idx < sdp.media.length; idx++) {
+    for (idx = 0; idx < sdp.media.length; idx++) {
       direction = sdp.direction || sdp.media[idx].direction || 'sendrecv';
 
       if (direction === 'sendonly' || direction === 'inactive') {
@@ -16579,9 +16513,9 @@ RTCSession.prototype.receiveReinvite = function(request) {
       'offer',
       request.body,
       /*
-      * onSuccess
-      * SDP Offer is valid
-      */
+       * onSuccess
+       * SDP Offer is valid
+       */
       answer,
       /*
        * onFailure
@@ -16609,7 +16543,7 @@ RTCSession.prototype.receiveUpdate = function(request) {
     contentType = request.getHeader('Content-Type'),
     hold = true;
 
-  if (! request.body) {
+  if (!request.body) {
     request.reply(200);
     return;
   }
@@ -16622,7 +16556,7 @@ RTCSession.prototype.receiveUpdate = function(request) {
 
   sdp = Parser.parseSDP(request.body);
 
-  for (idx=0; idx < sdp.media.length; idx++) {
+  for (idx = 0; idx < sdp.media.length; idx++) {
     direction = sdp.direction || sdp.media[idx].direction || 'sendrecv';
 
     if (direction !== 'sendonly' && direction !== 'inactive') {
@@ -16634,9 +16568,9 @@ RTCSession.prototype.receiveUpdate = function(request) {
     'offer',
     request.body,
     /*
-    * onSuccess
-    * SDP Offer is valid
-    */
+     * onSuccess
+     * SDP Offer is valid
+     */
     function() {
       self.rtcMediaHandler.createAnswer(
         function(body) {
@@ -16671,112 +16605,137 @@ RTCSession.prototype.receiveUpdate = function(request) {
  */
 RTCSession.prototype.receiveRequest = function(request) {
   var contentType,
-      self = this;
+    self = this;
 
-  if(request.method === ExSIP_C.CANCEL) {
+  if (request.method === ExSIP_C.CANCEL) {
     /* RFC3261 15 States that a UAS may have accepted an invitation while a CANCEL
-    * was in progress and that the UAC MAY continue with the session established by
-    * any 2xx response, or MAY terminate with BYE. ExSIP does continue with the
-    * established session. So the CANCEL is processed only if the session is not yet
-    * established.
-    */
+     * was in progress and that the UAC MAY continue with the session established by
+     * any 2xx response, or MAY terminate with BYE. ExSIP does continue with the
+     * established session. So the CANCEL is processed only if the session is not yet
+     * established.
+     */
 
     /*
-    * Terminate the whole session in case the user didn't accept (or yet send the answer)
-    * nor reject the request opening the session.
-    */
-    if(this.status === C.STATUS_WAITING_FOR_ANSWER  || this.status === C.STATUS_ANSWERED) {
-      this.status = C.STATUS_CANCELED;
+     * Terminate the whole session in case the user didn't accept (or yet send the answer)
+     * nor reject the request opening the session.
+     */
+    if (this.status === C.STATUS_WAITING_FOR_ANSWER || this.status === C.STATUS_ANSWERED) {
+      this.setStatus(C.STATUS_CANCELED);
       this.request.reply(487);
       this.failed('remote', request, ExSIP_C.causes.CANCELED);
     }
   } else {
     // Requests arriving here are in-dialog requests.
-    switch(request.method) {
+    switch (request.method) {
       case ExSIP_C.ACK:
-        if(this.status === C.STATUS_WAITING_FOR_ACK) {
+        if (this.status === C.STATUS_WAITING_FOR_ACK) {
           clearTimeout(this.timers.ackTimer);
           clearTimeout(this.timers.invite2xxTimer);
-
-          if (this.late_sdp) {
-            if (!request.body) {
-              self.ended('remote', request, ExSIP_C.causes.MISSING_SDP);
-              break;
-            }
-
-            this.rtcMediaHandler.onMessage(
-              'answer',
-              request.body,
-              /*
-               * onSuccess
-               * SDP Answer fits with Offer. Media will start
-               */
-              function() {
-                self.late_sdp = false;
-                self.status = C.STATUS_CONFIRMED;
-              },
-              /*
-               * onFailure
-               * SDP Answer does not fit the Offer. Accept the call and Terminate.
-               */
-              function(e) {
-                self.logger.warn(e);
-                self.ended('remote', request, ExSIP_C.causes.BAD_MEDIA_DESCRIPTION);
-              }
-            );
-          } else {
-            this.status = C.STATUS_CONFIRMED;
-          }
-
-          if (this.status === C.STATUS_CONFIRMED && !this.is_confirmed) {
-            this.confirmed('remote', request);
+          this.setStatus(C.STATUS_CONFIRMED);
+          if(request.body.length > 0) {
+            this.logger.log('set remoteDescription for late offer ACK');
+            this.rtcMediaHandler.onMessage(self.rtcMediaHandler.getSetRemoteLocationType(), request.body, function(){
+              self.logger.log('late offer remoteDescription success');
+              self.started('local', undefined, true);
+            }, function(){
+              self.logger.log('late offer remoteDescription failure');
+            });
           }
         }
         break;
       case ExSIP_C.BYE:
-        if(this.status === C.STATUS_CONFIRMED) {
+        if (this.status === C.STATUS_CONFIRMED) {
           request.reply(200);
           this.ended('remote', request, ExSIP_C.causes.BYE);
-        }
-        else if (this.status === C.STATUS_INVITE_RECEIVED) {
+        } else if (this.status === C.STATUS_INVITE_RECEIVED) {
           request.reply(200);
           this.request.reply(487, 'BYE Received');
           this.ended('remote', request, ExSIP_C.causes.BYE);
-        }
-        else {
+        } else {
           request.reply(403, 'Wrong Status');
         }
         break;
       case ExSIP_C.INVITE:
-        if(this.status === C.STATUS_CONFIRMED) {
+        if (this.status === C.STATUS_CONFIRMED) {
           this.logger.debug('re-INVITE received');
-          this.receiveReinvite(request);
-        }
-        else {
+          this.request = request;
+          // accept empty reinvites
+          if (!request.body || request.body.length === 0) {
+            this.acceptReInvite();
+            return;
+          }
+
+          var description = new WebRTC.RTCSessionDescription({
+            type: "offer",
+            sdp: request.body
+          });
+          var oldDescription = this.rtcMediaHandler.peerConnection.remoteDescription;
+          var audioAdd = description.hasActiveAudio() && (!oldDescription || !oldDescription.hasActiveAudio());
+          var videoAdd = description.hasActiveVideo() && (!oldDescription || !oldDescription.hasActiveVideo());
+          if (audioAdd || videoAdd) {
+            this.ua.emit("onReInvite", this.ua, {
+              session: this,
+              request: request,
+              audioAdd: audioAdd,
+              videoAdd: videoAdd
+            });
+          } else {
+            this.acceptReInvite();
+          }
+        } else {
           request.reply(403, 'Wrong Status');
         }
         break;
       case ExSIP_C.INFO:
-        if(this.status === C.STATUS_CONFIRMED || this.status === C.STATUS_WAITING_FOR_ACK || this.status === C.STATUS_INVITE_RECEIVED) {
+        if (this.status === C.STATUS_CONFIRMED || this.status === C.STATUS_WAITING_FOR_ACK || this.status === C.STATUS_INVITE_RECEIVED || this.status === C.STATUS_ANSWERED) {
           contentType = request.getHeader('content-type');
           if (contentType && (contentType.match(/^application\/dtmf-relay/i))) {
             new RTCSession_DTMF(this).init_incoming(request);
-          }
-          else {
+          } else if (contentType && (contentType.match(/^application\/media_control\+xml/i))) {
+            request.reply(200);
+            this.started('local', undefined, true);
+          } else {
             request.reply(415);
           }
-        }
-        else {
+        } else {
+          this.logger.debug('Wrong Status : ' + this.status);
           request.reply(403, 'Wrong Status');
         }
         break;
       case ExSIP_C.UPDATE:
-        if(this.status === C.STATUS_CONFIRMED) {
+        if (this.status === C.STATUS_CONFIRMED) {
           this.logger.debug('UPDATE received');
           this.receiveUpdate(request);
-        }
-        else {
+        } else {
           request.reply(403, 'Wrong Status');
+        }
+        break;
+      case ExSIP_C.REFER:
+        if(this.status === C.STATUS_CONFIRMED) {
+          this.ua.processRefer(this, request);
+        }
+        break;
+      case ExSIP_C.NOTIFY:
+        if(this.status === C.STATUS_REFER_SENT) {
+          request.reply(200);
+          this.logger.log('received NOTIFY with body : ' + request.body);
+          var status = parseInt(request.body.match(/SIP\/2.0\s(.*)\s/)[1], 10);
+          this.logger.log('NOTIFY status : ' + status);
+
+          if(!this.sessionToTransfer) {
+            this.logger.warn('no transferred session for REFER session : ' + this.id);
+            return;
+          }
+
+          if(status >= 200 && status <= 299) {
+            this.logger.log('terminate transferred session : ' + this.sessionToTransfer.id);
+            this.sessionToTransfer.terminate();
+          } else if(status >= 400 && status <= 699) {
+            this.logger.warn('resuming session : ' + this.sessionToTransfer.id);
+            this.sessionToTransfer.unhold(function(){
+              self.logger.log('resumed session : ' + self.sessionToTransfer.id);
+            });
+          }
         }
         break;
       default:
@@ -16786,98 +16745,102 @@ RTCSession.prototype.receiveRequest = function(request) {
 };
 
 
-  /**
-   * @private
-   */
-  RTCSession.prototype.acceptAndTerminate = function(response, status_code, reason_phrase) {
-    // Send ACK and BYE
-    // An error on dialog creation will fire 'failed' event
-    if (this.dialog || this.createDialog(response, 'UAC')) {
-      this.sendACK();
-      this.sendBye({
-        status_code: status_code,
-        reason_phrase: reason_phrase
-      });
+RTCSession.prototype.setStatus = function(status) {
+  if(this.logger) {
+    this.logger.debug('setStatus : '+Object.keys(C)[status]);    
+  } else {
+    console.log('setStatus : '+Object.keys(C)[status]);
+  }
+  this.status = status;
+};
+
+RTCSession.prototype.supports = function(name) {
+  var supported = this.request.getHeader("Supported");
+  return supported !== undefined && supported.indexOf(name) !== -1;
+};
+
+/**
+ * @private
+ */
+RTCSession.prototype.sendACK = function() {
+  this.sendRequest(ExSIP_C.ACK);
+};
+
+/**
+ * @private
+ */
+RTCSession.prototype.sendBye = function(options) {
+  var self = this;
+  options = options || {};
+  options.extraHeaders = options.extraHeaders || [];
+
+  var reason,
+    status_code = options.status_code,
+    reason_phrase = options.reason_phrase || ExSIP_C.REASON_PHRASE[status_code] || '',
+    body = options.body;
+
+  if (status_code && (status_code < 200 || status_code >= 700)) {
+    throw new TypeError('Invalid status_code: ' + status_code);
+  } else if (status_code) {
+    reason = 'SIP ;cause=' + status_code + '; text="' + reason_phrase + '"';
+    options.extraHeaders.push('Reason: ' + reason);
+  }
+
+  options.sdp = body;
+  options.status = C.STATUS_BYE_SENT;
+  var callbacks = {
+    success: function() {
+      self.sendACK();
+      self.ended('local', null, ExSIP_C.causes.BYE);
     }
   };
-
-  RTCSession.prototype.supports = function(name) {
-    var supported = this.request.getHeader("Supported");
-    return supported !== undefined && supported.indexOf(name) !== -1;
-  };
-
-  /**
-   * @private
-   */
-  RTCSession.prototype.sendACK = function() {
-    this.sendRequest(ExSIP_C.ACK);
-  };
-
-  /**
-   * @private
-   */
-  RTCSession.prototype.sendBye = function(options) {
-    options = options || {};
-    options.extraHeaders = options.extraHeaders || [];
-
-    var reason,
-      status_code = options.status_code,
-      reason_phrase = options.reason_phrase || ExSIP_C.REASON_PHRASE[status_code] || '',
-      body = options.body;
-
-    if (status_code && (status_code < 200 || status_code >= 700)) {
-      throw new TypeError('Invalid status_code: '+ status_code);
-    } else if (status_code) {
-      reason = 'SIP ;cause=' + status_code + '; text="' + reason_phrase + '"';
-      options.extraHeaders.push('Reason: '+ reason);
-    }
-
-    options.sdp = body;
-    options.status = C.STATUS_BYE_SENT;
-    this.sendRequest(ExSIP_C.BYE, options);
-  };
+  this.logger.log('sendBye : ' + callbacks);
+  this.sendRequest(ExSIP_C.BYE, options, callbacks);
+};
 
 
-  // /**
-  //  * @private
-  //  */
-  // RTCSession.prototype.sendRequest = function(method, options, requestCallbacks) {
-  //   var request;
-  //   options = options || {};
-  //   if(this.dialog) {
-  //     request = this.dialog.createRequest(method, options.extraHeaders);
-  //   } else {
-  //     request = this.createOutgoingRequest(options.target, method, options);
-  //   }
+/**
+ * @private
+ */
+RTCSession.prototype.sendRequest = function(method, options, requestCallbacks) {
+  var request_sender;
+  options = options || {};
+  if (this.dialog) {
+    this.logger.debug('sendRequest : dialog : ' + method);
+    request_sender = this.dialog.createRequestSender(this, method, options);
+  } else {
+    this.logger.debug('sendRequest : createOutgoingRequestSender : ' + method + ', ' + JSON.stringify(options));
+    request_sender = this.createOutgoingRequestSender(options.target, method, options);
+  }
 
-  //   if(!request) {
-  //     return;
-  //   }
+  if (!request_sender) {
+    return;
+  }
 
-  //   if(options.status) {
-  //     this.status = options.status;
-  //   }
-  //   request.body = options.sdp;
+  if (options.status) {
+    this.setStatus(options.status);
+  }
+  request_sender.request.body = options.sdp;
 
-  //   var hasSdp = request.body && request.body.length > 0;
-  //   if(!Utils.containsHeader(request.extraHeaders, "Content-Type") && hasSdp) {
-  //     request.extraHeaders.push('Content-Type: application/sdp');
-  //   }
+  var hasSdp = request_sender.request.body && request_sender.request.body.length > 0;
+  if (!Utils.containsHeader(request_sender.request.extraHeaders, "Content-Type") && hasSdp) {
+    request_sender.request.extraHeaders.push('Content-Type: application/sdp');
+  }
+  this.logger.debug('request_sender.request.extraHeaders : ' + Utils.toString(request_sender.request.extraHeaders));
 
-  //   var request_sender = new RequestSender(this, request, requestCallbacks);
-  //   request_sender.send();
-  // };
+  request_sender.send(requestCallbacks);
+};
 
-  /**
-   * Session Callbacks
-   */
+/**
+ * Session 1009s
+ */
 
-  /**
-   * Callback to be called from UA instance when TransportError occurs
-   * @private
-   */
+/**
+ * Callback to be called from UA instance when TransportError occurs
+ * @private
+ */
 RTCSession.prototype.onTransportError = function() {
-  if(this.status !== C.STATUS_TERMINATED) {
+  if (this.status !== C.STATUS_TERMINATED) {
     if (this.status === C.STATUS_CONFIRMED) {
       this.ended('system', null, ExSIP_C.causes.CONNECTION_ERROR);
     } else {
@@ -16889,84 +16852,96 @@ RTCSession.prototype.onTransportError = function() {
 /**
  * Initial Request Sender
  */
-RTCSession.prototype.sendInitialRequest = function(mediaConstraints, RTCOfferConstraints, mediaStream) {
+RTCSession.prototype.connectLocalMedia = function(target, options, success, failure) {
   var
-  self = this,
- request_sender = new RequestSender(self, this.ua),
+    self = this;
 
- // User media succeeded
- userMediaSucceeded = function(stream) {
-   self.rtcMediaHandler.addStream(
-     stream,
-     streamAdditionSucceeded,
-     streamAdditionFailed
-   );
- },
+  // // User media succeeded
+  // userMediaSucceeded = function(stream) {
+  //   self.rtcMediaHandler.addStream(
+  //     stream,
+  //     streamAdditionSucceeded,
+  //     streamAdditionFailed
+  //   );
+  // },
 
- // User media failed
- userMediaFailed = function() {
-   if (self.status === C.STATUS_TERMINATED) {
-     return;
-   }
+  // // User media failed
+  // userMediaFailed = function() {
+  //   if (self.status === C.STATUS_TERMINATED) {
+  //     return;
+  //   }
 
-   self.failed('local', null, ExSIP_C.causes.USER_DENIED_MEDIA_ACCESS);
- },
+  //   self.failed('local', null, ExSIP_C.causes.USER_DENIED_MEDIA_ACCESS);
+  // },
 
- // rtcMediaHandler.addStream successfully added
- streamAdditionSucceeded = function() {
-   self.connecting(self.request);
+  // // rtcMediaHandler.addStream successfully added
+  // streamAdditionSucceeded = function() {
+  //   self.connecting(self.request);
 
-   if (self.status === C.STATUS_TERMINATED) {
-     return;
-   }
+  //   if (self.status === C.STATUS_TERMINATED) {
+  //     return;
+  //   }
 
-   self.rtcMediaHandler.createOffer(
-     offerCreationSucceeded,
-     offerCreationFailed,
-     RTCOfferConstraints
-   );
- },
+  //   self.rtcMediaHandler.createOffer(
+  //     offerCreationSucceeded,
+  //     offerCreationFailed,
+  //     RTCOfferConstraints
+  //   );
+  // },
 
- // rtcMediaHandler.addStream failed
- streamAdditionFailed = function() {
-   if (self.status === C.STATUS_TERMINATED) {
-     return;
-   }
+  // // rtcMediaHandler.addStream failed
+  // streamAdditionFailed = function() {
+  //   if (self.status === C.STATUS_TERMINATED) {
+  //     return;
+  //   }
 
-   self.failed('system', null, ExSIP_C.causes.WEBRTC_ERROR);
- },
+  //   self.failed('system', null, ExSIP_C.causes.WEBRTC_ERROR);
+  // },
 
- // rtcMediaHandler.createOffer succeeded
- offerCreationSucceeded = function(offer) {
-   if (self.isCanceled || self.status === C.STATUS_TERMINATED) {
-     return;
-   }
+  // // rtcMediaHandler.createOffer succeeded
+  // offerCreationSucceeded = function(offer) {
+  //   if (self.isCanceled || self.status === C.STATUS_TERMINATED) {
+  //     return;
+  //   }
 
-   self.request.body = offer;
-   self.status = C.STATUS_INVITE_SENT;
-   request_sender.send();
- },
+  //   self.request.body = offer;
+  //   self.status = C.STATUS_INVITE_SENT;
+  //   request_sender.send();
+  // },
 
- // rtcMediaHandler.createOffer failed
- offerCreationFailed = function() {
-   if (self.status === C.STATUS_TERMINATED) {
-     return;
-   }
+  // // rtcMediaHandler.createOffer failed
+  // offerCreationFailed = function() {
+  //   if (self.status === C.STATUS_TERMINATED) {
+  //     return;
+  //   }
 
-   self.failed('system', null, ExSIP_C.causes.WEBRTC_ERROR);
- };
+  //   self.failed('system', null, ExSIP_C.causes.WEBRTC_ERROR);
+  // };
 
- this.receiveResponse = this.receiveInviteResponse;
+  this.receiveResponse = this.receiveInviteResponse;
+  var mediaConstraints = options.mediaConstraints || {
+    audio: true,
+    video: true
+  };
 
- if (mediaStream) {
-   userMediaSucceeded(mediaStream);
- } else {
-   this.rtcMediaHandler.getUserMedia(
-     userMediaSucceeded,
-     userMediaFailed,
-     mediaConstraints
-   );
- }
+  this.getUserMedia(mediaConstraints, function() {
+    self.logger.log('getUserMedia succeeded');
+    success();
+  }, function() {
+    self.logger.log('getUserMedia failed');
+    self.failed('local', null, ExSIP_C.causes.WEBRTC_ERROR);
+    failure();
+  }, options);
+
+  // if (mediaStream) {
+  //   userMediaSucceeded(mediaStream);
+  // } else {
+  //   this.getUserMedia(
+  //     mediaConstraints,
+  //     userMediaSucceeded,
+  //     userMediaFailed
+  //   );
+  // }
 };
 
 /**
@@ -16984,12 +16959,12 @@ RTCSession.prototype.sendReinvite = function(options) {
   if (eventHandlers.succeeded) {
     this.reinviteSucceeded = eventHandlers.succeeded;
   } else {
-    this.reinviteSucceeded = function(){};
+    this.reinviteSucceeded = function() {};
   }
   if (eventHandlers.failed) {
     this.reinviteFailed = eventHandlers.failed;
   } else {
-    this.reinviteFailed = function(){};
+    this.reinviteFailed = function() {};
   }
 
   extraHeaders.push('Contact: ' + this.contact);
@@ -16998,7 +16973,7 @@ RTCSession.prototype.sendReinvite = function(options) {
   this.receiveResponse = this.receiveReinviteResponse;
 
   this.rtcMediaHandler.createOffer(
-    function(body){
+    function(body) {
       if (mangle) {
         body = mangle(body);
       }
@@ -17019,146 +16994,6 @@ RTCSession.prototype.sendReinvite = function(options) {
 
 
 /**
- * Reception of Response for Initial INVITE
- */
-RTCSession.prototype.receiveInviteResponse = function(response) {
-  var dialog,
-    session = this;
-
-  // Handle 2XX retransmissions and responses from forked requests
-  if (this.dialog && (response.status_code >=200 && response.status_code <=299)) {
-
-    /*
-     * If it is a retransmission from the endpoint that established
-     * the dialog, send an ACK
-     */
-    if (this.dialog.id.call_id === response.call_id &&
-        this.dialog.id.local_tag === response.from_tag &&
-        this.dialog.id.remote_tag === response.to_tag) {
-      this.sendRequest(ExSIP_C.ACK);
-      return;
-    }
-
-    // If not, send an ACK  and terminate
-    else  {
-      dialog = new Dialog(this, response, 'UAC');
-
-      if (dialog.error !== undefined) {
-        this.logger.error(dialog.error);
-        return;
-      }
-
-      dialog.sendRequest({
-          owner: {status: C.STATUS_TERMINATED},
-          onRequestTimeout: function(){},
-          onTransportError: function(){},
-          onDialogError: function(){},
-          receiveResponse: function(){}
-        }, ExSIP_C.ACK);
-
-      dialog.sendRequest({
-          owner: {status: C.STATUS_TERMINATED},
-          onRequestTimeout: function(){},
-          onTransportError: function(){},
-          onDialogError: function(){},
-          receiveResponse: function(){}
-        }, ExSIP_C.BYE);
-      return;
-    }
-
-  }
-
-  // Proceed to cancellation if the user requested.
-  if(this.isCanceled) {
-    // Remove the flag. We are done.
-    this.isCanceled = false;
-
-    if(response.status_code >= 100 && response.status_code < 200) {
-      this.request.cancel(this.cancelReason);
-    } else if(response.status_code >= 200 && response.status_code < 299) {
-      this.acceptAndTerminate(response);
-    }
-    return;
-  }
-
-  if(this.status !== C.STATUS_INVITE_SENT && this.status !== C.STATUS_1XX_RECEIVED) {
-    return;
-  }
-
-  switch(true) {
-    case /^100$/.test(response.status_code):
-      break;
-    case /^1[0-9]{2}$/.test(response.status_code):
-      if(this.status !== C.STATUS_INVITE_SENT && this.status !== C.STATUS_1XX_RECEIVED) {
-        break;
-      }
-
-      // Do nothing with 1xx responses without To tag.
-      if(!response.to_tag) {
-        this.logger.warn('1xx response received without to tag');
-        break;
-      }
-
-      // Create Early Dialog if 1XX comes with contact
-      if(response.hasHeader('contact')) {
-        // An error on dialog creation will fire 'failed' event
-        if(!this.createDialog(response, 'UAC', true)) {
-          break;
-        }
-      }
-
-      this.status = C.STATUS_1XX_RECEIVED;
-      this.progress('remote', response);
-
-      if (!response.body) {
-        break;
-      }
-
-      this.rtcMediaHandler.onMessage(
-        'pranswer',
-        response.body,
-        /*
-        * OnSuccess.
-        * SDP Answer fits with Offer.
-        */
-        function() { },
-        /*
-        * OnFailure.
-        * SDP Answer does not fit with Offer.
-        */
-        function(e) {
-          session.logger.warn(e);
-          session.earlyDialogs[response.call_id + response.from_tag + response.to_tag].terminate();
-        }
-      );
-      break;
-    case /^2[0-9]{2}$/.test(response.status_code):
-      this.status = C.STATUS_CONFIRMED;
-
-      if(!response.body) {
-        this.acceptAndTerminate(response, 400, ExSIP_C.causes.MISSING_SDP);
-        this.failed('remote', response, ExSIP_C.causes.BAD_MEDIA_DESCRIPTION);
-        break;
-      }
-    }
-  };
-
-  /**
-   * Callback to be called from UA instance when RequestTimeout occurs
-   * @private
-   */
-  RTCSession.prototype.onRequestTimeout = function() {
-    if(this.status !== C.STATUS_TERMINATED) {
-      if (this.status === C.STATUS_CONFIRMED) {
-        this.ended('system', null, ExSIP_C.causes.REQUEST_TIMEOUT);
-      } else {
-        this.ua.reconnect();
-        this.failed('system', null, ExSIP_C.causes.CONNECTION_ERROR);
-      }
-    }
-  };
-
-/**
  * Reception of Response for in-dialog INVITE
  */
 RTCSession.prototype.receiveReinviteResponse = function(response) {
@@ -17170,14 +17005,14 @@ RTCSession.prototype.receiveReinviteResponse = function(response) {
     return;
   }
 
-  switch(true) {
+  switch (true) {
     case /^1[0-9]{2}$/.test(response.status_code):
       break;
     case /^2[0-9]{2}$/.test(response.status_code):
-      this.status = C.STATUS_CONFIRMED;
+      this.setStatus(C.STATUS_CONFIRMED);
       this.sendRequest(ExSIP_C.ACK);
 
-      if(!response.body) {
+      if (!response.body) {
         this.reinviteFailed();
         break;
       } else if (contentType !== 'application/sdp') {
@@ -17193,19 +17028,25 @@ RTCSession.prototype.receiveReinviteResponse = function(response) {
          * SDP Answer fits with Offer.
          */
         function() {
-          self.reinviteSucceeded();
+          if(self.reinviteSucceeded) {
+            self.reinviteSucceeded();
+          }
         },
         /*
          * onFailure
          * SDP Answer does not fit the Offer.
          */
         function() {
-          self.reinviteFailed();
+          if(self.reinviteFailed) {
+            self.reinviteFailed();            
+          }
         }
       );
       break;
     default:
-      this.reinviteFailed();
+      if(this.reinviteFailed) {
+        this.reinviteFailed();        
+      }
   }
 };
 
@@ -17222,13 +17063,14 @@ RTCSession.prototype.acceptAndTerminate = function(response, status_code, reason
   // An error on dialog creation will fire 'failed' event
   if (this.dialog || this.createDialog(response, 'UAC')) {
     this.sendRequest(ExSIP_C.ACK);
-    this.sendRequest(ExSIP_C.BYE, {
-      extraHeaders: extraHeaders
-    });
+    this.sendBye();
+    // this.sendRequest(ExSIP_C.BYE, {
+    //   extraHeaders: extraHeaders
+    // });
   }
 
   // Update session status.
-  this.status = C.STATUS_TERMINATED;
+  this.setStatus(C.STATUS_TERMINATED);
 };
 
 
@@ -17261,7 +17103,7 @@ RTCSession.prototype.toogleMuteVideo = function(mute) {
  */
 
 RTCSession.prototype.onTransportError = function() {
-  if(this.status !== C.STATUS_TERMINATED) {
+  if (this.status !== C.STATUS_TERMINATED) {
     if (this.status === C.STATUS_CONFIRMED) {
       this.ended('system', null, ExSIP_C.causes.CONNECTION_ERROR);
     } else {
@@ -17270,18 +17112,23 @@ RTCSession.prototype.onTransportError = function() {
   }
 };
 
+/**
+ * Callback to be called from UA instance when RequestTimeout occurs
+ * @private
+ */
 RTCSession.prototype.onRequestTimeout = function() {
-  if(this.status !== C.STATUS_TERMINATED) {
+  if (this.status !== C.STATUS_TERMINATED) {
     if (this.status === C.STATUS_CONFIRMED) {
       this.ended('system', null, ExSIP_C.causes.REQUEST_TIMEOUT);
     } else {
-      this.failed('system', null, ExSIP_C.causes.REQUEST_TIMEOUT);
+      this.ua.reconnect();
+      this.failed('system', null, ExSIP_C.causes.CONNECTION_ERROR);
     }
   }
 };
 
 RTCSession.prototype.onDialogError = function(response) {
-  if(this.status !== C.STATUS_TERMINATED) {
+  if (this.status !== C.STATUS_TERMINATED) {
     if (this.status === C.STATUS_CONFIRMED) {
       this.ended('remote', response, ExSIP_C.causes.DIALOG_ERROR);
     } else {
@@ -17302,7 +17149,7 @@ RTCSession.prototype.newRTCSession = function(originator, request) {
     session.direction = 'incoming';
     session.local_identity = request.to;
     session.remote_identity = request.from;
-  } else if (originator === 'local'){
+  } else if (originator === 'local') {
     session.direction = 'outgoing';
     session.local_identity = request.from;
     session.remote_identity = request.to;
@@ -17317,7 +17164,7 @@ RTCSession.prototype.newRTCSession = function(originator, request) {
 
 RTCSession.prototype.connecting = function(request) {
   var session = this,
-  event_name = 'connecting';
+    event_name = 'connecting';
 
   session.emit(event_name, session, {
     request: request
@@ -17337,6 +17184,18 @@ RTCSession.prototype.progress = function(originator, response) {
 RTCSession.prototype.accepted = function(originator, message) {
   var session = this,
     event_name = 'accepted';
+
+  session.start_time = new Date();
+
+  session.emit(event_name, session, {
+    originator: originator,
+    response: message || null
+  });
+};
+
+RTCSession.prototype.started = function(originator, message) {
+  var session = this,
+    event_name = 'started';
 
   session.start_time = new Date();
 
@@ -17423,7 +17282,7 @@ RTCSession.prototype.onunmute = function(options) {
 };
 
 RTCSession.prototype.onReadyToReinvite = function() {
-  var action = (this.pending_actions.length() > 0)? this.pending_actions.shift() : null;
+  var action = (this.pending_actions.length() > 0) ? this.pending_actions.shift() : null;
 
   if (!action) {
     return;
@@ -17435,8 +17294,7 @@ RTCSession.prototype.onReadyToReinvite = function() {
     this.unhold();
   }
 };
-
-},{"./Constants":7,"./Dialog":8,"./EventEmitter":11,"./Exceptions":13,"./Parser":19,"./RTCSession/DTMF":21,"./RTCSession/RTCMediaHandler":23,"./RTCSession/Request":24,"./RequestSender":26,"./SIPMessage":27,"./Timers":28,"./Transactions":29,"./UA":31,"./URI":32,"./Utils":33,"./WebRTC":34}],21:[function(require,module,exports){
+},{"./Constants":7,"./Dialog":8,"./EventEmitter":11,"./Exceptions":13,"./Parser":19,"./RTCSession/DTMF":21,"./RTCSession/RTCMediaHandler":23,"./RequestSender":25,"./SIPMessage":26,"./Timers":27,"./UA":30,"./Utils":32,"./WebRTC":33}],21:[function(require,module,exports){
 module.exports = DTMF;
 
 
@@ -17457,7 +17315,6 @@ DTMF.C = C;
 /**
  * Dependencies.
  */
-var ExSIP_C = require('../Constants');
 var EventEmitter = require('../EventEmitter');
 var Exceptions = require('../Exceptions');
 var RTCSession = require('../RTCSession');
@@ -17465,17 +17322,26 @@ var Utils = require('../Utils');
 
 
 function DTMF(session) {
+  var events = [
+  'succeeded',
+  'failed'
+  ];
+
   this.sendTimeoutId = null;
   this.queuedDTMFs = [];
   this.session = session;
-  this.logger = session.ua.getLogger('ExSIP.rtcsession.dtmf', session.id);
-  this.owner = session;
-}
-DTMF.prototype = new EventEmitter();
+  this.direction = null;
+  this.tone = null;
+  this.duration = null;
+  this.interToneGap = null;
+  this.dtmfSender = null;
 
-DTMF.prototype.isDebug = function() {
-  return this.session.ua.isDebug();
-};
+  this.logger = this.session.ua.getLogger('rtcsession.dtmf', session.id);
+
+  this.initEvents(events);
+}
+
+DTMF.prototype = new EventEmitter();
 
 DTMF.prototype.send = function(tone, options) {
   var event, eventHandlers, extraHeaders;
@@ -17487,9 +17353,8 @@ DTMF.prototype.send = function(tone, options) {
   this.direction = 'outgoing';
 
   // Check RTCSession Status
-  if (this.owner.status !== RTCSession.C.STATUS_CONFIRMED &&
-    this.owner.status !== RTCSession.C.STATUS_WAITING_FOR_ACK) {
-    throw new Exceptions.InvalidStateError(this.owner.status);
+  if (this.session.status !== RTCSession.C.STATUS_CONFIRMED && this.session.status !== RTCSession.C.STATUS_WAITING_FOR_ACK) {
+    throw new Exceptions.InvalidStateError(this.session.status);
   }
 
   // Get DTMF options
@@ -17528,7 +17393,7 @@ DTMF.prototype.processQueuedDTMFs = function() {
   }
   if(!this.dtmfSender.canInsertDTMF) {
     this.logger.log("DTMF Sender cannot insert DTMF - trying again after timeout", this.session.ua);
-    this.sendTimeoutId = window.setTimeout(function(){
+    this.sendTimeoutId = setTimeout(function(){
       self.processQueuedDTMFs();
     }, 1000);
     return;
@@ -17545,16 +17410,16 @@ DTMF.prototype.processQueuedDTMFs = function() {
   var duration = durationSum / this.queuedDTMFs.length;
   var interToneGap = interToneGapSum / this.queuedDTMFs.length;
 
-  this.logger.log("sending DTMF with tones "+tones+", duration "+duration+", gap "+interToneGap, this.session.ua);
+  this.logger.log("sending DTMF with tones "+tones+", duration "+duration+", gap "+interToneGap);
   this.dtmfSender.insertDTMF(tones, duration, interToneGap);
 };
 
 DTMF.prototype.queueTone = function(tone, duration, interToneGap) {
-  this.logger.log("Queue tone : "+tone, this.session.ua);
-  window.clearTimeout(this.sendTimeoutId);
+  this.logger.log("Queue tone : "+tone);
+  clearTimeout(this.sendTimeoutId);
   this.queuedDTMFs.push({tone: tone, duration: duration, interToneGap: interToneGap});
   var self = this;
-  this.sendTimeoutId = window.setTimeout(function(){
+  this.sendTimeoutId = setTimeout(function(){
     self.processQueuedDTMFs();
   }, 2 * duration);
 };
@@ -17564,17 +17429,17 @@ DTMF.prototype.onDTMFSent = function(tone) {
     return;
   }
 
-  this.logger.log("Sent Dtmf tone: " + tone.tone, this.session.ua);
+  this.logger.log("Sent Dtmf tone: " + tone.tone);
   for(var i=0; i < this.queuedDTMFs.length; i++) {
     var dtmf = this.queuedDTMFs[i];
     if(tone.tone === dtmf.tone) {
       this.queuedDTMFs.splice(i, 1);
-      this.logger.log("removing from queued tones - remaining queue: \t" + Utils.toString(this.queuedDTMFs), this.session.ua);
+      this.logger.log("removing from queued tones - remaining queue: \t" + Utils.toString(this.queuedDTMFs));
       break;
     } else if(dtmf.tone.indexOf(tone.tone) !== -1) {
       dtmf.tone = dtmf.tone.replace(tone.tone, '');
       this.queuedDTMFs[i] = dtmf;
-      this.logger.log("removing from queued tones as contained - remaining queue: \t" + Utils.toString(this.queuedDTMFs), this.session.ua);
+      this.logger.log("removing from queued tones as contained - remaining queue: \t" + Utils.toString(this.queuedDTMFs));
       break;
     }
   }
@@ -17587,10 +17452,11 @@ DTMF.prototype.onDTMFSent = function(tone) {
 
 DTMF.prototype.enableDtmfSender = function(localstream, peerConnection) {
   var self = this;
+  this.logger.debug('enableDtmfSender : '+localstream);
   if (localstream !== null) {
     var local_audio_track = localstream.getAudioTracks()[0];
     this.dtmfSender = peerConnection.createDTMFSender(local_audio_track);
-    this.logger.log("Created DTMF Sender with canInsertDTMF : "+this.dtmfSender.canInsertDTMF, this.session.ua);
+    this.logger.log("Created DTMF Sender with canInsertDTMF : "+this.dtmfSender.canInsertDTMF);
 
     this.dtmfSender.ontonechange = function(tone) {
       self.onDTMFSent(tone);
@@ -17632,31 +17498,29 @@ DTMF.prototype.receiveResponse = function(response) {
   }
 };
 
+/**
+ * @private
+ */
 DTMF.prototype.onRequestTimeout = function() {
   this.emit('failed', this, {
     originator: 'system',
-    cause: ExSIP_C.causes.REQUEST_TIMEOUT
+    cause: C.causes.REQUEST_TIMEOUT
   });
-  this.owner.onRequestTimeout();
 };
 
+/**
+ * @private
+ */
 DTMF.prototype.onTransportError = function() {
   this.emit('failed', this, {
     originator: 'system',
-    cause: ExSIP_C.causes.CONNECTION_ERROR
+    cause: C.causes.CONNECTION_ERROR
   });
-  this.owner.onTransportError();
 };
 
-DTMF.prototype.onDialogError = function(response) {
-  this.emit('failed', this, {
-    originator: 'remote',
-    response: response,
-    cause: ExSIP_C.causes.DIALOG_ERROR
-  });
-  this.owner.onDialogError(response);
-};
-
+/**
+ * @private
+ */
 DTMF.prototype.init_incoming = function(request) {
   var body,
     reg_tone = /^(Signal\s*?=\s*?)([0-9A-D#*]{1})(\s)?.*/,
@@ -17682,14 +17546,14 @@ DTMF.prototype.init_incoming = function(request) {
   if (!this.tone || !this.duration) {
     this.logger.warn('invalid INFO DTMF received, discarded');
   } else {
-    this.owner.emit('newDTMF', this.owner, {
+    this.session.emit('newDTMF', this.session, {
       originator: 'remote',
       dtmf: this,
       request: request
     });
   }
 };
-},{"../Constants":7,"../EventEmitter":11,"../Exceptions":13,"../RTCSession":20,"../Utils":33}],22:[function(require,module,exports){
+},{"../EventEmitter":11,"../Exceptions":13,"../RTCSession":20,"../Utils":32}],22:[function(require,module,exports){
 module.exports = DataChannel;
 
 var EventEmitter = require('../EventEmitter');
@@ -17869,10 +17733,11 @@ RTCMediaHandler.prototype = {
 
     var setRemoteDescription = function(successCallback) {
       self.onMessage(
+        self.getSetRemoteLocationType(),
         options.remoteSdp,
         successCallback || connectSucceeded, function(e){
-          this.logger.error("setRemoteDescription failed");
-          this.logger.error(Utils.toString(e));
+          self.logger.error("setRemoteDescription failed");
+          self.logger.error(Utils.toString(e));
           connectFailed();
         }
       );
@@ -17895,7 +17760,7 @@ RTCMediaHandler.prototype = {
     var streamAdditionSucceeded = function() {
       var hasRemoteSdp = options.remoteSdp && options.remoteSdp.length > 0;
       var isRemote = options.isAnswer && hasRemoteSdp;
-      this.logger.log("isRemote : "+isRemote+", isAnswer : "+options.isAnswer+", hasRemoteSdp :"+hasRemoteSdp, self.session.ua);
+      self.logger.log("isRemote : "+isRemote+", isAnswer : "+options.isAnswer+", hasRemoteSdp :"+hasRemoteSdp, self.session.ua);
       if(isRemote) {
         if(options.localDescription) {
           setRemoteDescription(setLocalDescription);
@@ -17930,7 +17795,7 @@ RTCMediaHandler.prototype = {
   createOffer: function(onSuccess, onFailure, constraints, options) {
     var self = this;
     options = options || {};
-    
+
     function onSetLocalDescriptionSuccess() {
       if (self.peerConnection.iceGatheringState === 'complete' && (self.peerConnection.iceConnectionState === 'connected' || self.peerConnection.iceConnectionState === 'completed')) {
         self.ready = true;
@@ -18160,12 +18025,13 @@ RTCMediaHandler.prototype = {
     };
 
     this.peerConnection.onicecandidate = function(e) {
-      if (e.candidate) {
+      if (e.candidate && self.session.ua.rtcMediaHandlerOptions.enableICE) {
         self.logger.debug('ICE candidate received: '+ e.candidate.candidate);
       } else if (self.onIceCompleted !== undefined) {
-        setTimeout(function() {
+        self.logger.log('onIceCompleted with ready : '+ self.ready+" and candidate : "+Utils.toString(e.candidate), self.session.ua);
+        if(!self.ready && e.candidate) {
           self.onIceCompleted();
-        });
+        }      
       }
     };
 
@@ -18240,15 +18106,16 @@ RTCMediaHandler.prototype = {
   * -param {Function} onFailure
   */
   onMessage: function(type, body, onSuccess, onFailure) {
-    var description = new WebRTC.RTCSessionDescription({type: this.getSetRemoteLocationType(), sdp:body});
+    var self = this;
+    var description = new WebRTC.RTCSessionDescription({type: type, sdp:body});
     if(this.session.ua.rtcMediaHandlerOptions.videoBandwidth) {
       description.setVideoBandwidth(this.session.ua.rtcMediaHandlerOptions.videoBandwidth);
-      this.logger.log("Modifying SDP with videoBandwidth : "+this.session.ua.rtcMediaHandlerOptions.videoBandwidth, this.session.ua);
+      this.logger.log("Modifying SDP with videoBandwidth : "+this.session.ua.rtcMediaHandlerOptions.videoBandwidth);
     }
 
     if(this.peerConnection) {
       if(!description.sdp) {
-        this.logger.log('empty sdp on setRemoteDescription - calling success', this.session.ua);
+        this.logger.log('empty sdp on setRemoteDescription - calling success');
         onSuccess();
         return;
       }
@@ -18258,151 +18125,21 @@ RTCMediaHandler.prototype = {
         this.logger.log('removed unsupported media : '+unsupportedMedia);
         this.peerConnection.remoteUnsupportedMedia = unsupportedMedia;
       }
-      this.logger.log('peerConnection.setRemoteDescription for type '+description.type+' : '+description.sdp, this.session.ua);
+
+      this.logger.log('peerConnection.setRemoteDescription : description : '+Utils.toString(description));
+      this.logger.log('peerConnection.setRemoteDescription for type '+description.type+' : '+description.sdp);
       this.peerConnection.setRemoteDescription(
         description,
         onSuccess,
         function(e){
-          console.log("----------setRemoteDescription with error : "+JSON.stringify(e));
+          self.logger.log("----------setRemoteDescription with error : "+JSON.stringify(e));
           onFailure(e);
         }
       );
     }
   }
 };
-},{"../Constants":7,"../Utils":33,"../WebRTC":34,"./DataChannel":22}],24:[function(require,module,exports){
-module.exports = Request;
-
-/**
- * Dependencies.
- */
-var ExSIP_C = require('../Constants');
-var EventEmitter = require('../EventEmitter');
-var Exceptions = require('../Exceptions');
-var RTCSession = require('../RTCSession');
-var Utils = require('../Utils');
-
-
-function Request(session, callbacks) {
-  var events = [
-    'progress',
-    'succeeded',
-    'failed'
-  ];
-
-  this.owner = session;
-  this.callbacks = callbacks || {};
-
-  this.logger = session.ua.getLogger('ExSIP.rtcsession.request', session.id);
-  this.initEvents(events);
-}
-
-
-Request.prototype = new EventEmitter();
-
-
-Request.prototype.send = function(method, options) {
-  options = options || {};
-
-  var event,
-    extraHeaders = options.extraHeaders && options.extraHeaders.slice() || [],
-    eventHandlers = options.eventHandlers || {},
-    body = options.body || null;
-
-  if (method === undefined) {
-    throw new TypeError('Not enough arguments');
-  }
-
-  // Check RTCSession Status
-  if (this.owner.status !== RTCSession.C.STATUS_1XX_RECEIVED &&
-    this.owner.status !== RTCSession.C.STATUS_WAITING_FOR_ANSWER &&
-    this.owner.status !== RTCSession.C.STATUS_WAITING_FOR_ACK &&
-    this.owner.status !== RTCSession.C.STATUS_CONFIRMED &&
-    this.owner.status !== RTCSession.C.STATUS_TERMINATED) {
-    throw new Exceptions.InvalidStateError(this.owner.status);
-  }
-
-  /*
-   * Allow sending BYE in TERMINATED status since the RTCSession
-   * could had been terminated before the ACK had arrived.
-   * RFC3261 Section 15, Paragraph 2
-   */
-  else if (this.owner.status === RTCSession.C.STATUS_TERMINATED && method !== ExSIP_C.BYE) {
-    throw new Exceptions.InvalidStateError(this.owner.status);
-  }
-
-  // Set event handlers
-  for (event in eventHandlers) {
-    this.on(event, eventHandlers[event]);
-  }
-
-  this.owner.dialog.sendRequest(this, method, {
-    extraHeaders: extraHeaders,
-    body: body
-  });
-};
-
-Request.prototype.receiveResponse = function(response) {
-  var cause;
-
-  switch(true) {
-    case /^1[0-9]{2}$/.test(response.status_code):
-      this.emit('progress', this, {
-        originator: 'remote',
-        response: response
-      });
-      break;
-
-    case /^2[0-9]{2}$/.test(response.status_code):
-      if(this.callbacks.success) {
-        this.callbacks.success();
-      }
-      this.emit('succeeded', this, {
-        originator: 'remote',
-        response: response
-      });
-      break;
-
-    default:
-      if(this.callbacks.failure) {
-        this.callbacks.failure();
-      }
-      cause = Utils.sipErrorCause(response.status_code);
-      this.emit('failed', this, {
-        originator: 'remote',
-        response: response,
-        cause: cause
-      });
-      break;
-  }
-};
-
-Request.prototype.onRequestTimeout = function() {
-  this.emit('failed', this, {
-    originator: 'system',
-    cause: ExSIP_C.causes.REQUEST_TIMEOUT
-  });
-  this.owner.onRequestTimeout();
-};
-
-Request.prototype.onTransportError = function() {
-  this.emit('failed', this, {
-    originator: 'system',
-    cause: ExSIP_C.causes.CONNECTION_ERROR
-  });
-  this.owner.onTransportError();
-};
-
-Request.prototype.onDialogError = function(response) {
-  this.emit('failed', this, {
-    originator: 'remote',
-    response: response,
-    cause: ExSIP_C.causes.DIALOG_ERROR
-  });
-  this.owner.onDialogError(response);
-};
-
-},{"../Constants":7,"../EventEmitter":11,"../Exceptions":13,"../RTCSession":20,"../Utils":33}],25:[function(require,module,exports){
+},{"../Constants":7,"../Utils":32,"../WebRTC":33,"./DataChannel":22}],24:[function(require,module,exports){
 module.exports = Registrator;
 
 
@@ -18690,6 +18427,10 @@ Registrator.prototype = {
     });
   },
 
+  onTransportConnected: function() {
+    this.register();
+  },
+
   onTransportClosed: function() {
     if (this.registrationTimer !== null) {
       clearTimeout(this.registrationTimer);
@@ -18708,7 +18449,7 @@ Registrator.prototype = {
     }
   }
 };
-},{"./Constants":7,"./RequestSender":26,"./SIPMessage":27,"./Utils":33}],26:[function(require,module,exports){
+},{"./Constants":7,"./RequestSender":25,"./SIPMessage":26,"./Utils":32}],25:[function(require,module,exports){
 module.exports = RequestSender;
 
 
@@ -18738,11 +18479,14 @@ function RequestSender(applicant, ua) {
 
 
 /**
-* Create the client transaction and send the message.
-*/
+ * Create the client transaction and send the message.
+ */
 RequestSender.prototype = {
-  send: function() {
-    switch(this.method) {
+  send: function(callbacks) {
+    this.callbacks = callbacks || {};
+    this.logger.log('callbacks : ' + this.callbacks);
+
+    switch (this.method) {
       case "INVITE":
         this.clientTransaction = new Transactions.InviteClientTransaction(this, this.request, this.ua.transport);
         break;
@@ -18756,33 +18500,36 @@ RequestSender.prototype = {
   },
 
   /**
-  * Callback fired when receiving a request timeout error from the client transaction.
-  * To be re-defined by the applicant.
-  */
+   * Callback fired when receiving a request timeout error from the client transaction.
+   * To be re-defined by the applicant.
+   */
   onRequestTimeout: function() {
+    this.logger.log('******************** onRequestTimeout : '+this.applicant);
     this.applicant.onRequestTimeout();
   },
 
   /**
-  * Callback fired when receiving a transport error from the client transaction.
-  * To be re-defined by the applicant.
-  */
+   * Callback fired when receiving a transport error from the client transaction.
+   * To be re-defined by the applicant.
+   */
   onTransportError: function() {
     this.applicant.onTransportError();
   },
 
   /**
-  * Called from client transaction when receiving a correct response to the request.
-  * Authenticate request if needed or pass the response back to the applicant.
-  */
+   * Called from client transaction when receiving a correct response to the request.
+   * Authenticate request if needed or pass the response back to the applicant.
+   */
   receiveResponse: function(response) {
     var cseq, challenge, authorization_header_name,
       status_code = response.status_code;
+    this.logger.log('receiveResponse: callbacks : ' + this.callbacks);
+
 
     /*
-    * Authentication
-    * Authenticate once. _challenged_ flag used to avoid infinite authentications.
-    */
+     * Authentication
+     * Authenticate once. _challenged_ flag used to avoid infinite authentications.
+     */
     if ((status_code === 401 || status_code === 407)) {
 
       // Get and parse the appropriate WWW-Authenticate or Proxy-Authenticate header.
@@ -18795,7 +18542,7 @@ RequestSender.prototype = {
       }
 
       // Verify it seems a valid challenge.
-      if (! challenge) {
+      if (!challenge) {
         this.logger.warn(response.status_code + ' with wrong or missing challenge, cannot authenticate');
         this.applicant.receiveResponse(response);
         return;
@@ -18819,13 +18566,13 @@ RequestSender.prototype = {
 
         if (response.method === ExSIP_C.REGISTER) {
           cseq = this.applicant.cseq += 1;
-        } else if (this.request.dialog){
+        } else if (this.request.dialog) {
           cseq = this.request.dialog.local_seqnum += 1;
         } else {
           cseq = this.request.cseq + 1;
           this.request.cseq = cseq;
         }
-        this.request.setHeader('cseq', cseq +' '+ this.method);
+        this.request.setHeader('cseq', cseq + ' ' + this.method);
 
         this.request.setHeader(authorization_header_name, this.credentials.toString());
         this.send();
@@ -18835,9 +18582,25 @@ RequestSender.prototype = {
     } else {
       this.applicant.receiveResponse(response);
     }
+
+    switch (true) {
+      case /^1[0-9]{2}$/.test(response.status_code):
+        break;
+      case /^2[0-9]{2}$/.test(response.status_code):
+        if (this.callbacks.success) {
+          this.callbacks.success();
+        }
+        break;
+      default:
+        if (this.callbacks.failure) {
+          this.callbacks.failure(response);
+        }
+        break;
+    }
+
   }
 };
-},{"./Constants":7,"./DigestAuthentication":10,"./Transactions":29,"./UA":31}],27:[function(require,module,exports){
+},{"./Constants":7,"./DigestAuthentication":10,"./Transactions":28,"./UA":30}],26:[function(require,module,exports){
 module.exports = {
   OutgoingRequest: OutgoingRequest,
   IncomingRequest: IncomingRequest,
@@ -18873,19 +18636,21 @@ function OutgoingRequest(method, ruri, ua, params, extraHeaders, body) {
 
   params = params || {};
 
+  this.logger = ua.getLogger('ExSIP.sipmessage');
+
+  this.logger.debug('OutgoingRequest.extraHeaders : '+method+', '+ruri+', '+extraHeaders);
   // Mandatory parameters check
   if(!method || !ruri || !ua) {
     return null;
   }
 
-  this.logger = ua.getLogger('ExSIP.sipmessage');
   this.ua = ua;
   this.headers = {};
   this.method = method;
   this.ruri = ruri;
   this.body = body;
   this.extraHeaders = extraHeaders && extraHeaders.slice() || [];
-
+this.logger.debug('OutgoingRequest.extraHeaders 2 : '+this.extraHeaders);
   // Fill the Common SIP Request Headers
 
   // Route
@@ -19038,7 +18803,7 @@ OutgoingRequest.prototype = {
     var msg = '', header, length, idx,
       supported = [];
 
-    msg += this.method + ' ' + this.ruri + ' SIP/2.0\r\n';
+    msg += this.method + ' ' + (this.ua.configuration.enable_ims && this.ruri.isPhoneNumber() ? this.ruri + ";user=phone" : this.ruri) + ' SIP/2.0\r\n';
 
     for (header in this.headers) {
       length = this.headers[header].length;
@@ -19067,9 +18832,14 @@ OutgoingRequest.prototype = {
     supported.push('outbound');
 
     // Allow
-    msg += 'Allow: '+ ExSIP_C.ALLOWED_METHODS +'\r\n';
+    if(!this.hasHeader('Allow')) {
+      msg += 'Allow: '+ ExSIP_C.ALLOWED_METHODS +'\r\n';      
+    }
 
-    msg += 'Supported: ' +  supported +'\r\n';
+    if(!this.hasHeader('Supported')) {
+      msg += 'Supported: ' +  supported +'\r\n';
+    }
+    
     msg += 'User-Agent: ' + ExSIP_C.USER_AGENT +'\r\n';
 
     if(this.body) {
@@ -19320,7 +19090,9 @@ IncomingRequest.prototype.reply = function(code, reason, extraHeaders, body, onS
 
   if(body) {
     length = Utils.str_utf8_length(body);
-    response += 'Content-Type: application/sdp\r\n';
+    if(!this.hasHeader('Content-Type')) {
+      response += 'Content-Type: application/sdp\r\n';      
+    }
     response += 'Content-Length: ' + length + '\r\n\r\n';
     response += body;
   } else {
@@ -19382,7 +19154,10 @@ function IncomingResponse(ua) {
   this.status_code = null;
   this.reason_phrase = null;
 }
-},{"./Constants":7,"./Grammar":14,"./NameAddrHeader":18,"./Utils":33}],28:[function(require,module,exports){
+
+IncomingResponse.prototype = new IncomingMessage();
+
+},{"./Constants":7,"./Grammar":14,"./NameAddrHeader":18,"./Utils":32}],27:[function(require,module,exports){
 var T1 = 500,
   T2 = 4000,
   T4 = 5000;
@@ -19406,7 +19181,7 @@ var Timers = {
 
 module.exports = Timers;
 
-},{}],29:[function(require,module,exports){
+},{}],28:[function(require,module,exports){
 module.exports = {
   C: null,
   NonInviteClientTransaction: NonInviteClientTransaction,
@@ -19526,7 +19301,6 @@ NonInviteClientTransaction.prototype.receiveResponse = function(response) {
   var
     tr = this,
     status_code = response.status_code;
-
   if(status_code < 200) {
     switch(this.state) {
       case C.STATUS_TRYING:
@@ -19571,6 +19345,7 @@ function InviteClientTransaction(request_sender, request, transport) {
 
   this.logger = request_sender.ua.getLogger('ExSIP.transaction.ict', this.id);
 
+  this.logger.log('******************** request_sender : ' + request_sender);
   if (request_sender.ua.configuration.hack_via_tcp) {
     via_transport = 'TCP';
   }
@@ -19647,6 +19422,7 @@ InviteClientTransaction.prototype.timer_B = function() {
   if(this.state === C.STATUS_CALLING) {
     this.stateChanged(C.STATUS_TERMINATED);
     this.request_sender.ua.destroyTransaction(this);
+    this.logger.debug('InviteClientTransaction.timer_B : ' + this.request_sender);
     this.request_sender.onRequestTimeout();
   }
 };
@@ -19714,6 +19490,7 @@ InviteClientTransaction.prototype.receiveResponse = function(response) {
   status_code = response.status_code;
 
   if(status_code >= 100 && status_code <= 199) {
+    this.logger.debug('received 1xx : '+this.state);
     switch(this.state) {
       case C.STATUS_CALLING:
         this.stateChanged(C.STATUS_PROCEEDING);
@@ -19738,18 +19515,29 @@ InviteClientTransaction.prototype.receiveResponse = function(response) {
         break;
     }
   } else if(status_code >= 300 && status_code <= 699) {
-    switch(this.state) {
-      case C.STATUS_CALLING:
-      case C.STATUS_PROCEEDING:
-        this.stateChanged(C.STATUS_COMPLETED);
-        this.sendACK(response);
-        this.request_sender.receiveResponse(response);
-        break;
-      case C.STATUS_COMPLETED:
-        this.sendACK(response);
-        break;
+      switch(this.state) {
+        case C.STATUS_CALLING:
+        case C.STATUS_PROCEEDING:
+          this.state = C.STATUS_COMPLETED;
+          this.sendACK(response);
+          if(status_code === 503) {
+            var options = {code: 503, reason: 'Service Unavailable', retryCallback: function(transport){
+              transport.ua.once("connected", function(e){
+                if(transport === e.data.transport) {
+                  tr.send();
+                }
+              });
+            }};
+            this.request_sender.ua.onTransportError(this.request_sender.ua.transport, options);
+          } else {
+            this.request_sender.receiveResponse(response);
+          }
+          break;
+        case C.STATUS_COMPLETED:
+          this.sendACK(response);
+          break;
+      }
     }
-  }
 };
 
 
@@ -19873,9 +19661,13 @@ NonInviteServerTransaction.prototype.receiveResponse = function(status_code, res
       case C.STATUS_PROCEEDING:
         this.stateChanged(C.STATUS_COMPLETED);
         this.last_response = response;
-        this.J = setTimeout(function() {
-          tr.timer_J();
-        }, Timers.TIMER_J);
+        if(Timers.TIMER_J === 0) {
+            tr.timer_J();
+        } else {
+          this.J = setTimeout(function() {
+            tr.timer_J();
+          }, Timers.TIMER_J);
+        }
         if(!this.transport.send(response)) {
           this.onTransportError();
           if (onFailure) {
@@ -20084,7 +19876,7 @@ function checkTransaction(ua, request) {
           case C.STATUS_ACCEPTED:
             break;
         }
-        this.logger.log("checkTransaction failed for INVITE request and server transaction in state : "+tr.state, ua);
+        console.log("checkTransaction failed for INVITE request and server transaction in state : "+tr.state);
         return true;
       }
       break;
@@ -20113,18 +19905,19 @@ function checkTransaction(ua, request) {
         if(tr.state === C.STATUS_PROCEEDING) {
           return false;
         } else {
-          this.logger.log("checkTransaction failed for CANCEL request and server transaction in state : "+tr.state, ua);
+          console.log("checkTransaction failed for CANCEL request and server transaction in state : "+tr.state);
           return true;
         }
       } else {
         request.reply_sl(481);
-        this.logger.log("checkTransaction failed for CANCEL request and no server transaction", ua);
+        console.log("checkTransaction failed for CANCEL request and no server transaction");
         return true;
       }
       break;
     default:
 
       // Non-INVITE Server Transaction RFC 3261 17.2.2
+      console.log('***************** nist : ', Object.keys(ua.transactions.nist));
       tr = ua.transactions.nist[request.via_branch];
       if(tr) {
         switch(tr.state) {
@@ -20135,14 +19928,14 @@ function checkTransaction(ua, request) {
             tr.transport.send(tr.last_response);
             break;
         }
-        this.logger.log("checkTransaction failed for non invite server transaction in state : "+tr.state, ua);
+        console.log("checkTransaction failed for non invite server transaction in state : "+tr.state);
         return true;
       }
       break;
   }
 }
 
-},{"./Constants":7,"./EventEmitter":11,"./Timers":28}],30:[function(require,module,exports){
+},{"./Constants":7,"./EventEmitter":11,"./Timers":27}],29:[function(require,module,exports){
 (function (global){
 module.exports = Transport;
 
@@ -20208,7 +20001,7 @@ Transport.prototype = {
   send: function(msg) {
     var message = msg.toString();
 
-    if(this.ws && this.ws.readyState === WebSocket.OPEN) {
+    if(this.ws && this.readyState() === WebSocket.OPEN) {
       if (this.ua.configuration.trace_sip === true) {
         this.logger.debug('sending WebSocket message:\n\n' + message + '\n');
       }
@@ -20256,7 +20049,7 @@ Transport.prototype = {
   connect: function() {
     var transport = this;
 
-    if(this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+    if(this.ws && (this.readyState() === WebSocket.OPEN || this.readyState() === WebSocket.CONNECTING)) {
       this.logger.log('WebSocket ' + this.server.ws_uri + ' is already connected');
       return false;
     }
@@ -20277,6 +20070,7 @@ Transport.prototype = {
       else {
         this.ws = new WebSocket(this.server.ws_uri, this.ws_options);
       }
+      this.ua.usedServers.push(this.server);
 
       this.ws.onopen = function() {
         transport.onOpen();
@@ -20379,6 +20173,7 @@ Transport.prototype = {
 
     // WebSocket text message.
     else {
+      this.logger.log('onMessage : '+this.ua.configuration.trace_sip);
       if (this.ua.configuration.trace_sip === true) {
         this.logger.debug('received WebSocket text message:\n\n' + data + '\n');
       }
@@ -20443,17 +20238,21 @@ Transport.prototype = {
       this.logger.warn('maximum reconnection attempts for WebSocket ' + this.server.ws_uri);
       this.ua.onTransportError(this);
     } else {
-      this.logger.log('trying to reconnect to WebSocket ' + this.server.ws_uri + ' (reconnection attempt ' + this.reconnection_attempts + ')');
+      this.logger.log('trying to reconnect to WebSocket ' + this.server.ws_uri + ' (reconnection attempt ' + this.reconnection_attempts + ')'+ ' (reconnection timeout '+this.ua.configuration.ws_server_reconnection_timeout+')');
 
-      this.reconnectTimer = setTimeout(function() {
+      if(this.ua.configuration.ws_server_reconnection_timeout === 0) {
         transport.connect();
-        transport.reconnectTimer = null;
-      }, this.ua.configuration.ws_server_reconnection_timeout * 1000);
+      } else {
+        this.reconnectTimer = setTimeout(function() {
+          transport.connect();
+          transport.reconnectTimer = null;
+        }, this.ua.configuration.ws_server_reconnection_timeout * 1000);
+      }
     }
   }
 };
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./Constants":7,"./Parser":19,"./SIPMessage":27,"./UA":31,"./sanityCheck":35,"ws":5}],31:[function(require,module,exports){
+},{"./Constants":7,"./Parser":19,"./SIPMessage":26,"./UA":30,"./sanityCheck":34,"ws":5}],30:[function(require,module,exports){
 module.exports = UA;
 
 
@@ -20492,6 +20291,7 @@ var WebRTC = require('./WebRTC');
 var Exceptions = require('./Exceptions');
 var URI = require('./URI');
 var Grammar = require('./Grammar');
+var Utils = require('./Utils');
 
 
 
@@ -20513,12 +20313,14 @@ function UA(configuration) {
     'unregistered',
     'registrationFailed',
     'newRTCSession',
-    'newMessage'
+    'newMessage',
+    'onReInvite'
   ];
 
   this.log = new LoggerFactory();
   this.logger = this.getLogger('ua');
   this.usedServers = [];
+  this.rtcMediaHandlerOptions = {};
 
   this.cache = {
     credentials: {}
@@ -20640,7 +20442,7 @@ UA.prototype.isDebug = function() {
  * @param {Boolean}
  */
 UA.prototype.isRegistered = function() {
-  if (this.registrator && this.registrator.registered) {
+  if (this._registrator && this._registrator.registered) {
     return true;
   } else {
     return false;
@@ -20661,36 +20463,34 @@ UA.prototype.isConnected = function() {
 
 UA.prototype.transfer = function(transferTarget, sessionToTransfer, options) {
   var self = this;
-  this.logger.log('transfer options : ' + Utils.toString(options), this);
-  try {
-    transferTarget = Utils.normalizeURI(transferTarget, this.configuration.hostport_params);
-  } catch (e) {
+  this.logger.log('transfer : ' + transferTarget + ' : options : ' + Utils.toString(options));
+  transferTarget = Utils.normalizeTarget(transferTarget, this.configuration.hostport_params);
+  if (!transferTarget) {
     sessionToTransfer.failed('local', null, ExSIP_C.causes.INVALID_TARGET);
-    this.logger.warn("invalid transfer target", this);
+    this.logger.warn("invalid transfer target");
     return;
   }
 
   var holdFailed = function() {
-    this.logger.log("transfer : hold failed", self);
+    self.logger.log("transfer : hold failed");
   };
 
   var holdSuccess = function() {
-    this.logger.log("transfer : hold success - sending refer to transferee", self);
+    self.logger.log("transfer : hold success - sending refer to transferee");
     self.sendReferBasic(sessionToTransfer, transferTarget, options);
   };
 
-  this.logger.log("transfer : holding session to transfer", self);
+  self.logger.log("transfer : holding session to transfer");
   sessionToTransfer.hold(holdSuccess, holdFailed);
 };
 
 UA.prototype.attendedTransfer = function(transferTarget, sessionToTransfer, options) {
   var self = this;
-  this.logger.log('attended transfer options : ' + Utils.toString(options), this);
-  try {
-    transferTarget = Utils.normalizeURI(transferTarget, this.configuration.hostport_params);
-  } catch (e) {
+  this.logger.log('attended transfer : ' + transferTarget + ' : options : ' + Utils.toString(options));
+  transferTarget = Utils.normalizeTarget(transferTarget, this.configuration.hostport_params);
+  if (!transferTarget) {
+    this.logger.warn('invalid transfer target');
     sessionToTransfer.failed('local', null, ExSIP_C.causes.INVALID_TARGET);
-    this.logger.warn("invalid transfer target", this);
     return;
   }
 
@@ -20699,39 +20499,39 @@ UA.prototype.attendedTransfer = function(transferTarget, sessionToTransfer, opti
   targetSession.rtcMediaHandler.copy(sessionToTransfer.rtcMediaHandler);
 
   var holdTargetSuccess = function() {
-    this.logger.log("transfer : hold target success - sending attended refer", self);
+    self.logger.log("transfer : hold target success - sending attended refer");
     self.sendReferAttended(sessionToTransfer, targetSession, transferTarget, options);
   };
 
   var holdTargetFailed = function() {
-    this.logger.log("transfer : hold target failed", self);
+    self.logger.log("transfer : hold target failed");
   };
 
   var sendTargetInviteSuccess = function() {
-    this.logger.log("transfer : send invite to target success - putting target on hold", self);
+    self.logger.log("transfer : send invite to target success - putting target on hold");
     targetSession.hold(holdTargetSuccess, holdTargetFailed);
   };
 
   var sendTargetInviteFailed = function(response) {
-    this.logger.log("transfer : send invite to target failed - sending basic refer", self);
+    self.logger.log("transfer : send invite to target failed - sending basic refer");
     if (response.status_code === 420) {
       self.sendReferBasic(sessionToTransfer, transferTarget, options);
     }
   };
 
   var holdFailed = function() {
-    this.logger.log("transfer : hold failed", self);
+    self.logger.log("transfer : hold failed");
   };
 
   var holdSuccess = function() {
-    this.logger.log("transfer : hold success - sending invite to target", self);
+    self.logger.log("transfer : hold success - sending invite to target");
     targetSession.sendInviteRequest(transferTarget, {
         extraHeaders: ["Require: replaces"]
       },
       sendTargetInviteSuccess, sendTargetInviteFailed);
   };
 
-  this.logger.log("transfer : holding session to transfer", self);
+  self.logger.log("transfer : holding session to transfer");
   sessionToTransfer.hold(holdSuccess, holdFailed);
 };
 
@@ -20747,12 +20547,13 @@ UA.prototype.sendReferAttended = function(sessionToTransfer, targetSession, tran
 };
 
 UA.prototype.processRefer = function(sessionToTransfer, referRequest) {
+  var self = this;
   referRequest.reply(202);
   var notifySuccess = function() {
-    this.logger.log("Notify successful");
+    self.logger.log("Notify successful");
   };
   var notifyFailure = function() {
-    this.logger.log("Notify failed");
+    self.logger.log("Notify failed");
   };
   sessionToTransfer.sendNotifyRequest({
     sdp: "SIP/2.0 100 Trying"
@@ -20763,6 +20564,7 @@ UA.prototype.sendReferBasic = function(sessionToTransfer, transferTarget, option
   var referSession = this.getReferSession(sessionToTransfer, options);
   options = this.getReferOptions(sessionToTransfer, sessionToTransfer, options);
   options.extraHeaders.push('Refer-To: <' + transferTarget + '>');
+  this.logger.debug('refer options : ' + JSON.stringify(options));
   referSession.sendReferRequest(sessionToTransfer, options);
 };
 
@@ -20846,9 +20648,9 @@ UA.prototype.stop = function() {
   clearTimeout(this.transportRecoveryTimer);
 
   // Close registrator
-  if (this.registrator) {
+  if (this._registrator) {
     this.logger.debug('closing registrator');
-    this.registrator.close();
+    this._registrator.close();
   }
 
   // If there are session wait a bit so CANCEL/BYE can be sent and their responses received.
@@ -20878,6 +20680,7 @@ UA.prototype.stop = function() {
 };
 
 UA.prototype.reconnect = function() {
+  this.logger.debug('************** reconnect');
   this.stop();
   this.status = C.STATUS_INIT;
   this.start();
@@ -20890,7 +20693,7 @@ UA.prototype.reconnect = function() {
 UA.prototype.start = function() {
   var server;
 
-  this.logger.debug('user requested startup...');
+  this.logger.debug('user requested startup... : ', this.status);
 
   if (this.status === C.STATUS_INIT) {
     server = this.getNextWsServer({
@@ -21132,14 +20935,14 @@ UA.prototype.onTransportConnected = function(transport) {
   });
 
   if (this.dynConfiguration.register) {
-    if (this.registrator) {
-      this.registrator.onTransportConnected();
+    if (this._registrator) {
+      this._registrator.onTransportConnected();
     } else {
-      this.registrator = new Registrator(this, transport);
+      this._registrator = new Registrator(this, transport);
       this.register();
     }
-  } else if (!this.registrator) {
-    this.registrator = new Registrator(this, transport);
+  } else if (!this._registrator) {
+    this._registrator = new Registrator(this, transport);
   }
 };
 
@@ -21406,37 +21209,6 @@ UA.prototype.closeSessionsOnTransportError = function() {
   this._registrator.onTransportClosed();
 };
 
-UA.prototype.recoverTransport = function(ua) {
-  var idx, length, k, nextRetry, count, server;
-
-  ua = ua || this;
-  count = ua.transportRecoverAttempts;
-
-  length = ua.configuration.ws_servers.length;
-  for (idx = 0; idx < length; idx++) {
-    ua.configuration.ws_servers[idx].status = 0;
-  }
-
-  server = ua.getNextWsServer();
-
-  k = Math.floor((Math.random() * Math.pow(2, count)) + 1);
-  nextRetry = k * ua.configuration.connection_recovery_min_interval;
-
-  if (nextRetry > ua.configuration.connection_recovery_max_interval) {
-    this.logger.log('time for next connection attempt exceeds connection_recovery_max_interval, resetting counter');
-    nextRetry = ua.configuration.connection_recovery_min_interval;
-    count = 0;
-  }
-
-  this.logger.log('next connection attempt in ' + nextRetry + ' seconds');
-
-  this.transportRecoveryTimer = setTimeout(function() {
-    ua.transportRecoverAttempts = count + 1;
-    ua.transport = new Transport(ua, server);
-    ua.transport.connect();
-  }, nextRetry * 1000);
-};
-
 UA.prototype.loadConfig = function(configuration) {
   // Settings and default values
   var parameter, value, checked_value, hostport_params, registrar_server,
@@ -21648,7 +21420,7 @@ UA.prototype.retry = function(nextRetry, server, callback) {
   if (nextRetry === 0) {
     retryCallback();
   } else {
-    window.setTimeout(retryCallback, nextRetry * 1000);
+    setTimeout(retryCallback, nextRetry * 1000);
   }
 };
 
@@ -21699,59 +21471,60 @@ UA.prototype.recoverTransport = function(options) {
   server = this.getNextWsServer({
     force: true
   });
-  this.logger.log('resetting ws server list - next connection attempt in ' + nextRetry + ' seconds to ' + server.ws_uri, this);
   this.transportRecoverAttempts = count + 1;
+  this.logger.log('resetting ws server list - next connection attempt in ' + nextRetry + ' seconds to ' + server.ws_uri + ' : ' + this.transportRecoverAttempts);
   this.retry(nextRetry, server, options.retryCallback);
 };
 
 /**
  * Configuration Object skeleton.
  */
- /**
+/**
  * Configuration Object skeleton.
  */
 UA.configuration_skeleton = (function() {
-  var idx,  parameter,
-  skeleton = {},
-  parameters = [
-    // Internal parameters
-    "exsip_id",
-    "ws_server_max_reconnection",
-    "ws_server_reconnection_timeout",
-    "hostport_params",
+  var idx, parameter,
+    skeleton = {},
+    parameters = [
+      // Internal parameters
+      "exsip_id",
+      "ws_server_max_reconnection",
+      "ws_server_reconnection_timeout",
+      "hostport_params",
 
-    // Mandatory user configurable parameters
-    "uri",
-    "ws_servers",
+      // Mandatory user configurable parameters
+      "uri",
+      "ws_servers",
 
-    // Optional user configurable parameters
-    "authorization_user",
-    "connection_recovery_max_interval",
-    "connection_recovery_min_interval",
-    "display_name",
-    "hack_via_tcp", // false
-    "hack_via_ws", // false
-    "hack_ip_in_contact", //false
-    "instance_id",
-    "no_answer_timeout", // 30 seconds
-    "node_ws_options",
-    "password",
-    "register_expires", // 600 seconds
-    "registrar_server",
-    "stun_servers",
-    "trace_sip",
-    "turn_servers",
-    "use_preloaded_route",
-    "enable_datachannel",
-    "enable_ims",
-    "p_asserted_identity",
+      // Optional user configurable parameters
+      "authorization_user",
+      "connection_recovery_max_interval",
+      "connection_recovery_min_interval",
+      "max_transport_recovery_attempts",
+      "display_name",
+      "hack_via_tcp", // false
+      "hack_via_ws", // false
+      "hack_ip_in_contact", //false
+      "instance_id",
+      "no_answer_timeout", // 30 seconds
+      "node_ws_options",
+      "password",
+      "register_expires", // 600 seconds
+      "registrar_server",
+      "stun_servers",
+      "trace_sip",
+      "turn_servers",
+      "use_preloaded_route",
+      "enable_datachannel",
+      "enable_ims",
+      "p_asserted_identity",
 
-    // Post-configuration generated parameters
-    "via_core_value",
-    "via_host"
-  ];
+      // Post-configuration generated parameters
+      "via_core_value",
+      "via_host"
+    ];
 
-  for(idx in parameters) {
+  for (idx in parameters) {
     parameter = parameters[idx];
     skeleton[parameter] = {
       value: '',
@@ -21880,7 +21653,7 @@ UA.configuration_check = {
       var value;
       if (Utils.isDecimal(connection_recovery_min_interval)) {
         value = Number(connection_recovery_min_interval);
-        if (value > 0) {
+        if (value >= 0) {
           return value;
         }
       }
@@ -21909,6 +21682,42 @@ UA.configuration_check = {
     hack_ip_in_contact: function(hack_ip_in_contact) {
       if (typeof hack_ip_in_contact === 'boolean') {
         return hack_ip_in_contact;
+      }
+    },
+
+    enable_ims: function(enable_ims) {
+      if (typeof enable_ims === 'boolean') {
+        return enable_ims;
+      }
+    },
+
+    ws_server_reconnection_timeout: function(ws_server_reconnection_timeout) {
+      var value;
+      if (Utils.isDecimal(ws_server_reconnection_timeout)) {
+        value = Number(ws_server_reconnection_timeout);
+        if (value >= 0) {
+          return value;
+        }
+      }
+    },
+
+    max_transport_recovery_attempts: function(max_transport_recovery_attempts) {
+      var value;
+      if (Utils.isDecimal(max_transport_recovery_attempts)) {
+        value = Number(max_transport_recovery_attempts);
+        if (value >= 0) {
+          return value;
+        }
+      }
+    },
+
+    p_asserted_identity: function(p_asserted_identity) {
+      return String(p_asserted_identity);
+    },
+
+    enable_datachannel: function(enable_datachannel) {
+      if (typeof enable_datachannel === 'boolean') {
+        return enable_datachannel;
       }
     },
 
@@ -22060,7 +21869,7 @@ UA.configuration_check = {
     }
   }
 };
-},{"./Constants":7,"./EventEmitter":11,"./Exceptions":13,"./Grammar":14,"./LoggerFactory":16,"./Message":17,"./RTCSession":20,"./Registrator":25,"./Transactions":29,"./Transport":30,"./URI":32,"./Utils":33,"./WebRTC":34}],32:[function(require,module,exports){
+},{"./Constants":7,"./EventEmitter":11,"./Exceptions":13,"./Grammar":14,"./LoggerFactory":16,"./Message":17,"./RTCSession":20,"./Registrator":24,"./Transactions":28,"./Transport":29,"./URI":31,"./Utils":32,"./WebRTC":33}],31:[function(require,module,exports){
 module.exports = URI;
 
 
@@ -22275,7 +22084,7 @@ URI.parse = function(uri) {
     return undefined;
   }
 };
-},{"./Constants":7,"./Grammar":14,"./Utils":33}],33:[function(require,module,exports){
+},{"./Constants":7,"./Grammar":14,"./Utils":32}],32:[function(require,module,exports){
 var Utils = {};
 
 module.exports = Utils;
@@ -22289,27 +22098,29 @@ var URI = require('./URI');
 var Grammar = require('./Grammar');
 
 Utils.inArray = function(array, el) {
-  for ( var i = array.length; i--; ) {
-    if ( array[i] === el ) { return true; }
+  for (var i = array.length; i--;) {
+    if (array[i] === el) {
+      return true;
+    }
   }
   return false;
 };
 
 Utils.isEqArrays = function(arr1, arr2) {
-  if ( arr1 === null && arr2 !== null ) {
+  if (arr1 === null && arr2 !== null) {
     return false;
   }
-  if ( arr1 !== null && arr2 === null ) {
+  if (arr1 !== null && arr2 === null) {
     return false;
   }
-  if ( arr1 === null && arr2 === null ) {
+  if (arr1 === null && arr2 === null) {
     return true;
   }
-  if ( arr1.length !== arr2.length ) {
+  if (arr1.length !== arr2.length) {
     return false;
   }
-  for ( var i = arr1.length; i--; ) {
-    if ( !this.inArray( arr2, arr1[i] ) ) {
+  for (var i = arr1.length; i--;) {
+    if (!this.inArray(arr2, arr1[i])) {
       return false;
     }
   }
@@ -22322,15 +22133,28 @@ Utils.isEqArrays = function(arr1, arr2) {
  * @param obj2
  * @returns obj3 a new object based on obj1 and obj2
  */
-Utils.merge_options = function(obj1,obj2){
-    var obj3 = {};
-    for (var attrname1 in obj1) { obj3[attrname1] = obj1[attrname1]; }
-    for (var attrname2 in obj2) { obj3[attrname2] = obj2[attrname2]; }
-    return obj3;
+Utils.merge_options = function(obj1, obj2) {
+  var obj3 = {};
+  for (var attrname1 in obj1) {
+    obj3[attrname1] = obj1[attrname1];
+  }
+  for (var attrname2 in obj2) {
+    obj3[attrname2] = obj2[attrname2];
+  }
+  return obj3;
+};
+
+Utils.containsHeader = function(headers, name) {
+  for (var i = 0; i < headers.length; i++) {
+    if (headers[i].indexOf(name) !== -1) {
+      return true;
+    }
+  }
+  return false;
 };
 
 Utils.str_utf8_length = function(string) {
-  return window.unescape(encodeURIComponent(string)).length;
+  return unescape(encodeURIComponent(string)).length;
 };
 
 Utils.toString = function(object) {
@@ -22349,35 +22173,48 @@ Utils.toString = function(object) {
 
 Utils.isFunction = function(fn) {
   if (fn !== undefined) {
-    return (Object.prototype.toString.call(fn) === '[object Function]')? true : false;
+    return (Object.prototype.toString.call(fn) === '[object Function]') ? true : false;
   } else {
     return false;
   }
 };
 
 Utils.isDecimal = function(num) {
-  return !isNaN(num) && (parseFloat(num) === parseInt(num,10));
+  return !isNaN(num) && (parseFloat(num) === parseInt(num, 10));
 };
 
-Utils.getHeadersFromQuery = function (query) {
-    var headers = [];
-    var queryParts = query.split("&");
-    for(var i=0; i<queryParts.length; i++) {
-      var parameters = queryParts[i].split("=");
-      headers.push(parameters[0]+": "+decodeURIComponent(parameters[1]));
-    }
-    return headers;
-  };
+Utils.getHeadersFromQuery = function(query) {
+  var headers = [];
+  var queryParts = query.split("&");
+  for (var i = 0; i < queryParts.length; i++) {
+    var parameters = queryParts[i].split("=");
+    headers.push(parameters[0] + ": " + decodeURIComponent(parameters[1]));
+  }
+  return headers;
+};
 
-Utils.stripSip = function (address) {
-    var match = address.match(/<sip\:(.*)\>/);
-    return match ? match[1] : address;
-  };
+Utils.stripSip = function(address) {
+  var match = address.match(/<sip\:(.*)\>/);
+  return match ? match[1] : address;
+};
 
 Utils.isEmpty = function(value) {
   if (value === null || value === "" || value === undefined || (value instanceof Array && value.length === 0) || (typeof(value) === 'number' && isNaN(value))) {
     return true;
   }
+};
+
+Utils.getAllowedMethods = function(ua) {
+  var event,
+    allowed = ExSIP_C.ALLOWED_METHODS.toString();
+
+  for (event in ExSIP_C.EVENT_METHODS) {
+    if (ua.checkEvent(event) && ua.listeners(event).length > 0) {
+      allowed += ',' + ExSIP_C.EVENT_METHODS[event];
+    }
+  }
+
+  return allowed;
 };
 
 Utils.createRandomToken = function(size, base) {
@@ -22386,8 +22223,8 @@ Utils.createRandomToken = function(size, base) {
 
   base = base || 32;
 
-  for( i=0; i < size; i++ ) {
-    r = Math.random() * base|0;
+  for (i = 0; i < size; i++) {
+    r = Math.random() * base | 0;
     token += r.toString(base);
   }
   return token;
@@ -22400,7 +22237,8 @@ Utils.newTag = function() {
 // http://stackoverflow.com/users/109538/broofa
 Utils.newUUID = function() {
   var UUID = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    var r = Math.random()*16|0, v = c === 'x' ? r : (r&0x3|0x8);
+    var r = Math.random() * 16 | 0,
+      v = c === 'x' ? r : (r & 0x3 | 0x8);
     return v.toString(16);
   });
 
@@ -22411,7 +22249,7 @@ Utils.hostType = function(host) {
   if (!host) {
     return;
   } else {
-    host = Grammar.parse(host,'host');
+    host = Grammar.parse(host, 'host');
     if (host !== -1) {
       return host.host_type;
     }
@@ -22419,29 +22257,29 @@ Utils.hostType = function(host) {
 };
 
 /**
-* Normalize SIP URI.
-* NOTE: It does not allow a SIP URI without username.
-* Accepts 'sip', 'sips' and 'tel' URIs and convert them into 'sip'.
-* Detects the domain part (if given) and properly hex-escapes the user portion.
-* If the user portion has only 'tel' number symbols the user portion is clean of 'tel' visual separators.
-*/
+ * Normalize SIP URI.
+ * NOTE: It does not allow a SIP URI without username.
+ * Accepts 'sip', 'sips' and 'tel' URIs and convert them into 'sip'.
+ * Detects the domain part (if given) and properly hex-escapes the user portion.
+ * If the user portion has only 'tel' number symbols the user portion is clean of 'tel' visual separators.
+ */
 Utils.normalizeTarget = function(target, domain) {
   var uri, target_array, target_user, target_domain;
 
   // If no target is given then raise an error.
   if (!target) {
     return;
-  // If a URI instance is given then return it.
+    // If a URI instance is given then return it.
   } else if (target instanceof URI) {
     return target;
 
-  // If a string is given split it by '@':
-  // - Last fragment is the desired domain.
-  // - Otherwise append the given domain argument.
+    // If a string is given split it by '@':
+    // - Last fragment is the desired domain.
+    // - Otherwise append the given domain argument.
   } else if (typeof target === 'string') {
     target_array = target.split('@');
 
-    switch(target_array.length) {
+    switch (target_array.length) {
       case 1:
         if (!domain) {
           return;
@@ -22454,8 +22292,8 @@ Utils.normalizeTarget = function(target, domain) {
         target_domain = target_array[1];
         break;
       default:
-        target_user = target_array.slice(0, target_array.length-1).join('@');
-        target_domain = target_array[target_array.length-1];
+        target_user = target_array.slice(0, target_array.length - 1).join('@');
+        target_domain = target_array[target_array.length - 1];
     }
 
     // Remove the URI scheme (if present).
@@ -22481,8 +22319,8 @@ Utils.normalizeTarget = function(target, domain) {
 };
 
 /**
-* Hex-escape a SIP URI user.
-*/
+ * Hex-escape a SIP URI user.
+ */
 Utils.escapeUser = function(user) {
   // Don't hex-escape ':' (%3A), '+' (%2B), '?' (%3F"), '/' (%2F).
   return encodeURIComponent(decodeURIComponent(user)).replace(/%3A/ig, ':').replace(/%2B/ig, '+').replace(/%3F/ig, '?').replace(/%2F/ig, '/');
@@ -22490,19 +22328,20 @@ Utils.escapeUser = function(user) {
 
 Utils.headerize = function(string) {
   var exceptions = {
-    'Call-Id': 'Call-ID',
-    'Cseq': 'CSeq',
-    'Www-Authenticate': 'WWW-Authenticate'
+      'Call-Id': 'Call-ID',
+      'Cseq': 'CSeq',
+      'Www-Authenticate': 'WWW-Authenticate'
     },
-    name = string.toLowerCase().replace(/_/g,'-').split('-'),
+    name = string.toLowerCase().replace(/_/g, '-').split('-'),
     hname = '',
-    parts = name.length, part;
+    parts = name.length,
+    part;
 
   for (part = 0; part < parts; part++) {
     if (part !== 0) {
-      hname +='-';
+      hname += '-';
     }
-    hname += name[part].charAt(0).toUpperCase()+name[part].substring(1);
+    hname += name[part].charAt(0).toUpperCase() + name[part].substring(1);
   }
   if (exceptions[hname]) {
     hname = exceptions[hname];
@@ -22523,11 +22362,11 @@ Utils.sipErrorCause = function(status_code) {
 };
 
 /**
-* Generate a random Test-Net IP (http://tools.ietf.org/html/rfc5735)
-*/
+ * Generate a random Test-Net IP (http://tools.ietf.org/html/rfc5735)
+ */
 Utils.getRandomTestNetIP = function() {
-  function getOctet(from,to) {
-    return Math.floor(Math.random()*(to-from+1)+from);
+  function getOctet(from, to) {
+    return Math.floor(Math.random() * (to - from + 1) + from);
   }
   return '192.0.2.' + getOctet(1, 254);
 };
@@ -22535,16 +22374,16 @@ Utils.getRandomTestNetIP = function() {
 // MD5 (Message-Digest Algorithm) http://www.webtoolkit.info
 Utils.calculateMD5 = function(string) {
   function rotateLeft(lValue, iShiftBits) {
-    return (lValue<<iShiftBits) | (lValue>>>(32-iShiftBits));
+    return (lValue << iShiftBits) | (lValue >>> (32 - iShiftBits));
   }
 
-  function addUnsigned(lX,lY) {
-    var lX4,lY4,lX8,lY8,lResult;
+  function addUnsigned(lX, lY) {
+    var lX4, lY4, lX8, lY8, lResult;
     lX8 = (lX & 0x80000000);
     lY8 = (lY & 0x80000000);
     lX4 = (lX & 0x40000000);
     lY4 = (lY & 0x40000000);
-    lResult = (lX & 0x3FFFFFFF)+(lY & 0x3FFFFFFF);
+    lResult = (lX & 0x3FFFFFFF) + (lY & 0x3FFFFFFF);
     if (lX4 & lY4) {
       return (lResult ^ 0x80000000 ^ lX8 ^ lY8);
     }
@@ -22559,38 +22398,38 @@ Utils.calculateMD5 = function(string) {
     }
   }
 
-  function doF(x,y,z) {
+  function doF(x, y, z) {
     return (x & y) | ((~x) & z);
   }
 
-  function doG(x,y,z) {
+  function doG(x, y, z) {
     return (x & z) | (y & (~z));
   }
 
-  function doH(x,y,z) {
+  function doH(x, y, z) {
     return (x ^ y ^ z);
   }
 
-  function doI(x,y,z) {
+  function doI(x, y, z) {
     return (y ^ (x | (~z)));
   }
 
-  function doFF(a,b,c,d,x,s,ac) {
+  function doFF(a, b, c, d, x, s, ac) {
     a = addUnsigned(a, addUnsigned(addUnsigned(doF(b, c, d), x), ac));
     return addUnsigned(rotateLeft(a, s), b);
   }
 
-  function doGG(a,b,c,d,x,s,ac) {
+  function doGG(a, b, c, d, x, s, ac) {
     a = addUnsigned(a, addUnsigned(addUnsigned(doG(b, c, d), x), ac));
     return addUnsigned(rotateLeft(a, s), b);
   }
 
-  function doHH(a,b,c,d,x,s,ac) {
+  function doHH(a, b, c, d, x, s, ac) {
     a = addUnsigned(a, addUnsigned(addUnsigned(doH(b, c, d), x), ac));
     return addUnsigned(rotateLeft(a, s), b);
   }
 
-  function doII(a,b,c,d,x,s,ac) {
+  function doII(a, b, c, d, x, s, ac) {
     a = addUnsigned(a, addUnsigned(addUnsigned(doI(b, c, d), x), ac));
     return addUnsigned(rotateLeft(a, s), b);
   }
@@ -22598,38 +22437,40 @@ Utils.calculateMD5 = function(string) {
   function convertToWordArray(string) {
     var lWordCount;
     var lMessageLength = string.length;
-    var lNumberOfWords_temp1=lMessageLength + 8;
-    var lNumberOfWords_temp2=(lNumberOfWords_temp1-(lNumberOfWords_temp1 % 64))/64;
-    var lNumberOfWords = (lNumberOfWords_temp2+1)*16;
-    var lWordArray = new Array(lNumberOfWords-1);
+    var lNumberOfWords_temp1 = lMessageLength + 8;
+    var lNumberOfWords_temp2 = (lNumberOfWords_temp1 - (lNumberOfWords_temp1 % 64)) / 64;
+    var lNumberOfWords = (lNumberOfWords_temp2 + 1) * 16;
+    var lWordArray = new Array(lNumberOfWords - 1);
     var lBytePosition = 0;
     var lByteCount = 0;
-    while ( lByteCount < lMessageLength ) {
-      lWordCount = (lByteCount-(lByteCount % 4))/4;
-      lBytePosition = (lByteCount % 4)*8;
-      lWordArray[lWordCount] = (lWordArray[lWordCount] | (string.charCodeAt(lByteCount)<<lBytePosition));
+    while (lByteCount < lMessageLength) {
+      lWordCount = (lByteCount - (lByteCount % 4)) / 4;
+      lBytePosition = (lByteCount % 4) * 8;
+      lWordArray[lWordCount] = (lWordArray[lWordCount] | (string.charCodeAt(lByteCount) << lBytePosition));
       lByteCount++;
     }
-    lWordCount = (lByteCount-(lByteCount % 4))/4;
-    lBytePosition = (lByteCount % 4)*8;
-    lWordArray[lWordCount] = lWordArray[lWordCount] | (0x80<<lBytePosition);
-    lWordArray[lNumberOfWords-2] = lMessageLength<<3;
-    lWordArray[lNumberOfWords-1] = lMessageLength>>>29;
+    lWordCount = (lByteCount - (lByteCount % 4)) / 4;
+    lBytePosition = (lByteCount % 4) * 8;
+    lWordArray[lWordCount] = lWordArray[lWordCount] | (0x80 << lBytePosition);
+    lWordArray[lNumberOfWords - 2] = lMessageLength << 3;
+    lWordArray[lNumberOfWords - 1] = lMessageLength >>> 29;
     return lWordArray;
   }
 
   function wordToHex(lValue) {
-    var wordToHexValue="",wordToHexValue_temp="",lByte,lCount;
-    for (lCount = 0;lCount<=3;lCount++) {
-      lByte = (lValue>>>(lCount*8)) & 255;
+    var wordToHexValue = "",
+      wordToHexValue_temp = "",
+      lByte, lCount;
+    for (lCount = 0; lCount <= 3; lCount++) {
+      lByte = (lValue >>> (lCount * 8)) & 255;
       wordToHexValue_temp = "0" + lByte.toString(16);
-      wordToHexValue = wordToHexValue + wordToHexValue_temp.substr(wordToHexValue_temp.length-2,2);
+      wordToHexValue = wordToHexValue + wordToHexValue_temp.substr(wordToHexValue_temp.length - 2, 2);
     }
     return wordToHexValue;
   }
 
   function utf8Encode(string) {
-    string = string.replace(/\r\n/g,"\n");
+    string = string.replace(/\r\n/g, "\n");
     var utftext = "";
 
     for (var n = 0; n < string.length; n++) {
@@ -22637,12 +22478,10 @@ Utils.calculateMD5 = function(string) {
 
       if (c < 128) {
         utftext += String.fromCharCode(c);
-      }
-      else if((c > 127) && (c < 2048)) {
+      } else if ((c > 127) && (c < 2048)) {
         utftext += String.fromCharCode((c >> 6) | 192);
         utftext += String.fromCharCode((c & 63) | 128);
-      }
-      else {
+      } else {
         utftext += String.fromCharCode((c >> 12) | 224);
         utftext += String.fromCharCode(((c >> 6) & 63) | 128);
         utftext += String.fromCharCode((c & 63) | 128);
@@ -22651,97 +22490,114 @@ Utils.calculateMD5 = function(string) {
     return utftext;
   }
 
-  var x=[];
-  var k,AA,BB,CC,DD,a,b,c,d;
-  var S11=7, S12=12, S13=17, S14=22;
-  var S21=5, S22=9 , S23=14, S24=20;
-  var S31=4, S32=11, S33=16, S34=23;
-  var S41=6, S42=10, S43=15, S44=21;
+  var x = [];
+  var k, AA, BB, CC, DD, a, b, c, d;
+  var S11 = 7,
+    S12 = 12,
+    S13 = 17,
+    S14 = 22;
+  var S21 = 5,
+    S22 = 9,
+    S23 = 14,
+    S24 = 20;
+  var S31 = 4,
+    S32 = 11,
+    S33 = 16,
+    S34 = 23;
+  var S41 = 6,
+    S42 = 10,
+    S43 = 15,
+    S44 = 21;
 
   string = utf8Encode(string);
 
   x = convertToWordArray(string);
 
-  a = 0x67452301; b = 0xEFCDAB89; c = 0x98BADCFE; d = 0x10325476;
+  a = 0x67452301;
+  b = 0xEFCDAB89;
+  c = 0x98BADCFE;
+  d = 0x10325476;
 
-  for (k=0;k<x.length;k+=16) {
-    AA=a; BB=b; CC=c; DD=d;
-    a=doFF(a,b,c,d,x[k+0], S11,0xD76AA478);
-    d=doFF(d,a,b,c,x[k+1], S12,0xE8C7B756);
-    c=doFF(c,d,a,b,x[k+2], S13,0x242070DB);
-    b=doFF(b,c,d,a,x[k+3], S14,0xC1BDCEEE);
-    a=doFF(a,b,c,d,x[k+4], S11,0xF57C0FAF);
-    d=doFF(d,a,b,c,x[k+5], S12,0x4787C62A);
-    c=doFF(c,d,a,b,x[k+6], S13,0xA8304613);
-    b=doFF(b,c,d,a,x[k+7], S14,0xFD469501);
-    a=doFF(a,b,c,d,x[k+8], S11,0x698098D8);
-    d=doFF(d,a,b,c,x[k+9], S12,0x8B44F7AF);
-    c=doFF(c,d,a,b,x[k+10],S13,0xFFFF5BB1);
-    b=doFF(b,c,d,a,x[k+11],S14,0x895CD7BE);
-    a=doFF(a,b,c,d,x[k+12],S11,0x6B901122);
-    d=doFF(d,a,b,c,x[k+13],S12,0xFD987193);
-    c=doFF(c,d,a,b,x[k+14],S13,0xA679438E);
-    b=doFF(b,c,d,a,x[k+15],S14,0x49B40821);
-    a=doGG(a,b,c,d,x[k+1], S21,0xF61E2562);
-    d=doGG(d,a,b,c,x[k+6], S22,0xC040B340);
-    c=doGG(c,d,a,b,x[k+11],S23,0x265E5A51);
-    b=doGG(b,c,d,a,x[k+0], S24,0xE9B6C7AA);
-    a=doGG(a,b,c,d,x[k+5], S21,0xD62F105D);
-    d=doGG(d,a,b,c,x[k+10],S22,0x2441453);
-    c=doGG(c,d,a,b,x[k+15],S23,0xD8A1E681);
-    b=doGG(b,c,d,a,x[k+4], S24,0xE7D3FBC8);
-    a=doGG(a,b,c,d,x[k+9], S21,0x21E1CDE6);
-    d=doGG(d,a,b,c,x[k+14],S22,0xC33707D6);
-    c=doGG(c,d,a,b,x[k+3], S23,0xF4D50D87);
-    b=doGG(b,c,d,a,x[k+8], S24,0x455A14ED);
-    a=doGG(a,b,c,d,x[k+13],S21,0xA9E3E905);
-    d=doGG(d,a,b,c,x[k+2], S22,0xFCEFA3F8);
-    c=doGG(c,d,a,b,x[k+7], S23,0x676F02D9);
-    b=doGG(b,c,d,a,x[k+12],S24,0x8D2A4C8A);
-    a=doHH(a,b,c,d,x[k+5], S31,0xFFFA3942);
-    d=doHH(d,a,b,c,x[k+8], S32,0x8771F681);
-    c=doHH(c,d,a,b,x[k+11],S33,0x6D9D6122);
-    b=doHH(b,c,d,a,x[k+14],S34,0xFDE5380C);
-    a=doHH(a,b,c,d,x[k+1], S31,0xA4BEEA44);
-    d=doHH(d,a,b,c,x[k+4], S32,0x4BDECFA9);
-    c=doHH(c,d,a,b,x[k+7], S33,0xF6BB4B60);
-    b=doHH(b,c,d,a,x[k+10],S34,0xBEBFBC70);
-    a=doHH(a,b,c,d,x[k+13],S31,0x289B7EC6);
-    d=doHH(d,a,b,c,x[k+0], S32,0xEAA127FA);
-    c=doHH(c,d,a,b,x[k+3], S33,0xD4EF3085);
-    b=doHH(b,c,d,a,x[k+6], S34,0x4881D05);
-    a=doHH(a,b,c,d,x[k+9], S31,0xD9D4D039);
-    d=doHH(d,a,b,c,x[k+12],S32,0xE6DB99E5);
-    c=doHH(c,d,a,b,x[k+15],S33,0x1FA27CF8);
-    b=doHH(b,c,d,a,x[k+2], S34,0xC4AC5665);
-    a=doII(a,b,c,d,x[k+0], S41,0xF4292244);
-    d=doII(d,a,b,c,x[k+7], S42,0x432AFF97);
-    c=doII(c,d,a,b,x[k+14],S43,0xAB9423A7);
-    b=doII(b,c,d,a,x[k+5], S44,0xFC93A039);
-    a=doII(a,b,c,d,x[k+12],S41,0x655B59C3);
-    d=doII(d,a,b,c,x[k+3], S42,0x8F0CCC92);
-    c=doII(c,d,a,b,x[k+10],S43,0xFFEFF47D);
-    b=doII(b,c,d,a,x[k+1], S44,0x85845DD1);
-    a=doII(a,b,c,d,x[k+8], S41,0x6FA87E4F);
-    d=doII(d,a,b,c,x[k+15],S42,0xFE2CE6E0);
-    c=doII(c,d,a,b,x[k+6], S43,0xA3014314);
-    b=doII(b,c,d,a,x[k+13],S44,0x4E0811A1);
-    a=doII(a,b,c,d,x[k+4], S41,0xF7537E82);
-    d=doII(d,a,b,c,x[k+11],S42,0xBD3AF235);
-    c=doII(c,d,a,b,x[k+2], S43,0x2AD7D2BB);
-    b=doII(b,c,d,a,x[k+9], S44,0xEB86D391);
-    a=addUnsigned(a,AA);
-    b=addUnsigned(b,BB);
-    c=addUnsigned(c,CC);
-    d=addUnsigned(d,DD);
+  for (k = 0; k < x.length; k += 16) {
+    AA = a;
+    BB = b;
+    CC = c;
+    DD = d;
+    a = doFF(a, b, c, d, x[k + 0], S11, 0xD76AA478);
+    d = doFF(d, a, b, c, x[k + 1], S12, 0xE8C7B756);
+    c = doFF(c, d, a, b, x[k + 2], S13, 0x242070DB);
+    b = doFF(b, c, d, a, x[k + 3], S14, 0xC1BDCEEE);
+    a = doFF(a, b, c, d, x[k + 4], S11, 0xF57C0FAF);
+    d = doFF(d, a, b, c, x[k + 5], S12, 0x4787C62A);
+    c = doFF(c, d, a, b, x[k + 6], S13, 0xA8304613);
+    b = doFF(b, c, d, a, x[k + 7], S14, 0xFD469501);
+    a = doFF(a, b, c, d, x[k + 8], S11, 0x698098D8);
+    d = doFF(d, a, b, c, x[k + 9], S12, 0x8B44F7AF);
+    c = doFF(c, d, a, b, x[k + 10], S13, 0xFFFF5BB1);
+    b = doFF(b, c, d, a, x[k + 11], S14, 0x895CD7BE);
+    a = doFF(a, b, c, d, x[k + 12], S11, 0x6B901122);
+    d = doFF(d, a, b, c, x[k + 13], S12, 0xFD987193);
+    c = doFF(c, d, a, b, x[k + 14], S13, 0xA679438E);
+    b = doFF(b, c, d, a, x[k + 15], S14, 0x49B40821);
+    a = doGG(a, b, c, d, x[k + 1], S21, 0xF61E2562);
+    d = doGG(d, a, b, c, x[k + 6], S22, 0xC040B340);
+    c = doGG(c, d, a, b, x[k + 11], S23, 0x265E5A51);
+    b = doGG(b, c, d, a, x[k + 0], S24, 0xE9B6C7AA);
+    a = doGG(a, b, c, d, x[k + 5], S21, 0xD62F105D);
+    d = doGG(d, a, b, c, x[k + 10], S22, 0x2441453);
+    c = doGG(c, d, a, b, x[k + 15], S23, 0xD8A1E681);
+    b = doGG(b, c, d, a, x[k + 4], S24, 0xE7D3FBC8);
+    a = doGG(a, b, c, d, x[k + 9], S21, 0x21E1CDE6);
+    d = doGG(d, a, b, c, x[k + 14], S22, 0xC33707D6);
+    c = doGG(c, d, a, b, x[k + 3], S23, 0xF4D50D87);
+    b = doGG(b, c, d, a, x[k + 8], S24, 0x455A14ED);
+    a = doGG(a, b, c, d, x[k + 13], S21, 0xA9E3E905);
+    d = doGG(d, a, b, c, x[k + 2], S22, 0xFCEFA3F8);
+    c = doGG(c, d, a, b, x[k + 7], S23, 0x676F02D9);
+    b = doGG(b, c, d, a, x[k + 12], S24, 0x8D2A4C8A);
+    a = doHH(a, b, c, d, x[k + 5], S31, 0xFFFA3942);
+    d = doHH(d, a, b, c, x[k + 8], S32, 0x8771F681);
+    c = doHH(c, d, a, b, x[k + 11], S33, 0x6D9D6122);
+    b = doHH(b, c, d, a, x[k + 14], S34, 0xFDE5380C);
+    a = doHH(a, b, c, d, x[k + 1], S31, 0xA4BEEA44);
+    d = doHH(d, a, b, c, x[k + 4], S32, 0x4BDECFA9);
+    c = doHH(c, d, a, b, x[k + 7], S33, 0xF6BB4B60);
+    b = doHH(b, c, d, a, x[k + 10], S34, 0xBEBFBC70);
+    a = doHH(a, b, c, d, x[k + 13], S31, 0x289B7EC6);
+    d = doHH(d, a, b, c, x[k + 0], S32, 0xEAA127FA);
+    c = doHH(c, d, a, b, x[k + 3], S33, 0xD4EF3085);
+    b = doHH(b, c, d, a, x[k + 6], S34, 0x4881D05);
+    a = doHH(a, b, c, d, x[k + 9], S31, 0xD9D4D039);
+    d = doHH(d, a, b, c, x[k + 12], S32, 0xE6DB99E5);
+    c = doHH(c, d, a, b, x[k + 15], S33, 0x1FA27CF8);
+    b = doHH(b, c, d, a, x[k + 2], S34, 0xC4AC5665);
+    a = doII(a, b, c, d, x[k + 0], S41, 0xF4292244);
+    d = doII(d, a, b, c, x[k + 7], S42, 0x432AFF97);
+    c = doII(c, d, a, b, x[k + 14], S43, 0xAB9423A7);
+    b = doII(b, c, d, a, x[k + 5], S44, 0xFC93A039);
+    a = doII(a, b, c, d, x[k + 12], S41, 0x655B59C3);
+    d = doII(d, a, b, c, x[k + 3], S42, 0x8F0CCC92);
+    c = doII(c, d, a, b, x[k + 10], S43, 0xFFEFF47D);
+    b = doII(b, c, d, a, x[k + 1], S44, 0x85845DD1);
+    a = doII(a, b, c, d, x[k + 8], S41, 0x6FA87E4F);
+    d = doII(d, a, b, c, x[k + 15], S42, 0xFE2CE6E0);
+    c = doII(c, d, a, b, x[k + 6], S43, 0xA3014314);
+    b = doII(b, c, d, a, x[k + 13], S44, 0x4E0811A1);
+    a = doII(a, b, c, d, x[k + 4], S41, 0xF7537E82);
+    d = doII(d, a, b, c, x[k + 11], S42, 0xBD3AF235);
+    c = doII(c, d, a, b, x[k + 2], S43, 0x2AD7D2BB);
+    b = doII(b, c, d, a, x[k + 9], S44, 0xEB86D391);
+    a = addUnsigned(a, AA);
+    b = addUnsigned(b, BB);
+    c = addUnsigned(c, CC);
+    d = addUnsigned(d, DD);
   }
 
-  var temp = wordToHex(a)+wordToHex(b)+wordToHex(c)+wordToHex(d);
+  var temp = wordToHex(a) + wordToHex(b) + wordToHex(c) + wordToHex(d);
 
   return temp.toLowerCase();
 };
-
-},{"./Constants":7,"./Grammar":14,"./URI":32}],34:[function(require,module,exports){
+},{"./Constants":7,"./Grammar":14,"./URI":31}],33:[function(require,module,exports){
 var WebRTC = {};
 
 module.exports = WebRTC;
@@ -22802,7 +22658,7 @@ else {
   WebRTC.RTCSessionDescription = function(options){
     options = options || {};
     this.sdp = options.sdp;
-    this.type = options.offer;
+    this.type = options.type;
   };
 }
 
@@ -23155,7 +23011,7 @@ else {
   WebRTC.isSupported = false;
 }
 
-},{"./Constants":7,"./Utils":33}],35:[function(require,module,exports){
+},{"./Constants":7,"./Utils":32}],34:[function(require,module,exports){
 module.exports = sanityCheck;
 
 
@@ -23386,5 +23242,5 @@ function reply(status_code) {
 
   transport.send(response);
 }
-},{"./Constants":7,"./SIPMessage":27,"./Utils":33}]},{},[12])(12)
+},{"./Constants":7,"./SIPMessage":26,"./Utils":32}]},{},[12])(12)
 });

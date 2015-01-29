@@ -438,6 +438,7 @@ RTCMediaHandler.prototype = {
   * -param {Function} onFailure
   */
   onMessage: function(type, body, onSuccess, onFailure) {
+    var self = this;
     var description = new WebRTC.RTCSessionDescription({type: type, sdp:body});
     if(this.session.ua.rtcMediaHandlerOptions.videoBandwidth) {
       description.setVideoBandwidth(this.session.ua.rtcMediaHandlerOptions.videoBandwidth);

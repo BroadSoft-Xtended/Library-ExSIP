@@ -234,7 +234,7 @@ UA.prototype.attendedTransfer = function(transferTarget, sessionToTransfer, opti
   this.logger.log('attended transfer : ' + transferTarget + ' : options : ' + Utils.toString(options));
   transferTarget = Utils.normalizeTarget(transferTarget, this.configuration.hostport_params);
   if (!transferTarget) {
-    this.logger.warn('invalid transfer target : ' + e);
+    this.logger.warn('invalid transfer target');
     sessionToTransfer.failed('local', null, ExSIP_C.causes.INVALID_TARGET);
     return;
   }
@@ -1398,7 +1398,6 @@ UA.configuration_check = {
       var value;
       if (Utils.isDecimal(connection_recovery_min_interval)) {
         value = Number(connection_recovery_min_interval);
-        return value;
         if (value >= 0) {
           return value;
         }

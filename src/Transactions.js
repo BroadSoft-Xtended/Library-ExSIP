@@ -38,7 +38,6 @@ module.exports.C = C;
 var ExSIP_C = require('./Constants');
 var EventEmitter = require('./EventEmitter');
 var Timers = require('./Timers');
-var Utils = require('./Utils');
 
 
 function NonInviteClientTransaction(request_sender, request, transport) {

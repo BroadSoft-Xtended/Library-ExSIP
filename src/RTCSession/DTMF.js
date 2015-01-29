@@ -18,7 +18,6 @@ DTMF.C = C;
 /**
  * Dependencies.
  */
-var ExSIP_C = require('../Constants');
 var EventEmitter = require('../EventEmitter');
 var Exceptions = require('../Exceptions');
 var RTCSession = require('../RTCSession');
@@ -157,7 +156,7 @@ DTMF.prototype.onDTMFSent = function(tone) {
 DTMF.prototype.enableDtmfSender = function(localstream, peerConnection) {
   var self = this;
   this.logger.debug('enableDtmfSender : '+localstream);
-  if (localstream != null) {
+  if (localstream !== null) {
     var local_audio_track = localstream.getAudioTracks()[0];
     this.dtmfSender = peerConnection.createDTMFSender(local_audio_track);
     this.logger.log("Created DTMF Sender with canInsertDTMF : "+this.dtmfSender.canInsertDTMF);

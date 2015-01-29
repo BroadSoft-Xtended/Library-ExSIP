@@ -7,7 +7,6 @@ var ExSIP_C = require('../Constants');
 var Transactions = require('../Transactions');
 var RTCSession = require('../RTCSession');
 var RequestSender = require('../RequestSender');
-var Utils = require('../Utils');
 
 
 function DialogRequestSender(dialog, applicant, request) {

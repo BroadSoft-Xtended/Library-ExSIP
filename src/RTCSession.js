@@ -26,10 +26,8 @@ RTCSession.C = C;
  * Dependencies.
  */
 var ExSIP_C = require('./Constants');
-var URI = require('./URI');
 var EventEmitter = require('./EventEmitter');
 var Exceptions = require('./Exceptions');
-var Transactions = require('./Transactions');
 var Parser = require('./Parser');
 var Utils = require('./Utils');
 var Timers = require('./Timers');
@@ -39,7 +37,6 @@ var SIPMessage = require('./SIPMessage');
 var Dialog = require('./Dialog');
 var RequestSender = require('./RequestSender');
 var RTCSession_RTCMediaHandler = require('./RTCSession/RTCMediaHandler');
-var RTCSession_Request = require('./RTCSession/Request');
 var RTCSession_DTMF = require('./RTCSession/DTMF');
 
 
@@ -155,13 +152,11 @@ RTCSession.prototype = new EventEmitter();
 RTCSession.prototype.terminate = function(options) {
   options = options || {};
 
-  var cancel_reason, dialog,
-    cause = options.cause || ExSIP_C.causes.BYE,
+  var cancel_reason,
     status_code = options.status_code,
     reason_phrase = options.reason_phrase,
     extraHeaders = options.extraHeaders && options.extraHeaders.slice() || [],
-    body = options.body,
-    self = this;
+    body = options.body;
 
   // Check Session Status
   if (this.status === C.STATUS_TERMINATED) {
@@ -331,7 +326,6 @@ RTCSession.prototype.answer = function(options) {
     request = this.request,
     extraHeaders = options.extraHeaders && options.extraHeaders.slice() || [],
     mediaConstraints = options.mediaConstraints || {},
-    RTCAnswerConstraints = options.RTCAnswerConstraints || {},
     mediaStream = options.mediaStream || null,
 
     // rtcMediaHandler.createAnswer or rtcMediaHandler.createOffer succeeded
@@ -448,9 +442,7 @@ RTCSession.prototype.answer = function(options) {
  * Send a DTMF
  */
 RTCSession.prototype.sendDTMF = function(tones, options) {
-  var duration, interToneGap,
-    position = 0,
-    self = this;
+  var duration, interToneGap;
 
   options = options || {};
   duration = options.duration || null;
@@ -1313,7 +1305,7 @@ RTCSession.prototype.createOutgoingRequestSender = function(target, method, opti
 
   this.newRTCSession('local', this.request);
 
-  return request_sender = new RequestSender(this, this.ua);
+  return new RequestSender(this, this.ua);
 
 };
 
@@ -1366,7 +1358,7 @@ RTCSession.prototype.hold = function(inviteSuccessCallback, inviteFailureCallbac
 };
 
 RTCSession.prototype.unhold = function(inviteSuccessCallback, inviteFailureCallback) {
-  var self = this
+  var self = this;
   this.changeSession({audioMode: ExSIP_C.SENDRECV, videoMode: ExSIP_C.SENDRECV}, function(){
       self.resumed();
       if(inviteSuccessCallback) {
@@ -1851,7 +1843,7 @@ RTCSession.prototype.receiveRequest = function(request) {
         if (this.status === C.STATUS_CONFIRMED || this.status === C.STATUS_WAITING_FOR_ACK || this.status === C.STATUS_INVITE_RECEIVED || this.status === C.STATUS_ANSWERED) {
           contentType = request.getHeader('content-type');
           if (contentType && (contentType.match(/^application\/dtmf-relay/i))) {
-            new DTMF(this).init_incoming(request);
+            new RTCSession_DTMF(this).init_incoming(request);
           } else if (contentType && (contentType.match(/^application\/media_control\+xml/i))) {
             request.reply(200);
             this.started('local', undefined, true);
@@ -2090,7 +2082,7 @@ RTCSession.prototype.connectLocalMedia = function(target, options, success, fail
     success();
   }, function() {
     self.logger.log('getUserMedia failed');
-    self.failed('local', null, ExSIP.C.causes.WEBRTC_ERROR);
+    self.failed('local', null, ExSIP_C.causes.WEBRTC_ERROR);
     failure();
   }, options);
 
@@ -2231,7 +2223,7 @@ RTCSession.prototype.acceptAndTerminate = function(response, status_code, reason
   }
 
   // Update session status.
-  this.setStatus(C.STATUS_TERMINATED)
+  this.setStatus(C.STATUS_TERMINATED);
 };
 
 
