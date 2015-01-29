@@ -115,15 +115,6 @@ module.exports = function(grunt) {
 			}
 		},
 
-	    "qunit-serverless": {
-	      all: {
-	        options: {
-	          includeFiles: ["builds/<%= pkg.name %>-<%= pkg.version %>.js", "test/includes/*.js"],
-	          testFiles: ["test/test-*.js"]
-	        }
-	      }
-	    },
-
 		nodeunit: {
 			all: [ 'test/*.js' ],
 			options: {
@@ -224,7 +215,6 @@ module.exports = function(grunt) {
 	grunt.loadNpmTasks('grunt-contrib-symlink');
 	grunt.loadNpmTasks('grunt-browserify');
 	grunt.loadNpmTasks('grunt-jsdoc');
-	grunt.loadNpmTasks("grunt-qunit-serverless");
 	grunt.loadNpmTasks('grunt-notify');
   	grunt.loadNpmTasks('grunt-bumpx');
 
@@ -274,7 +264,7 @@ module.exports = function(grunt) {
 
 	// Taks for building builds/jssip-X.Y.Z.js and builds/jssip-last.js symlink.
 	// NOTE: This task assumes that 'grunt devel' has been already executed.
-	grunt.registerTask('dist', [ 'jshint:each_file', 'browserify:dist', 'concat:dist', 'symlink:last', 'test' ]);
+	grunt.registerTask('dist', [ 'jshint:each_file', 'test', 'browserify:dist', 'concat:dist', 'symlink:last']);
 
 	// Taks for building builds/jssip-X.Y.Z.min.js (minified).
 	// NOTE: This task assumes that 'devel' and 'dist' tasks have been already executed.
