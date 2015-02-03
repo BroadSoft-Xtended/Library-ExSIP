@@ -5,7 +5,9 @@ var ExSIP = {
   UA: require('./UA'),
   URI: require('./URI'),
   NameAddrHeader: require('./NameAddrHeader'),
-  Grammar: require('./Grammar')
+  Grammar: require('./Grammar'),
+  WebRTC: require('./WebRTC'),
+  RTCSession: require('./RTCSession')
 };
 
 module.exports = ExSIP;

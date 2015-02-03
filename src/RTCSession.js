@@ -94,6 +94,7 @@ function RTCSession(ua) {
   this.videoMuted = false;
   this.local_hold = false;
   this.remote_hold = false;
+  this.start_time = null;
 
   this.pending_actions = {
     actions: [],
@@ -1330,6 +1331,10 @@ RTCSession.prototype.sendNotifyRequest = function(options, successCallback, fail
     success: successCallback,
     failure: failureCallback
   });
+};
+
+RTCSession.prototype.isStarted = function() {
+  return this.start_time !== null;
 };
 
 RTCSession.prototype.isHeld = function() {
