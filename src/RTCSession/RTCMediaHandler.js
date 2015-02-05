@@ -290,6 +290,15 @@ RTCMediaHandler.prototype = {
 
     this.peerConnection.oniceconnectionstatechange = function() {
       logger.log('oniceconnectionstatechange : '+ this.iceConnectionState, self.session.ua);
+      if(this.iceConnectionState === 'connected') {
+        self.session.iceConnected();
+      }
+      else if(this.iceConnectionState === 'completed') {
+        self.session.iceCompleted();
+      }
+      else if(this.iceConnectionState === 'closed') {
+        self.session.iceClosed();
+      }
     };
 
     this.peerConnection.onnegotiationneeded = function(e) {

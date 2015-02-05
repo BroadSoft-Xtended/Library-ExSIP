@@ -43,7 +43,10 @@
       'resumed',
       'newDTMF',
       'dataSent',
-      'dataReceived'
+      'dataReceived',
+      'iceconnected',
+      'icecompleted',
+      'iceclosed'
     ];
 
     this.ua = ua;
@@ -1346,6 +1349,36 @@
       originator: originator,
       response: message || null,
       isReconnect: isReconnect
+    });
+  };
+
+  RTCSession.prototype.iceConnected = function(originator, message) {
+    var session = this,
+      event_name = 'iceconnected';
+
+    session.emit(event_name, session, {
+      originator: originator,
+      response: message || null
+    });
+  };
+
+  RTCSession.prototype.iceCompleted = function(originator, message) {
+    var session = this,
+      event_name = 'icecompleted';
+
+    session.emit(event_name, session, {
+      originator: originator,
+      response: message || null
+    });
+  };
+
+  RTCSession.prototype.iceClosed = function(originator, message) {
+    var session = this,
+      event_name = 'iceclosed';
+
+    session.emit(event_name, session, {
+      originator: originator,
+      response: message || null
     });
   };
 
