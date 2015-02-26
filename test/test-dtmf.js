@@ -1,10 +1,8 @@
 require('./include/common');
-var testUA = require('./include/testUA');
-var ExSIP = require('../');
 
-module.exports = {
+describe('dtmf', function() {
 
-  setUp: function(callback) {
+  beforeEach(function() {
     ua = testUA.createFakeUA({
       trace_sip: true,
       use_preloaded_route: false
@@ -24,10 +22,9 @@ module.exports = {
         hasBandwidth: true
       })
     });
-    callback();
-  },
+  });
 
-  'dtmf sent with multiple tones': function(test) {
+  it('dtmf sent with multiple tones', function() {
     var toneSent = '';
     session.dtmf.dtmfSender.insertDTMF = function(tone) {
       toneSent = tone;
@@ -37,11 +34,10 @@ module.exports = {
       interToneGap: 100
     });
     session.dtmf.processQueuedDTMFs();
-    test.strictEqual(toneSent, ',,0430813#');
-    test.done();
-  },
+    expect(toneSent).toEqual( ',,0430813#');
+  });
 
-  'with multiple tones queued': function(test) {
+  it('with multiple tones queued', function() {
     var toneSent = '';
     session.dtmf.dtmfSender.insertDTMF = function(tone) {
       toneSent = tone;
@@ -50,23 +46,22 @@ module.exports = {
       duration: 100,
       interToneGap: 100
     });
-    test.strictEqual(toneSent, '');
+    expect(toneSent).toEqual( '');
     session.sendDTMF('2', {
       duration: 100,
       interToneGap: 100
     });
-    test.strictEqual(toneSent, '');
+    expect(toneSent).toEqual( '');
     session.sendDTMF('3', {
       duration: 100,
       interToneGap: 100
     });
-    test.strictEqual(toneSent, '');
+    expect(toneSent).toEqual( '');
     session.dtmf.processQueuedDTMFs();
-    test.strictEqual(toneSent, '123');
-    test.done();
-  },
+    expect(toneSent).toEqual( '123');
+  });
 
-  'with multiple tones and reinvite': function(test) {
+  it('with multiple tones and reinvite', function() {
     var toneSent = '';
     session.dtmf.dtmfSender.insertDTMF = function(tone) {
       toneSent = tone;
@@ -75,19 +70,19 @@ module.exports = {
       duration: 100,
       interToneGap: 100
     });
-    test.strictEqual(toneSent, '');
+    expect(toneSent).toEqual( '');
     session.sendDTMF('2', {
       duration: 100,
       interToneGap: 100
     });
-    test.strictEqual(toneSent, '');
+    expect(toneSent).toEqual( '');
     session.sendDTMF('3', {
       duration: 100,
       interToneGap: 100
     });
-    test.strictEqual(toneSent, '');
+    expect(toneSent).toEqual( '');
     session.dtmf.processQueuedDTMFs();
-    test.strictEqual(toneSent, '123');
+    expect(toneSent).toEqual( '123');
     session.dtmf.dtmfSender.ontonechange({
       tone: '1'
     });
@@ -111,11 +106,11 @@ module.exports = {
       toneSent = tone;
     }
     session.dtmf.processQueuedDTMFs();
-    test.strictEqual(toneSent, '3');
-    test.done();
-  },
+    expect(toneSent).toEqual( '3');
+    
+  });
 
-  'with multiple tones as batch and reinvite': function(test) {
+  it('with multiple tones as batch and reinvite', function() {
     var toneSent = '';
     session.dtmf.dtmfSender.insertDTMF = function(tone) {
       toneSent = tone;
@@ -124,9 +119,9 @@ module.exports = {
       duration: 100,
       interToneGap: 100
     });
-    test.strictEqual(toneSent, '');
+    expect(toneSent).toEqual( '');
     session.dtmf.processQueuedDTMFs();
-    test.strictEqual(toneSent, '123');
+    expect(toneSent).toEqual( '123');
     session.dtmf.dtmfSender.ontonechange({
       tone: '1'
     });
@@ -150,7 +145,7 @@ module.exports = {
       toneSent = tone;
     }
     session.dtmf.processQueuedDTMFs();
-    test.strictEqual(toneSent, '3');
-    test.done();
-  }
-}
+    expect(toneSent).toEqual( '3');
+    
+  });
+});

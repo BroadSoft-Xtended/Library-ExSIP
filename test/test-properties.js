@@ -1,18 +1,17 @@
 require('./include/common');
-var ExSIP = require('../');
 var pkg = require('../package.json');
 
 
-module.exports = {
+describe('properties', function() {
 
-  'name': function(test) {
-    test.equal(ExSIP.name, pkg.title);
-    test.done();
-  },
+  it('name', function() {
+    expect(ExSIP.name).toEqual( pkg.title);
+    
+  });
 
-  'version': function(test) {
-    test.equal(ExSIP.version, pkg.version);
-    test.done();
-  }
+  it('version', function() {
+    expect(ExSIP.version).toEqual( pkg.version);
+    
+  });
 
-};
+});

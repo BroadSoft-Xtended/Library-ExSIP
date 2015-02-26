@@ -56,7 +56,9 @@ function RTCSession(ua) {
     'muted',
     'unmuted',
     'started',
-    'onReInvite'
+    'onReInvite',
+    'dataSent',
+    'dataReceived'
   ];
 
   this.ua = ua;
@@ -339,6 +341,7 @@ RTCSession.prototype.answer = function(options) {
           self.setInvite2xxTimer(request, body);
           self.setACKTimer();
           self.accepted('local');
+          self.started('local');
         },
 
         // run for reply failure callback
@@ -1530,6 +1533,7 @@ RTCSession.prototype.receiveInviteResponse = function(response) {
          */
         function() {
           session.accepted('remote', response);
+          session.started('remote', response);
           session.sendRequest(ExSIP_C.ACK);
           session.confirmed('local', null);
         },

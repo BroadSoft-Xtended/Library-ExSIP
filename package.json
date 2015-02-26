@@ -23,7 +23,9 @@
   ],
   "dependencies": {
     "sdp-transform": "0.6.1",
-    "ws": "0.4.32"
+    "ws": "0.4.32",
+    "expect": "~1.6.0",
+    "mocha": "~2.1.0"
   },
   "devDependencies": {
     "nodeunit": "0.9.0",

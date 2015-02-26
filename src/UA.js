@@ -62,7 +62,7 @@ function UA(configuration) {
     'onReInvite'
   ];
 
-  this.log = new LoggerFactory();
+  this.log = new LoggerFactory(configuration);
   this.logger = this.getLogger('ua');
   this.usedServers = [];
   this.rtcMediaHandlerOptions = {};

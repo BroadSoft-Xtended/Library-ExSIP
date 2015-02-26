@@ -1,10 +1,8 @@
 require('./include/common');
-var testUA = require('./include/testUA');
-var ExSIP = require('../');
 
-module.exports = {
+describe('register', function() {
 
-  'without password': function(test) {
+  it('without password', function() {
     ua = testUA.createFakeUA({
       trace_sip: true,
       use_preloaded_route: false,
@@ -15,11 +13,11 @@ module.exports = {
     testUA.start(ua);
     testUA.onOpen(ua);
     var registerMsg = testUA.popMessageSent(ua);
-    test.strictEqual(registerMsg.method, "REGISTER");
-    test.done();
-  },
+    expect(registerMsg.method).toEqual( "REGISTER");
+    
+  });
 
-  'without password and 401 Unauthorized response': function(test) {
+  it('without password and 401 Unauthorized response', function() {
     ua = testUA.createFakeUA({
       trace_sip: true,
       use_preloaded_route: false,
@@ -41,15 +39,15 @@ module.exports = {
       www_authenticate: "DIGEST qop=\"auth\",nonce=\"BroadWorksXhou9t4uvTc36x37BW\",realm=\"broadsoft.com\",algorithm=MD5"
     });
     var registerAuthMsg = testUA.popMessageSent(ua);
-    test.strictEqual(registerAuthMsg.method, "REGISTER");
-    test.strictEqual(registerAuthMsg.getHeader('Authorization').indexOf("Digest algorithm=MD5, username=\"fakeUA\", realm=\"broadsoft.com\"") !== -1, true);
+    expect(registerAuthMsg.method).toEqual( "REGISTER");
+    expect(registerAuthMsg.getHeader('Authorization').indexOf("Digest algorithm=MD5).toEqual( username=\"fakeUA\", realm=\"broadsoft.com\"") !== -1, true);
 
     testUA.responseFor(registerAuthMsg, {
       status_code: "403 Forbidden",
       noSdp: true,
       method: "REGISTER"
     });
-    test.strictEqual(registrationFailedStatusCode, 403);
-    test.done();    
-  }
-}
+    expect(registrationFailedStatusCode).toEqual( 403);
+        
+  });
+});

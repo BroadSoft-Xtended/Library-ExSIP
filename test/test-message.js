@@ -1,10 +1,8 @@
 require('./include/common');
-var testUA = require('./include/testUA');
-var ExSIP = require('../');
 
-module.exports = {
+describe('message', function() {
 
-  setUp: function(callback) {
+  beforeEach(function() {
     ua = testUA.createFakeUA({
       trace_sip: true,
       use_preloaded_route: false
@@ -18,10 +16,9 @@ module.exports = {
     ua.transport.onMessage({
       data: testUA.ringingResponse(ua)
     });
-    callback();
-  },
+  });
 
-  'response with statusCode 606 not acceptable': function(test) {
+  it('response with statusCode 606 not acceptable', function() {
     var messageText;
     session.on('failed', function(e) {
       messageText = e.data.cause;
@@ -33,7 +30,7 @@ module.exports = {
       })
     });
     testUA.ackResponse(ua);
-    test.strictEqual('Not Acceptable', messageText);
-    test.done();
-  }
-}
+    expect('Not Acceptable').toEqual( messageText);
+    
+  });
+});

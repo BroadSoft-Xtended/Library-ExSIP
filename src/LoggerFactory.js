@@ -7,10 +7,10 @@ module.exports = LoggerFactory;
 var Logger = require('./Logger');
 
 
-function LoggerFactory() {
+function LoggerFactory(configuration) {
   var logger,
     levels = { 'error': 0, 'warn': 1, 'log': 2, 'debug': 3 },
-    level = 1,
+    level = configuration && configuration.trace_sip === true ? 3 : 1,
     builtinEnabled = true,
     connector = null;
 

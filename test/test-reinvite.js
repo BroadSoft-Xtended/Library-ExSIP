@@ -5,9 +5,9 @@ var RTCSession = require('../src/RTCSession');
 var WebRTC = require('../src/WebRTC');
 var ExSIP_C = require('../src/Constants');
 
-module.exports = {
+describe('reinvite', function() {
 
-  setUp: function(callback) {
+  beforeEach(function() {
     ua = testUA.createFakeUA({
       trace_sip: true,
       use_preloaded_route: false
@@ -27,9 +27,9 @@ module.exports = {
         hasBandwidth: true
       })
     });
-    callback();
-  },
-  'request received': function(test) {
+  });
+
+  it('request received', function() {
     var onReInviteEventReceived = false;
     ua.on('onReInvite', function(e) {
       onReInviteEventReceived = true;
@@ -37,10 +37,11 @@ module.exports = {
     ua.transport.onMessage({
       data: testUA.inviteRequest(ua)
     });
-    test.ok(onReInviteEventReceived);
-    test.done();
-  },
-  'reinvite with no sdp after audio only reinvite': function(test) {
+    expect(onReInviteEventReceived).toEqual(true)
+    
+  });
+
+  it('reinvite with no sdp after audio only reinvite', function() {
     ua.transport.onMessage({
       data: testUA.inviteRequest(ua, {
         withoutVideo: true
@@ -52,12 +53,12 @@ module.exports = {
     }));
     testUA.triggerOnIceCandidate(session);
     var answerMsg = testUA.popMessageSentAndClear(ua);
-    test.strictEqual(answerMsg.status_code, 200);
-    test.strictEqual(answerMsg.body.length > 0, true);
-    test.strictEqual(new WebRTC.RTCSessionDescription({
+    expect(answerMsg.status_code).toEqual( 200);
+    expect(answerMsg.body.length > 0).toEqual( true);
+    expect(new WebRTC.RTCSessionDescription({
       type: 'offer',
       sdp: answerMsg.body
-    }).hasVideo(), false);
+    }).hasVideo()).toEqual(false);
     ua.transport.onMessage({
       data: testUA.ackResponse(ua)
     });
@@ -76,16 +77,17 @@ module.exports = {
       })
     });
     testUA.triggerOnIceCandidate(session);
-    test.strictEqual(createOfferCalled, true, "should call createOffer");
-    test.deepEqual(createOfferConstraints, {
+    expect(createOfferCalled).toEqual( true, "should call createOffer");
+    expect(createOfferConstraints).toEqual( {
       "mandatory": {
         "OfferToReceiveAudio": true,
         "OfferToReceiveVideo": true
       }
     }, 'should have video set but was ' + JSON.stringify(createOfferConstraints));
-    test.done();
-  },
-  'reinvite with no sdp and ACK with sdp': function(test) {
+    
+  });
+
+  it('reinvite with no sdp and ACK with sdp', function() {
     var onReInviteEventReceived = false;
     ua.on('onReInvite', function(e) {
       onReInviteEventReceived = true;
@@ -97,9 +99,9 @@ module.exports = {
     });
     testUA.triggerOnIceCandidate(session);
     var answerMsg = testUA.popMessageSentAndClear(ua);
-    test.strictEqual(answerMsg.status_code, 200);
-    test.strictEqual(answerMsg.body.length > 0, true);
-    test.ok(!onReInviteEventReceived);
+    expect(answerMsg.status_code).toEqual( 200);
+    expect(answerMsg.body.length > 0).toEqual( true);
+    expect(!onReInviteEventReceived).toEqual(true)
 
     var answerCreated = false,
       localDescriptionSet = false,
@@ -124,15 +126,15 @@ module.exports = {
       })
     });
     testUA.triggerOnIceCandidate(session);
-    test.strictEqual(session.status, RTCSession.C.STATUS_CONFIRMED);
-    test.strictEqual(session.rtcMediaHandler === formerRtcMediaHandler, true, "should not reconnect after ACK with sdp");
-    test.strictEqual(answerCreated, false, "should not have called createAnswer");
-    test.strictEqual(localDescriptionSet, false, "should not have called setLocalDescription");
-    test.strictEqual(remoteDescriptionSet, true, "should have called setRemoteDescription");
-    test.strictEqual(started, true, "should trigger started in order to update video streams");
-    test.done();
-  },
-  'request received from hold from E20': function(test) {
+    expect(session.status).toEqual( RTCSession.C.STATUS_CONFIRMED);
+    expect(session.rtcMediaHandler === formerRtcMediaHandler).toEqual( true, "should not reconnect after ACK with sdp");
+    expect(answerCreated).toEqual( false, "should not have called createAnswer");
+    expect(localDescriptionSet).toEqual( false, "should not have called setLocalDescription");
+    expect(remoteDescriptionSet).toEqual( true, "should have called setRemoteDescription");
+    expect(started).toEqual( true, "should trigger started in order to update video streams");
+    
+  });
+  it('request received from hold from E20', function() {
     var sdp = "v=0\r\n" +
       "o=sipgw 1388678972 2 IN IP4 64.212.220.60\r\n" +
       "s=Lj2WCt1mITKBsSSDc4Vl\r\n" +
@@ -192,11 +194,11 @@ module.exports = {
     });
     testUA.triggerOnIceCandidate(session);
     var answerMsg = testUA.popMessageSentAndClear(ua);
-    test.strictEqual(answerMsg.status_code, 200);
+    expect(answerMsg.status_code).toEqual( 200);
     testUA.createDescription = createDescriptionFunction;
-    test.done();
-  },
-  'reinvite with unsupported medias': function(test) {
+    
+  });
+  it('reinvite with unsupported medias', function() {
     var unsupportedSdp = "m=video 0 RTP/SAVPF 99\r\n" +
       "a=rtpmap:99 H264/90000\r\n" +
       "a=inactive\r\n" +
@@ -254,11 +256,11 @@ module.exports = {
     });
     testUA.triggerOnIceCandidate(session);
     var answerMsg = testUA.popMessageSentAndClear(ua);
-    test.strictEqual(answerMsg.status_code, 200);
-    test.strictEqual(answerMsg.body, expectedAnswerSdp);
-    test.done();
-  },
-  'request received from hold': function(test) {
+    expect(answerMsg.status_code).toEqual( 200);
+    expect(answerMsg.body).toEqual( expectedAnswerSdp);
+    
+  });
+  it('request received from hold', function() {
     var sdp = "v=0\r\n" +
       "o=sipgw 1388756803 3 IN IP4 204.117.64.113\r\n" +
       "s=hTilrLbzMHZlWdwGx5MG\r\n" +
@@ -280,33 +282,33 @@ module.exports = {
     });
     testUA.triggerOnIceCandidate(session);
     var answerMsg = testUA.popMessageSentAndClear(ua);
-    test.strictEqual(answerMsg.status_code, 200);
+    expect(answerMsg.status_code).toEqual( 200);
     testUA.createDescription = createDescriptionFunction;
-    test.done();
-  },
+    
+  });
 
-  'hold': function(test) {
+  it('hold', function() {
     session.hold();
     testUA.triggerOnIceCandidate(session);
     var reinviteMsg = testUA.popMessageSentAndClear(ua);
-    test.strictEqual(reinviteMsg.method, ExSIP_C.INVITE);
-    test.deepEqual(session.rtcMediaHandler.createOfferConstraints, testUA.getMediaOptions().createOfferConstraints);
+    expect(reinviteMsg.method).toEqual( ExSIP_C.INVITE);
+    expect(session.rtcMediaHandler.createOfferConstraints).toEqual( testUA.getMediaOptions().createOfferConstraints);
     testUA.responseFor(reinviteMsg, {
       videoMode: ExSIP_C.RECVONLY,
       audioMode: ExSIP_C.RECVONLY
     });
-    test.done();
-  },
+    
+  });
 
-  'request received and accepting': function(test) {
+  it('request received and accepting', function() {
     var onReInviteEvent = false,
       session = null;
     ua.on('onReInvite', function(e) {
       onReInviteEvent = true;
       e.data.session.acceptReInvite();
       session = e.data.session;
-      test.ok(!e.data.audioAdd);
-      test.ok(e.data.videoAdd);
+      expect(!e.data.audioAdd).toEqual(true)
+      expect(e.data.videoAdd).toEqual(true)
     });
     ua.transport.onMessage({
       data: testUA.inviteRequest(ua, {
@@ -314,19 +316,19 @@ module.exports = {
       })
     });
     testUA.triggerOnIceCandidate(session);
-    test.ok(onReInviteEvent);
-    test.strictEqual(session.rtcMediaHandler.peerConnection.remoteDescription.getVideoBandwidth(), "1024")
-    test.strictEqual(session.status, RTCSession.C.STATUS_WAITING_FOR_ACK);
-    test.ok(session.rtcMediaHandler.localMedia);
-    test.ok(!session.rtcMediaHandler.localMedia.ended, "local media should not have been stopped");
+    expect(onReInviteEvent).toEqual(true)
+    expect(session.rtcMediaHandler.peerConnection.remoteDescription.getVideoBandwidth()).toEqual( "1024")
+    expect(session.status).toEqual( RTCSession.C.STATUS_WAITING_FOR_ACK);
+    expect(session.rtcMediaHandler.localMedia).toExist();
+    expect(!session.rtcMediaHandler.localMedia.ended, "local media should not have been stopped").toEqual(true)
 
     ua.transport.onMessage({
       data: testUA.ackResponse(ua)
     });
-    test.strictEqual(session.status, RTCSession.C.STATUS_CONFIRMED);
-    test.done();
-  },
-  'request received and rejecting': function(test) {
+    expect(session.status).toEqual( RTCSession.C.STATUS_CONFIRMED);
+    
+  });
+  it('request received and rejecting', function() {
     var onReInviteEvent = false,
       session = null;
     ua.on('onReInvite', function(e) {
@@ -340,17 +342,17 @@ module.exports = {
       })
     });
     testUA.triggerOnIceCandidate(session);
-    test.ok(onReInviteEvent);
-    test.strictEqual(session.rtcMediaHandler.peerConnection.remoteDescription.getVideoBandwidth(), "512")
-    test.strictEqual(session.status, RTCSession.C.STATUS_CONFIRMED);
+    expect(onReInviteEvent).toEqual(true)
+    expect(session.rtcMediaHandler.peerConnection.remoteDescription.getVideoBandwidth()).toEqual( "512")
+    expect(session.status).toEqual( RTCSession.C.STATUS_CONFIRMED);
 
     ua.transport.onMessage({
       data: testUA.ackResponse(ua)
     });
-    test.strictEqual(session.status, RTCSession.C.STATUS_CONFIRMED);
-    test.done();
-  },
-  'request with no audio/video change received': function(test) {
+    expect(session.status).toEqual( RTCSession.C.STATUS_CONFIRMED);
+    
+  });
+  it('request with no audio/video change received', function() {
     var onReInviteEvent = false;
     ua.on('onReInvite', function(e) {
       onReInviteEvent = true;
@@ -363,14 +365,14 @@ module.exports = {
       })
     });
     testUA.triggerOnIceCandidate(session);
-    test.ok(!onReInviteEvent);
-    test.strictEqual(session.rtcMediaHandler.peerConnection.remoteDescription.getVideoBandwidth(), "1024")
-    test.strictEqual(session.status, RTCSession.C.STATUS_WAITING_FOR_ACK);
+    expect(!onReInviteEvent).toEqual(true)
+    expect(session.rtcMediaHandler.peerConnection.remoteDescription.getVideoBandwidth()).toEqual( "1024")
+    expect(session.status).toEqual( RTCSession.C.STATUS_WAITING_FOR_ACK);
 
     ua.transport.onMessage({
       data: testUA.ackResponse(ua)
     });
-    test.strictEqual(session.status, RTCSession.C.STATUS_CONFIRMED);
-    test.done();
-  }
-}
+    expect(session.status).toEqual( RTCSession.C.STATUS_CONFIRMED);
+    
+  });
+});

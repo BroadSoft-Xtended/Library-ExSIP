@@ -1,11 +1,8 @@
 require('./include/common');
-var testUA = require('./include/testUA');
-var ExSIP = require('../');
-var RTCSession = require('../src/RTCSession');
 
-module.exports = {
+describe('incomingCall', function() {
 
-  setUp: function(callback) {
+  beforeEach(function() {
     ua = testUA.createFakeUA({
       trace_sip: true,
       use_preloaded_route: false
@@ -15,19 +12,18 @@ module.exports = {
     });
     testUA.mockWebRTC();
     testUA.start(ua);
-    callback();
-  },
+  });
 
-  'terminate before answering': function(test) {
+  it('terminate before answering', function() {
     ua.transport.onMessage({
       data: testUA.initialInviteRequest(ua, {})
     });
     session.terminate();
     var answerMsg = testUA.popMessageSent(ua);
-    test.strictEqual(answerMsg.status_code, 486, "Should send a 486 response");
-    test.done();
-  },
-  'with Firefox and not null candidate': function(test) {
+    expect(answerMsg.status_code).toEqual( 486, "Should send a 486 response");    
+  });
+
+  it('with Firefox and not null candidate', function() {
     ua.transport.onMessage({
       data: testUA.initialInviteRequest(ua, {})
     });
@@ -35,11 +31,11 @@ module.exports = {
     session.answer();
     testUA.triggerOnIceCandidate(session);
     var answerMsg = testUA.popMessageSent(ua);
-    test.strictEqual(answerMsg.status_code, 200);
-    mozRTCPeerConnection = undefined;
-    test.done();
-  },
-  'initial invite without sdp': function(test) {
+    expect(answerMsg.status_code).toEqual( 200);
+    mozRTCPeerConnection = undefined;    
+  });
+
+  it('initial invite without sdp', function() {
     ua.transport.onMessage({
       data: testUA.initialInviteRequest(ua, {
         noSdp: true
@@ -48,11 +44,12 @@ module.exports = {
     session.answer();
     testUA.triggerOnIceCandidate(session);
     var answerMsg = testUA.popMessageSent(ua);
-    test.strictEqual(answerMsg.status_code, 200);
-    test.notStrictEqual(answerMsg.body, '', 'should have sdp');
-    test.done();
-  },
-  'INFO received after INVITE': function(test) {
+    expect(answerMsg.status_code).toEqual( 200);
+    expect(answerMsg.body).toNotEqual( '', 'should have sdp');
+    
+  });
+
+  it('INFO received after INVITE', function() {
     var answerMsg = testUA.receiveInviteAndAnswer();
     var started = false;
     session.on('started', function(e) {
@@ -75,11 +72,12 @@ module.exports = {
     });
 
     var infoAnswerMsg = testUA.popMessageSent(ua);
-    test.strictEqual(infoAnswerMsg.status_code, 200);
-    test.strictEqual(started, true, "should trigger started in order to update video streams");
-    test.done();    
-  },
-  'reINVITE received after INVITE and before ACK': function(test) {
+    expect(infoAnswerMsg.status_code).toEqual( 200);
+    expect(started).toEqual( true, "should trigger started in order to update video streams");
+        
+  });
+
+  it('reINVITE received after INVITE and before ACK', function() {
     var answerMsg = testUA.receiveInviteAndAnswer();
     var reinviteMsg = testUA.initialInviteRequest(ua, {
       branch: 'z9hG4bK-524287-1---ab6ff8065ea5f163', 
@@ -92,12 +90,12 @@ module.exports = {
     ua.transport.onMessage({data: reinviteMsg});
 
     var reinviteAnswerMsg = testUA.popMessageSentAndClear(ua);
-    test.strictEqual(reinviteAnswerMsg.status_code, 500);
-    test.notStrictEqual(reinviteAnswerMsg.getHeader('Retry-After'), undefined);
-    test.strictEqual(session.status, RTCSession.C.STATUS_WAITING_FOR_ACK);
+    expect(reinviteAnswerMsg.status_code).toEqual( 500);
+    expect(reinviteAnswerMsg.getHeader('Retry-After')).toNotEqual( undefined);
+    expect(session.status).toEqual( RTCSession.C.STATUS_WAITING_FOR_ACK);
 
     testUA.ackResponseFor(answerMsg, {branch: 'z9hG4bK-524287-1---e126e35bf46fb226', cseq: answerMsg.cseq});
-    test.strictEqual(session.status, RTCSession.C.STATUS_CONFIRMED);
-    test.done();
-  }
-}
+    expect(session.status).toEqual( RTCSession.C.STATUS_CONFIRMED);
+    
+  });
+});

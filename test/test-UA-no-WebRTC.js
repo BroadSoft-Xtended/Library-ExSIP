@@ -1,61 +1,56 @@
 require('./include/common');
-var testUA = require('./include/testUA')
-var ExSIP = require('../');
 
+describe('UA-no-WebRTC', function() {
 
-module.exports = {
-
-  'UA wrong configuration': function(test) {
-    test.throws(
+  it('UA wrong configuration', function() {
+    expect(
       function() {
         new ExSIP.UA({'lalala': 'lololo'});
-      },
+      }).toThrow(
       ExSIP.Exceptions.ConfigurationError
     );
+  });
 
-    test.done();
-  },
-
-  'UA no WS connection': function(test) {
+  it('UA no WS connection', function() {
     var ua = new ExSIP.UA(testUA.UA_CONFIGURATION);
 
-    test.ok(ua instanceof(ExSIP.UA));
+    expect(ua instanceof(ExSIP.UA)).toEqual(true);
 
     ua.start();
 
-    test.strictEqual(ua.contact.toString(), '<sip:' + ua.contact.uri.user + '@' + ua.configuration.via_host + ';transport=ws>');
-    test.strictEqual(ua.contact.toString({outbound: false, anonymous: false, foo: true}), '<sip:' + ua.contact.uri.user + '@' + ua.configuration.via_host + ';transport=ws>');
-    test.strictEqual(ua.contact.toString({outbound: true}), '<sip:' + ua.contact.uri.user + '@' + ua.configuration.via_host + ';transport=ws;ob>');
-    test.strictEqual(ua.contact.toString({anonymous: true}), '<sip:anonymous@anonymous.invalid;transport=ws>');
-    test.strictEqual(ua.contact.toString({anonymous: true, outbound: true}), '<sip:anonymous@anonymous.invalid;transport=ws;ob>');
+    expect(ua.contact.toString()).toEqual( '<sip:' + ua.contact.uri.user + '@' + ua.configuration.via_host + ';transport=ws>');
+    expect(ua.contact.toString({outbound: false, anonymous: false, foo: true})).toEqual('<sip:' + ua.contact.uri.user + '@' + ua.configuration.via_host + ';transport=ws>');
+    expect(ua.contact.toString({outbound: true})).toEqual( '<sip:' + ua.contact.uri.user + '@' + ua.configuration.via_host + ';transport=ws;ob>');
+    expect(ua.contact.toString({anonymous: true})).toEqual( '<sip:anonymous@anonymous.invalid;transport=ws>');
+    expect(ua.contact.toString({anonymous: true, outbound: true})).toEqual('<sip:anonymous@anonymous.invalid;transport=ws;ob>');
 
     for (var parameter in testUA.UA_CONFIGURATION_AFTER_START) {
       switch(parameter) {
         case 'uri':
         case 'registrar_server':
-          test.deepEqual(ua.configuration[parameter].toString(), testUA.UA_CONFIGURATION_AFTER_START[parameter], 'testing parameter ' + parameter);
+          expect(ua.configuration[parameter].toString()).toEqual( testUA.UA_CONFIGURATION_AFTER_START[parameter], 'testing parameter ' + parameter);
           break;
         default:
-          test.deepEqual(ua.configuration[parameter], testUA.UA_CONFIGURATION_AFTER_START[parameter], 'testing parameter ' + parameter);
+          expect(ua.configuration[parameter]).toEqual( testUA.UA_CONFIGURATION_AFTER_START[parameter], 'testing parameter ' + parameter);
       }
     }
 
     ua.sendMessage('test', 'FAIL WITH CONNECTION_ERROR PLEASE', {
       eventHandlers: {
         failed: function(e) {
-          test.strictEqual(e.data.cause, ExSIP.C.causes.CONNECTION_ERROR);
+          expect(e.data.cause).toEqual( ExSIP.C.causes.CONNECTION_ERROR);
         }
       }
     });
 
-    test.throws(
+    expect(
       function() {
         ua.sendMessage('sip:ibc@iñaki.ðđß', 'FAIL WITH INVALID_TARGET PLEASE');
-      },
+      }).toThrow(
       ExSIP.Exceptions.TypeError
     );
 
-    test.done();
-  }
+    
+  });
 
-};
+});
