@@ -531,7 +531,6 @@ module.exports={
     "grunt": "0.4.5",
     "grunt-contrib-jshint": "0.10.0",
     "grunt-contrib-concat": "0.5.0",
-    "grunt-contrib-nodeunit": "0.4.1",
     "grunt-contrib-uglify": "0.6.0",
     "grunt-contrib-watch": "0.6.1",
     "grunt-contrib-symlink": "0.3.0",
@@ -539,7 +538,10 @@ module.exports={
     "grunt-jsdoc": "0.5.7",
     "grunt-notify": ">=0.2.6",
     "grunt-bumpx": "0.1.5",
-    "pegjs": "0.7.0"
+    "pegjs": "0.7.0",
+    "grunt-mocha-test": "0.12.7",
+    "expect": "1.6.0",
+    "mocha": "2.1.0"
   },
   "engines": {
     "node": ">=0.8"
@@ -1413,7 +1415,9 @@ var ExSIP = {
   UA: require('./UA'),
   URI: require('./URI'),
   NameAddrHeader: require('./NameAddrHeader'),
-  Grammar: require('./Grammar')
+  Grammar: require('./Grammar'),
+  WebRTC: require('./WebRTC'),
+  RTCSession: require('./RTCSession')
 };
 
 module.exports = ExSIP;
@@ -1441,7 +1445,7 @@ Object.defineProperties(ExSIP, {
   }
 });
 
-},{"../package.json":6,"./Constants":7,"./Exceptions":13,"./Grammar":14,"./NameAddrHeader":18,"./UA":30,"./URI":31,"./Utils":32}],13:[function(require,module,exports){
+},{"../package.json":6,"./Constants":7,"./Exceptions":13,"./Grammar":14,"./NameAddrHeader":18,"./RTCSession":20,"./UA":30,"./URI":31,"./Utils":32,"./WebRTC":33}],13:[function(require,module,exports){
 /**
  * @namespace Exceptions
  * @memberOf ExSIP
@@ -14112,10 +14116,10 @@ module.exports = LoggerFactory;
 var Logger = require('./Logger');
 
 
-function LoggerFactory() {
+function LoggerFactory(configuration) {
   var logger,
     levels = { 'error': 0, 'warn': 1, 'log': 2, 'debug': 3 },
-    level = 1,
+    level = configuration && configuration.trace_sip === true ? 3 : 1,
     builtinEnabled = true,
     connector = null;
 
@@ -14902,7 +14906,9 @@ function RTCSession(ua) {
     'muted',
     'unmuted',
     'started',
-    'onReInvite'
+    'onReInvite',
+    'dataSent',
+    'dataReceived'
   ];
 
   this.ua = ua;
@@ -14940,6 +14946,7 @@ function RTCSession(ua) {
   this.videoMuted = false;
   this.local_hold = false;
   this.remote_hold = false;
+  this.start_time = null;
 
   this.pending_actions = {
     actions: [],
@@ -15184,6 +15191,7 @@ RTCSession.prototype.answer = function(options) {
           self.setInvite2xxTimer(request, body);
           self.setACKTimer();
           self.accepted('local');
+          self.started('local');
         },
 
         // run for reply failure callback
@@ -16178,6 +16186,10 @@ RTCSession.prototype.sendNotifyRequest = function(options, successCallback, fail
   });
 };
 
+RTCSession.prototype.isStarted = function() {
+  return this.start_time !== null;
+};
+
 RTCSession.prototype.isHeld = function() {
   return this.isOnHold;
 };
@@ -16371,6 +16383,7 @@ RTCSession.prototype.receiveInviteResponse = function(response) {
          */
         function() {
           session.accepted('remote', response);
+          session.started('remote', response);
           session.sendRequest(ExSIP_C.ACK);
           session.confirmed('local', null);
         },
@@ -20316,7 +20329,7 @@ function UA(configuration) {
     'onReInvite'
   ];
 
-  this.log = new LoggerFactory();
+  this.log = new LoggerFactory(configuration);
   this.logger = this.getLogger('ua');
   this.usedServers = [];
   this.rtcMediaHandlerOptions = {};

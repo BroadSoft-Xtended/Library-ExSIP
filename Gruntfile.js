@@ -115,10 +115,10 @@ module.exports = function(grunt) {
 			}
 		},
 
-		nodeunit: {
-			all: [ 'test/*.js' ],
+		mochaTest: {
+			src: [ 'test/*.js' ],
 			options: {
-				reporter: 'default'
+				reporter: 'spec'
 			}
 		},
 
@@ -209,7 +209,7 @@ module.exports = function(grunt) {
 	// Load Grunt plugins.
 	grunt.loadNpmTasks('grunt-contrib-jshint');
 	grunt.loadNpmTasks('grunt-contrib-concat');
-	grunt.loadNpmTasks('grunt-contrib-nodeunit');
+	grunt.loadNpmTasks('grunt-mocha-test');
 	grunt.loadNpmTasks('grunt-contrib-uglify');
 	grunt.loadNpmTasks('grunt-contrib-watch');
 	grunt.loadNpmTasks('grunt-contrib-symlink');
@@ -259,8 +259,8 @@ module.exports = function(grunt) {
 
 	grunt.registerTask('devel', [ 'grammar' ]);
 
-	// Test task (nodeunit).
-	grunt.registerTask('test', [ 'nodeunit', 'notify:qunit' ]);
+	// Test task (mochaTest).
+	grunt.registerTask('test', [ 'mochaTest', 'notify:qunit' ]);
 
 	// Taks for building builds/jssip-X.Y.Z.js and builds/jssip-last.js symlink.
 	// NOTE: This task assumes that 'grunt devel' has been already executed.
@@ -272,9 +272,6 @@ module.exports = function(grunt) {
 
 	// Build builds nice documentation using JsDoc3.
 	grunt.registerTask('doc', [ 'jsdoc:docstrap' ]);
-
-	// Task for Travis CI.
-	grunt.registerTask('travis', [ 'test' ]);
 
 	// Default task points to 'dist' task.
 	grunt.registerTask('default', [ 'dist' ]);
