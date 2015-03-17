@@ -1910,8 +1910,6 @@ RTCSession.prototype.receiveRequest = function(request) {
 RTCSession.prototype.setStatus = function(status) {
   if(this.logger) {
     this.logger.debug('setStatus : '+Object.keys(C)[status]);    
-  } else {
-    console.log('setStatus : '+Object.keys(C)[status]);
   }
   this.status = status;
 };
