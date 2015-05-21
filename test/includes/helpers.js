@@ -320,7 +320,7 @@ test = {
       "To: <sip:fakeUA@exsip.net>;tag="+(options["from_tag"] || "<from_tag>")+"\r\n"+
       "From: \"Dom Webrtc\" <sip:1500@exarionetworks.com>;tag="+(options["to_tag"] || "8c9b3674")+"\r\n"+
       "Call-ID: "+(options["call_id"] || "<call_id>")+"\r\n"+
-      "CSeq: 637827301 "+(options["method"] || "INVITE")+"\r\n"+
+      "CSeq: "+(options.cseq || "637827301")+" "+(options["method"] || "INVITE")+"\r\n"+
       "Contact: <sip:5vlmplnu@exarionetworks.com;transport=ws;ob>\r\n"+
       "Allow: "+(options["allow"] || "ACK,CANCEL,BYE,OPTIONS,INVITE")+"\r\n"+
       "Content-Type: "+(options["content_type"] || "application/sdp")+"\r\n"+
@@ -376,7 +376,11 @@ test = {
     options = options || {};
     options["method"] = ExSIP.C.ACK;
     return test.sipRequestMessage(options, "");
+  },
 
+  ackResponseFor: function(request, options) {
+    options = this.mergeOptions(request, options);
+    ua.transport.onMessage({data: this.ackResponse(ua, options)});
   },
 
   inviteRequest: function(ua, options) {
@@ -447,13 +451,13 @@ test = {
     var sip = "INVITE sip:fakeUA@exsip.net SIP/2.0\r\n"+
       "Via: SIP/2.0/TLS 192.0.2.4;branch="+(options["branch"] || "z9hG4bKnas432")+"\r\n"+
       "Max-Forwards: 69\r\n"+
-      "To: <sip:fakeUA@exsip.net>\r\n"+
+      "To: <sip:fakeUA@exsip.net>"+(options["to_tag"] || "")+"\r\n"+
       "From: "+(options["from"] || "\"Dom Webrtc\" <sip:1500@exarionetworks.com>;tag=7553452")+"\r\n"+
       "Call-ID: "+(options["callId"] || "090459243588173445")+"\r\n"+
-      "CSeq: 29887 INVITE\r\n"+
+      "CSeq: "+(options["cseq"] || "29887")+" INVITE\r\n"+
       "Contact: <sip:5vlmplnu@exarionetworks.com;transport=ws;ob>\r\n"+
       "Allow: "+(options["allow"] || "ACK,CANCEL,BYE,OPTIONS,INVITE")+"\r\n"+
-      "Content-Type: application/sdp\r\n"+
+      (options.withoutContentType ? "" : "Content-Type: application/sdp\r\n")+
       "Supported: "+(options["supported"] || "path, outbound, gruu")+"\r\n"+
       "User-Agent: BroadSoft ExSIP - 1.5\r\n"+
       "Content-Length: "+sdp.length+"\r\n"+

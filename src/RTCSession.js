@@ -58,7 +58,10 @@ function RTCSession(ua) {
     'started',
     'onReInvite',
     'dataSent',
-    'dataReceived'
+    'dataReceived',
+    'iceconnected',
+    'icecompleted',
+    'iceclosed'
   ];
 
   this.ua = ua;
@@ -1296,7 +1299,7 @@ RTCSession.prototype.createOutgoingRequestSender = function(target, method, opti
   }
 
   extraHeaders.push('Contact: ' + this.contact);
-  extraHeaders.push('Allow: '+ Utils.getAllowedMethods(this.ua));
+  extraHeaders.push('Allow: ' + Utils.getAllowedMethods(this.ua));
 
   this.request = new SIPMessage.OutgoingRequest(method, target, this.ua, requestParams, extraHeaders);
 
@@ -1344,6 +1347,36 @@ RTCSession.prototype.isHeld = function() {
   return this.isOnHold;
 };
 
+RTCSession.prototype.iceConnected = function(originator, message) {
+  var session = this,
+    event_name = 'iceconnected';
+
+  session.emit(event_name, session, {
+    originator: originator,
+    response: message || null
+  });
+};
+
+RTCSession.prototype.iceCompleted = function(originator, message) {
+  var session = this,
+    event_name = 'icecompleted';
+
+  session.emit(event_name, session, {
+    originator: originator,
+    response: message || null
+  });
+};
+
+RTCSession.prototype.iceClosed = function(originator, message) {
+  var session = this,
+    event_name = 'iceclosed';
+
+  session.emit(event_name, session, {
+    originator: originator,
+    response: message || null
+  });
+};
+
 RTCSession.prototype.held = function() {
   this.isOnHold = true;
   this.emit('held', this);
@@ -1356,9 +1389,14 @@ RTCSession.prototype.resumed = function() {
 
 RTCSession.prototype.hold = function(inviteSuccessCallback, inviteFailureCallback) {
   var self = this;
-  this.changeSession({audioMode: ExSIP_C.INACTIVE, audioPort: "0", videoMode: ExSIP_C.INACTIVE, videoPort: "0"}, function(){
+  this.changeSession({
+      audioMode: ExSIP_C.INACTIVE,
+      audioPort: "0",
+      videoMode: ExSIP_C.INACTIVE,
+      videoPort: "0"
+    }, function() {
       self.held();
-      if(inviteSuccessCallback) {
+      if (inviteSuccessCallback) {
         inviteSuccessCallback();
       }
     },
@@ -1367,9 +1405,12 @@ RTCSession.prototype.hold = function(inviteSuccessCallback, inviteFailureCallbac
 
 RTCSession.prototype.unhold = function(inviteSuccessCallback, inviteFailureCallback) {
   var self = this;
-  this.changeSession({audioMode: ExSIP_C.SENDRECV, videoMode: ExSIP_C.SENDRECV}, function(){
+  this.changeSession({
+      audioMode: ExSIP_C.SENDRECV,
+      videoMode: ExSIP_C.SENDRECV
+    }, function() {
       self.resumed();
-      if(inviteSuccessCallback) {
+      if (inviteSuccessCallback) {
         inviteSuccessCallback();
       }
     },
@@ -1378,7 +1419,7 @@ RTCSession.prototype.unhold = function(inviteSuccessCallback, inviteFailureCallb
 
 RTCSession.prototype.changeSession = function(sdpOptions, inviteSuccessCallback, inviteFailureCallback) {
   var self = this;
-  this.logger.debug('changeSession : '+JSON.stringify(sdpOptions));
+  this.logger.debug('changeSession : ' + JSON.stringify(sdpOptions));
   this.reconnectRtcMediaHandler(function() {
     self.logger.debug('changeSession : reconnectRtcMediaHandler : success');
     self.receiveResponse = self.receiveReinviteResponse;
@@ -1794,12 +1835,12 @@ RTCSession.prototype.receiveRequest = function(request) {
           clearTimeout(this.timers.ackTimer);
           clearTimeout(this.timers.invite2xxTimer);
           this.setStatus(C.STATUS_CONFIRMED);
-          if(request.body.length > 0) {
+          if (request.body.length > 0) {
             this.logger.log('set remoteDescription for late offer ACK');
-            this.rtcMediaHandler.onMessage(self.rtcMediaHandler.getSetRemoteLocationType(), request.body, function(){
+            this.rtcMediaHandler.onMessage(self.rtcMediaHandler.getSetRemoteLocationType(), request.body, function() {
               self.logger.log('late offer remoteDescription success');
               self.started('local', undefined, true);
-            }, function(){
+            }, function() {
               self.logger.log('late offer remoteDescription failure');
             });
           }
@@ -1873,28 +1914,28 @@ RTCSession.prototype.receiveRequest = function(request) {
         }
         break;
       case ExSIP_C.REFER:
-        if(this.status === C.STATUS_CONFIRMED) {
+        if (this.status === C.STATUS_CONFIRMED) {
           this.ua.processRefer(this, request);
         }
         break;
       case ExSIP_C.NOTIFY:
-        if(this.status === C.STATUS_REFER_SENT) {
+        if (this.status === C.STATUS_REFER_SENT) {
           request.reply(200);
           this.logger.log('received NOTIFY with body : ' + request.body);
           var status = parseInt(request.body.match(/SIP\/2.0\s(.*)\s/)[1], 10);
           this.logger.log('NOTIFY status : ' + status);
 
-          if(!this.sessionToTransfer) {
+          if (!this.sessionToTransfer) {
             this.logger.warn('no transferred session for REFER session : ' + this.id);
             return;
           }
 
-          if(status >= 200 && status <= 299) {
+          if (status >= 200 && status <= 299) {
             this.logger.log('terminate transferred session : ' + this.sessionToTransfer.id);
             this.sessionToTransfer.terminate();
-          } else if(status >= 400 && status <= 699) {
+          } else if (status >= 400 && status <= 699) {
             this.logger.warn('resuming session : ' + this.sessionToTransfer.id);
-            this.sessionToTransfer.unhold(function(){
+            this.sessionToTransfer.unhold(function() {
               self.logger.log('resumed session : ' + self.sessionToTransfer.id);
             });
           }
@@ -1908,8 +1949,8 @@ RTCSession.prototype.receiveRequest = function(request) {
 
 
 RTCSession.prototype.setStatus = function(status) {
-  if(this.logger) {
-    this.logger.debug('setStatus : '+Object.keys(C)[status]);    
+  if (this.logger) {
+    this.logger.debug('setStatus : ' + Object.keys(C)[status]);
   }
   this.status = status;
 };
@@ -2188,7 +2229,7 @@ RTCSession.prototype.receiveReinviteResponse = function(response) {
          * SDP Answer fits with Offer.
          */
         function() {
-          if(self.reinviteSucceeded) {
+          if (self.reinviteSucceeded) {
             self.reinviteSucceeded();
           }
         },
@@ -2197,15 +2238,15 @@ RTCSession.prototype.receiveReinviteResponse = function(response) {
          * SDP Answer does not fit the Offer.
          */
         function() {
-          if(self.reinviteFailed) {
-            self.reinviteFailed();            
+          if (self.reinviteFailed) {
+            self.reinviteFailed();
           }
         }
       );
       break;
     default:
-      if(this.reinviteFailed) {
-        this.reinviteFailed();        
+      if (this.reinviteFailed) {
+        this.reinviteFailed();
       }
   }
 };

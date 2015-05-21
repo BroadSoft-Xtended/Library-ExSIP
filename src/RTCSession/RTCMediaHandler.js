@@ -370,12 +370,18 @@ RTCMediaHandler.prototype = {
     this.peerConnection.oniceconnectionstatechange = function() {
       self.logger.debug('ICE connection state changed to "'+ this.iceConnectionState +'"');
 
-      if (this.iceConnectionState === 'failed') {
+      if (this.iceConnectionState === 'connected') {
+        self.session.iceConnected();
+      } else if (this.iceConnectionState === 'completed') {
+        self.session.iceCompleted();
+      } else if (this.iceConnectionState === 'closed') {
+        self.session.iceClosed();
+      } else if (this.iceConnectionState === 'failed') {
         self.session.terminate({
-            cause: ExSIP_C.causes.RTP_TIMEOUT,
-            status_code: 200,
-            reason_phrase: ExSIP_C.causes.RTP_TIMEOUT
-          });
+          cause: ExSIP_C.causes.RTP_TIMEOUT,
+          status_code: 200,
+          reason_phrase: ExSIP_C.causes.RTP_TIMEOUT
+        });
       }
     };
 
