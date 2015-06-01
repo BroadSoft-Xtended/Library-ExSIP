@@ -487,7 +487,7 @@ IncomingRequest.prototype.reply = function(code, reason, extraHeaders, body, onS
 
   if(body) {
     length = Utils.str_utf8_length(body);
-    if(!this.hasHeader('Content-Type')) {
+    if(response.indexOf('Content-Type:') === -1) {
       response += 'Content-Type: application/sdp\r\n';      
     }
     response += 'Content-Length: ' + length + '\r\n\r\n';
