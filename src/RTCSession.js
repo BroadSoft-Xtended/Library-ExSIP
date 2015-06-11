@@ -1080,10 +1080,10 @@
       return;
     }
 
-    if(this.status !== C.STATUS_INVITE_SENT && this.status !== C.STATUS_1XX_RECEIVED) {
-      logger.warn('status ('+this.status+') not invite sent or 1xx received or terminated', this.ua);
-      return;
-    }
+    // if(this.status !== C.STATUS_INVITE_SENT && this.status !== C.STATUS_1XX_RECEIVED) {
+    //   logger.warn('status ('+this.status+') not invite sent or 1xx received or terminated', this.ua);
+    //   return;
+    // }
 
     switch(true) {
       case /^100$/.test(response.status_code):
