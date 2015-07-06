@@ -129,7 +129,8 @@ RTCMediaHandler.prototype = {
     options = options || {};
 
     function onSetLocalDescriptionSuccess() {
-      if (self.peerConnection.iceGatheringState === 'complete' && (self.peerConnection.iceConnectionState === 'connected' || self.peerConnection.iceConnectionState === 'completed')) {
+      if (self.peerConnection.iceGatheringState === 'complete' && (self.peerConnection.iceConnectionState === 'connected' || self.peerConnection.iceConnectionState === 'completed') ||
+          !self.peerConnection.localDescription.isActive()) {
         self.ready = true;
         onSuccess(self.peerConnection.localDescription.sdp);
       } else {
@@ -186,7 +187,8 @@ RTCMediaHandler.prototype = {
     var self = this;
 
     function onSetLocalDescriptionSuccess() {
-      if (self.peerConnection.iceGatheringState === 'complete' && (self.peerConnection.iceConnectionState === 'connected' || self.peerConnection.iceConnectionState === 'completed')) {
+      if (self.peerConnection.iceGatheringState === 'complete' && (self.peerConnection.iceConnectionState === 'connected' || self.peerConnection.iceConnectionState === 'completed') ||
+          !self.peerConnection.localDescription.isActive()) {
         self.ready = true;
         onSuccess(self.peerConnection.localDescription.sdp);
       } else {

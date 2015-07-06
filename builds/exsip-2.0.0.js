@@ -14908,7 +14908,10 @@ function RTCSession(ua) {
     'started',
     'onReInvite',
     'dataSent',
-    'dataReceived'
+    'dataReceived',
+    'iceconnected',
+    'icecompleted',
+    'iceclosed'
   ];
 
   this.ua = ua;
@@ -16146,7 +16149,7 @@ RTCSession.prototype.createOutgoingRequestSender = function(target, method, opti
   }
 
   extraHeaders.push('Contact: ' + this.contact);
-  extraHeaders.push('Allow: '+ Utils.getAllowedMethods(this.ua));
+  extraHeaders.push('Allow: ' + Utils.getAllowedMethods(this.ua));
 
   this.request = new SIPMessage.OutgoingRequest(method, target, this.ua, requestParams, extraHeaders);
 
@@ -16194,6 +16197,36 @@ RTCSession.prototype.isHeld = function() {
   return this.isOnHold;
 };
 
+RTCSession.prototype.iceConnected = function(originator, message) {
+  var session = this,
+    event_name = 'iceconnected';
+
+  session.emit(event_name, session, {
+    originator: originator,
+    response: message || null
+  });
+};
+
+RTCSession.prototype.iceCompleted = function(originator, message) {
+  var session = this,
+    event_name = 'icecompleted';
+
+  session.emit(event_name, session, {
+    originator: originator,
+    response: message || null
+  });
+};
+
+RTCSession.prototype.iceClosed = function(originator, message) {
+  var session = this,
+    event_name = 'iceclosed';
+
+  session.emit(event_name, session, {
+    originator: originator,
+    response: message || null
+  });
+};
+
 RTCSession.prototype.held = function() {
   this.isOnHold = true;
   this.emit('held', this);
@@ -16206,9 +16239,14 @@ RTCSession.prototype.resumed = function() {
 
 RTCSession.prototype.hold = function(inviteSuccessCallback, inviteFailureCallback) {
   var self = this;
-  this.changeSession({audioMode: ExSIP_C.INACTIVE, audioPort: "0", videoMode: ExSIP_C.INACTIVE, videoPort: "0"}, function(){
+  this.changeSession({
+      audioMode: ExSIP_C.INACTIVE,
+      audioPort: "0",
+      videoMode: ExSIP_C.INACTIVE,
+      videoPort: "0"
+    }, function() {
       self.held();
-      if(inviteSuccessCallback) {
+      if (inviteSuccessCallback) {
         inviteSuccessCallback();
       }
     },
@@ -16217,9 +16255,12 @@ RTCSession.prototype.hold = function(inviteSuccessCallback, inviteFailureCallbac
 
 RTCSession.prototype.unhold = function(inviteSuccessCallback, inviteFailureCallback) {
   var self = this;
-  this.changeSession({audioMode: ExSIP_C.SENDRECV, videoMode: ExSIP_C.SENDRECV}, function(){
+  this.changeSession({
+      audioMode: ExSIP_C.SENDRECV,
+      videoMode: ExSIP_C.SENDRECV
+    }, function() {
       self.resumed();
-      if(inviteSuccessCallback) {
+      if (inviteSuccessCallback) {
         inviteSuccessCallback();
       }
     },
@@ -16228,7 +16269,7 @@ RTCSession.prototype.unhold = function(inviteSuccessCallback, inviteFailureCallb
 
 RTCSession.prototype.changeSession = function(sdpOptions, inviteSuccessCallback, inviteFailureCallback) {
   var self = this;
-  this.logger.debug('changeSession : '+JSON.stringify(sdpOptions));
+  this.logger.debug('changeSession : ' + JSON.stringify(sdpOptions));
   this.reconnectRtcMediaHandler(function() {
     self.logger.debug('changeSession : reconnectRtcMediaHandler : success');
     self.receiveResponse = self.receiveReinviteResponse;
@@ -16644,12 +16685,12 @@ RTCSession.prototype.receiveRequest = function(request) {
           clearTimeout(this.timers.ackTimer);
           clearTimeout(this.timers.invite2xxTimer);
           this.setStatus(C.STATUS_CONFIRMED);
-          if(request.body.length > 0) {
+          if (request.body.length > 0) {
             this.logger.log('set remoteDescription for late offer ACK');
-            this.rtcMediaHandler.onMessage(self.rtcMediaHandler.getSetRemoteLocationType(), request.body, function(){
+            this.rtcMediaHandler.onMessage(self.rtcMediaHandler.getSetRemoteLocationType(), request.body, function() {
               self.logger.log('late offer remoteDescription success');
               self.started('local', undefined, true);
-            }, function(){
+            }, function() {
               self.logger.log('late offer remoteDescription failure');
             });
           }
@@ -16723,28 +16764,28 @@ RTCSession.prototype.receiveRequest = function(request) {
         }
         break;
       case ExSIP_C.REFER:
-        if(this.status === C.STATUS_CONFIRMED) {
+        if (this.status === C.STATUS_CONFIRMED) {
           this.ua.processRefer(this, request);
         }
         break;
       case ExSIP_C.NOTIFY:
-        if(this.status === C.STATUS_REFER_SENT) {
+        if (this.status === C.STATUS_REFER_SENT) {
           request.reply(200);
           this.logger.log('received NOTIFY with body : ' + request.body);
           var status = parseInt(request.body.match(/SIP\/2.0\s(.*)\s/)[1], 10);
           this.logger.log('NOTIFY status : ' + status);
 
-          if(!this.sessionToTransfer) {
+          if (!this.sessionToTransfer) {
             this.logger.warn('no transferred session for REFER session : ' + this.id);
             return;
           }
 
-          if(status >= 200 && status <= 299) {
+          if (status >= 200 && status <= 299) {
             this.logger.log('terminate transferred session : ' + this.sessionToTransfer.id);
             this.sessionToTransfer.terminate();
-          } else if(status >= 400 && status <= 699) {
+          } else if (status >= 400 && status <= 699) {
             this.logger.warn('resuming session : ' + this.sessionToTransfer.id);
-            this.sessionToTransfer.unhold(function(){
+            this.sessionToTransfer.unhold(function() {
               self.logger.log('resumed session : ' + self.sessionToTransfer.id);
             });
           }
@@ -16758,10 +16799,8 @@ RTCSession.prototype.receiveRequest = function(request) {
 
 
 RTCSession.prototype.setStatus = function(status) {
-  if(this.logger) {
-    this.logger.debug('setStatus : '+Object.keys(C)[status]);    
-  } else {
-    console.log('setStatus : '+Object.keys(C)[status]);
+  if (this.logger) {
+    this.logger.debug('setStatus : ' + Object.keys(C)[status]);
   }
   this.status = status;
 };
@@ -17040,7 +17079,7 @@ RTCSession.prototype.receiveReinviteResponse = function(response) {
          * SDP Answer fits with Offer.
          */
         function() {
-          if(self.reinviteSucceeded) {
+          if (self.reinviteSucceeded) {
             self.reinviteSucceeded();
           }
         },
@@ -17049,15 +17088,15 @@ RTCSession.prototype.receiveReinviteResponse = function(response) {
          * SDP Answer does not fit the Offer.
          */
         function() {
-          if(self.reinviteFailed) {
-            self.reinviteFailed();            
+          if (self.reinviteFailed) {
+            self.reinviteFailed();
           }
         }
       );
       break;
     default:
-      if(this.reinviteFailed) {
-        this.reinviteFailed();        
+      if (this.reinviteFailed) {
+        this.reinviteFailed();
       }
   }
 };
@@ -17809,7 +17848,8 @@ RTCMediaHandler.prototype = {
     options = options || {};
 
     function onSetLocalDescriptionSuccess() {
-      if (self.peerConnection.iceGatheringState === 'complete' && (self.peerConnection.iceConnectionState === 'connected' || self.peerConnection.iceConnectionState === 'completed')) {
+      if (self.peerConnection.iceGatheringState === 'complete' && (self.peerConnection.iceConnectionState === 'connected' || self.peerConnection.iceConnectionState === 'completed') ||
+          !self.peerConnection.localDescription.isActive()) {
         self.ready = true;
         onSuccess(self.peerConnection.localDescription.sdp);
       } else {
@@ -17866,7 +17906,8 @@ RTCMediaHandler.prototype = {
     var self = this;
 
     function onSetLocalDescriptionSuccess() {
-      if (self.peerConnection.iceGatheringState === 'complete' && (self.peerConnection.iceConnectionState === 'connected' || self.peerConnection.iceConnectionState === 'completed')) {
+      if (self.peerConnection.iceGatheringState === 'complete' && (self.peerConnection.iceConnectionState === 'connected' || self.peerConnection.iceConnectionState === 'completed') ||
+          !self.peerConnection.localDescription.isActive()) {
         self.ready = true;
         onSuccess(self.peerConnection.localDescription.sdp);
       } else {
@@ -18050,12 +18091,18 @@ RTCMediaHandler.prototype = {
     this.peerConnection.oniceconnectionstatechange = function() {
       self.logger.debug('ICE connection state changed to "'+ this.iceConnectionState +'"');
 
-      if (this.iceConnectionState === 'failed') {
+      if (this.iceConnectionState === 'connected') {
+        self.session.iceConnected();
+      } else if (this.iceConnectionState === 'completed') {
+        self.session.iceCompleted();
+      } else if (this.iceConnectionState === 'closed') {
+        self.session.iceClosed();
+      } else if (this.iceConnectionState === 'failed') {
         self.session.terminate({
-            cause: ExSIP_C.causes.RTP_TIMEOUT,
-            status_code: 200,
-            reason_phrase: ExSIP_C.causes.RTP_TIMEOUT
-          });
+          cause: ExSIP_C.causes.RTP_TIMEOUT,
+          status_code: 200,
+          reason_phrase: ExSIP_C.causes.RTP_TIMEOUT
+        });
       }
     };
 
@@ -18350,10 +18397,10 @@ Registrator.prototype = {
   unregister: function(options) {
     var extraHeaders;
 
-    if(!this.registered) {
-      this.logger.debug('already unregistered');
-      return;
-    }
+    // if(!this.registered) {
+    //   this.logger.debug('already unregistered');
+    //   return;
+    // }
 
     options = options || {};
 
@@ -19102,7 +19149,7 @@ IncomingRequest.prototype.reply = function(code, reason, extraHeaders, body, onS
 
   if(body) {
     length = Utils.str_utf8_length(body);
-    if(!this.hasHeader('Content-Type')) {
+    if(response.indexOf('Content-Type:') === -1) {
       response += 'Content-Type: application/sdp\r\n';      
     }
     response += 'Content-Length: ' + length + '\r\n\r\n';
@@ -20434,9 +20481,6 @@ function UA(configuration) {
     this.error = C.CONFIGURATION_ERROR;
     throw e;
   }
-
-  // Initialize registrator
-  this._registrator = new Registrator(this);
 }
 
 
@@ -21228,7 +21272,7 @@ UA.prototype.loadConfig = function(configuration) {
       /* Host address
        * Value to be set in Via sent_by and host part of Contact FQDN
        */
-      via_host: Utils.createRandomToken(12) + '.invalid',
+      via_host: this.configuration.via_host || (Utils.createRandomToken(12) + '.invalid'),
 
       // Password
       password: null,
@@ -21321,11 +21365,11 @@ UA.prototype.loadConfig = function(configuration) {
 
   // Instance-id for GRUU
   if (!settings.instance_id) {
-    settings.instance_id = Utils.newUUID();
+    settings.instance_id = this.configuration.instance_id || Utils.newUUID();
   }
 
   // ExSIP_id instance parameter. Static random tag of length 5
-  settings.exsip_id = Utils.createRandomToken(5);
+  settings.exsip_id = this.configuration.exsip_id || Utils.createRandomToken(5);
 
   // String containing settings.uri without scheme and user.
   hostport_params = settings.uri.clone();
@@ -21360,7 +21404,7 @@ UA.prototype.loadConfig = function(configuration) {
     settings.stun_servers = [];
   }
 
-  this.contact = {
+  this.contact = this.contact || {
     pub_gruu: null,
     temp_gruu: null,
     uri: new URI('sip', Utils.createRandomToken(8), settings.via_host, null, {
@@ -21416,6 +21460,9 @@ UA.prototype.loadConfig = function(configuration) {
         this.logger.debug('· ' + parameter + ': ' + JSON.stringify(settings[parameter]));
     }
   }
+
+  // Initialize registrator
+  this._registrator = new Registrator(this);
 
   return;
 };
@@ -21541,14 +21588,14 @@ UA.configuration_skeleton = (function() {
     skeleton[parameter] = {
       value: '',
       writable: false,
-      configurable: false
+      configurable: true
     };
   }
 
   skeleton.register = {
     value: '',
     writable: true,
-    configurable: false
+    configurable: true
   };
 
   return skeleton;

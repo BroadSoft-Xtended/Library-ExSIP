@@ -59,6 +59,15 @@ DialogRequestSender.prototype = {
     this.applicant.onTransportError();
   },
 
+  // RFC3261 14.1
+  getReattemptTimeout: function() {
+    if(this.applicant.direction === 'outgoing') {
+      return (Math.random() * (4 - 2.1) + 2.1).toFixed(2);
+    } else {
+      return (Math.random() * 2).toFixed(2);
+    }
+  },
+
   receiveResponse: function(response) {
     var self = this;
 

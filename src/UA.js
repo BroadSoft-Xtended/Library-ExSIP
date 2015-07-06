@@ -167,9 +167,6 @@ function UA(configuration) {
     this.error = C.CONFIGURATION_ERROR;
     throw e;
   }
-
-  // Initialize registrator
-  this._registrator = new Registrator(this);
 }
 
 
@@ -961,7 +958,7 @@ UA.prototype.loadConfig = function(configuration) {
       /* Host address
        * Value to be set in Via sent_by and host part of Contact FQDN
        */
-      via_host: Utils.createRandomToken(12) + '.invalid',
+      via_host: this.configuration.via_host || (Utils.createRandomToken(12) + '.invalid'),
 
       // Password
       password: null,
@@ -1054,11 +1051,11 @@ UA.prototype.loadConfig = function(configuration) {
 
   // Instance-id for GRUU
   if (!settings.instance_id) {
-    settings.instance_id = Utils.newUUID();
+    settings.instance_id = this.configuration.instance_id || Utils.newUUID();
   }
 
   // ExSIP_id instance parameter. Static random tag of length 5
-  settings.exsip_id = Utils.createRandomToken(5);
+  settings.exsip_id = this.configuration.exsip_id || Utils.createRandomToken(5);
 
   // String containing settings.uri without scheme and user.
   hostport_params = settings.uri.clone();
@@ -1093,7 +1090,7 @@ UA.prototype.loadConfig = function(configuration) {
     settings.stun_servers = [];
   }
 
-  this.contact = {
+  this.contact = this.contact || {
     pub_gruu: null,
     temp_gruu: null,
     uri: new URI('sip', Utils.createRandomToken(8), settings.via_host, null, {
@@ -1149,6 +1146,9 @@ UA.prototype.loadConfig = function(configuration) {
         this.logger.debug('· ' + parameter + ': ' + JSON.stringify(settings[parameter]));
     }
   }
+
+  // Initialize registrator
+  this._registrator = new Registrator(this);
 
   return;
 };
@@ -1274,14 +1274,14 @@ UA.configuration_skeleton = (function() {
     skeleton[parameter] = {
       value: '',
       writable: false,
-      configurable: false
+      configurable: true
     };
   }
 
   skeleton.register = {
     value: '',
     writable: true,
-    configurable: false
+    configurable: true
   };
 
   return skeleton;

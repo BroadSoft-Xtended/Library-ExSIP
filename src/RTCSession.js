@@ -615,7 +615,7 @@ RTCSession.prototype.acceptReInvite = function(options) {
 RTCSession.prototype.reconnectRtcMediaHandler = function(connectSuccess, connectFailed, options) {
   var self = this;
   options = options || {};
-  var localMedia = options.localMedia || this.rtcMediaHandler.localMedia;
+  var localMedia = options.localMedia || this.rtcMediaHandler.localMedia || self.ua.localMedia;
   options.createOfferConstraints = options.createOfferConstraints || this.rtcMediaHandler.createOfferConstraints;
   this.rtcMediaHandler.close(!!options.localMedia);
 
@@ -1847,7 +1847,7 @@ RTCSession.prototype.receiveRequest = function(request) {
         }
         break;
       case ExSIP_C.BYE:
-        if (this.status === C.STATUS_CONFIRMED) {
+        if (this.status === C.STATUS_CONFIRMED || this.status === C.STATUS_REFER_SENT) {
           request.reply(200);
           this.ended('remote', request, ExSIP_C.causes.BYE);
         } else if (this.status === C.STATUS_INVITE_RECEIVED) {
@@ -2210,39 +2210,42 @@ RTCSession.prototype.receiveReinviteResponse = function(response) {
     case /^1[0-9]{2}$/.test(response.status_code):
       break;
     case /^2[0-9]{2}$/.test(response.status_code):
-      this.setStatus(C.STATUS_CONFIRMED);
-      this.sendRequest(ExSIP_C.ACK);
+      if(this.status !== C.STATUS_CONFIRMED) {
+        this.setStatus(C.STATUS_CONFIRMED);
+        this.sendRequest(ExSIP_C.ACK);
 
-      if (!response.body) {
-        this.reinviteFailed();
-        break;
-      } else if (contentType !== 'application/sdp') {
-        this.reinviteFailed();
-        break;
-      }
-
-      this.rtcMediaHandler.onMessage(
-        'answer',
-        response.body,
-        /*
-         * onSuccess
-         * SDP Answer fits with Offer.
-         */
-        function() {
-          if (self.reinviteSucceeded) {
-            self.reinviteSucceeded();
-          }
-        },
-        /*
-         * onFailure
-         * SDP Answer does not fit the Offer.
-         */
-        function() {
-          if (self.reinviteFailed) {
-            self.reinviteFailed();
-          }
+        if (!response.body) {
+          this.reinviteFailed();
+          break;
+        } else if (contentType !== 'application/sdp') {
+          this.reinviteFailed();
+          break;
         }
-      );
+
+        this.rtcMediaHandler.onMessage(
+          'answer',
+          response.body,
+          /*
+           * onSuccess
+           * SDP Answer fits with Offer.
+           */
+          function() {
+            if (self.reinviteSucceeded) {
+              self.reinviteSucceeded();
+            }
+          },
+          /*
+           * onFailure
+           * SDP Answer does not fit the Offer.
+           */
+          function() {
+            if (self.reinviteFailed) {
+              self.reinviteFailed();
+            }
+          }
+        );
+
+      }
       break;
     default:
       if (this.reinviteFailed) {
@@ -2394,7 +2397,7 @@ RTCSession.prototype.accepted = function(originator, message) {
   });
 };
 
-RTCSession.prototype.started = function(originator, message) {
+RTCSession.prototype.started = function(originator, message, isReconnect) {
   var session = this,
     event_name = 'started';
 
@@ -2402,7 +2405,8 @@ RTCSession.prototype.started = function(originator, message) {
 
   session.emit(event_name, session, {
     originator: originator,
-    response: message || null
+    response: message || null,
+    isReconnect: isReconnect
   });
 };
 

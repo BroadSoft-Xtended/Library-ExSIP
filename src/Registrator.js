@@ -196,10 +196,10 @@ Registrator.prototype = {
   unregister: function(options) {
     var extraHeaders;
 
-    if(!this.registered) {
-      this.logger.debug('already unregistered');
-      return;
-    }
+    // if(!this.registered) {
+    //   this.logger.debug('already unregistered');
+    //   return;
+    // }
 
     options = options || {};
 
