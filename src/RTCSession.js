@@ -848,6 +848,8 @@
             else if (contentType && (contentType.match(/^application\/media_control\+xml/i))) {
               request.reply(200);
               self.started('local', undefined, true);
+            } else {
+              request.reply(415);
             }
           }
           break;
