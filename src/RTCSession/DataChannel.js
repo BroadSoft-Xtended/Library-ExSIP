@@ -68,23 +68,23 @@ DataChannel.prototype.initSendChannel = function() {
 
     var onSendChannelStateChange = function() {
       var readyState = self.sendChannel.readyState;
-      this.logger.log('Send channel state is: ' + readyState, self.session.ua);
+      self.logger.log('Send channel state is: ' + readyState, self.session.ua);
     };
 
     this.sendChannel.onopen = onSendChannelStateChange;
     this.sendChannel.onclose = onSendChannelStateChange;
 
     var receiveChannelCallback = function(event) {
-      this.logger.log('Receive Channel Callback', self.session.ua);
+      self.logger.log('Receive Channel Callback', self.session.ua);
       self.receiveChannel = event.channel;
 
       var onReceiveChannelStateChange = function() {
         var readyState = self.receiveChannel.readyState;
-        this.logger.log('Receive channel state is: ' + readyState, self.session.ua);
+        self.logger.log('Receive channel state is: ' + readyState, self.session.ua);
       };
 
       var onReceiveMessageCallback = function(event) {
-        this.logger.log('Received Message : '+event.data, self.session.ua);
+        self.logger.log('Received Message : '+event.data, self.session.ua);
 
         if(event.data.indexOf('\n') !== -1) {
           self.dataReceived.push(event.data.replace('\n', ''));
