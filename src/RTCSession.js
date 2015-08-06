@@ -152,6 +152,26 @@ function RTCSession(ua) {
 
 RTCSession.prototype = new EventEmitter();
 
+RTCSession.prototype.hasRemoteAudio = function() {
+  return this.rtcMediaHandler && this.rtcMediaHandler.peerConnection && this.rtcMediaHandler.peerConnection.remoteDescription &&
+  this.rtcMediaHandler.peerConnection.remoteDescription.hasAudio();
+};
+
+RTCSession.prototype.hasRemoteVideo = function() {
+  return this.rtcMediaHandler && this.rtcMediaHandler.peerConnection && this.rtcMediaHandler.peerConnection.remoteDescription &&
+  this.rtcMediaHandler.peerConnection.remoteDescription.hasVideo();
+};
+
+RTCSession.prototype.hasLocalAudio = function() {
+  return this.rtcMediaHandler && this.rtcMediaHandler.peerConnection && this.rtcMediaHandler.peerConnection.localDescription &&
+  this.rtcMediaHandler.peerConnection.localDescription.hasAudio();
+};
+
+RTCSession.prototype.hasLocalVideo = function() {
+  return this.rtcMediaHandler && this.rtcMediaHandler.peerConnection && this.rtcMediaHandler.peerConnection.localDescription &&
+  this.rtcMediaHandler.peerConnection.localDescription.hasVideo();
+};
+
 /**
  * Terminate the call.
  */
