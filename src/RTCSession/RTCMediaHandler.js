@@ -228,6 +228,7 @@ RTCMediaHandler.prototype = {
   setLocalDescription: function(sessionDescription, onSuccess, onFailure) {
     var self = this;
 
+    this.logger.log('peerConnection.setLocalDescription : '+Utils.toString(sessionDescription));
     this.peerConnection.setLocalDescription(
       sessionDescription,
       onSuccess,
@@ -351,14 +352,35 @@ RTCMediaHandler.prototype = {
     this.peerConnection = new WebRTC.RTCPeerConnection({'iceServers': servers}, constraints);
 
     this.peerConnection.onaddstream = function(e) {
-      self.logger.debug('stream added: '+ e.stream.id);
+      self.logger.debug('pc.onaddstream : '+ e.stream.id);
     };
 
+    this.peerConnection.onpeeridentity = function(e) { 
+      self.logger.debug('pc.onpeeridentity : '+Utils.toString(e));
+    }
+
+    this.peerConnection.onidpassertionerror = function(e) { 
+      self.logger.debug('pc.onidpassertionerror : '+Utils.toString(e));
+    }
+
+    this.peerConnection.onidpvalidationerror = function(e) { 
+      self.logger.debug('pc.onidpvalidationerror : '+Utils.toString(e));
+    }
+    
     this.peerConnection.onremovestream = function(e) {
-      self.logger.debug('stream removed: '+ e.stream.id);
+      self.logger.debug('pc.onremovestream : '+ e.stream.id);
+    };
+
+    this.peerConnection.onnegotiationneeded = function(e) {
+      self.logger.debug('pc.onnegotiationneeded : '+ Utils.toString(e));
+    };
+
+    this.peerConnection.onsignalingstatechange = function(e) {
+      self.logger.debug('pc.onsignalingstatechange : '+ Utils.toString(e));
     };
 
     this.peerConnection.onicecandidate = function(e) {
+      self.logger.debug('pc.onicecandidate : '+ Utils.toString(e));
       if (e.candidate && self.session.ua.rtcMediaHandlerOptions.enableICE) {
         self.logger.debug('ICE candidate received: '+ e.candidate.candidate);
       } else if (self.onIceCompleted !== undefined) {
@@ -370,7 +392,7 @@ RTCMediaHandler.prototype = {
     };
 
     this.peerConnection.oniceconnectionstatechange = function() {
-      self.logger.debug('ICE connection state changed to "'+ this.iceConnectionState +'"');
+      self.logger.debug('pc.oniceconnectionstatechange : '+ this.iceConnectionState);
 
       if (this.iceConnectionState === 'connected') {
         self.session.iceConnected();
@@ -389,7 +411,7 @@ RTCMediaHandler.prototype = {
 
 
     this.peerConnection.onstatechange = function() {
-      self.logger.debug('PeerConnection state changed to "'+ this.readyState +'"');
+      self.logger.debug('pc.onstatechange : '+ this.readyState);
     };
 
     if(self.session.ua.configuration.enable_datachannel) {
@@ -422,7 +444,7 @@ RTCMediaHandler.prototype = {
   getUserMedia: function(onSuccess, onFailure, constraints) {
     var self = this;
 
-    this.logger.debug('requesting access to local media');
+    this.logger.debug('requesting access to local media : '+JSON.stringify(constraints));
 
     WebRTC.getUserMedia(constraints,
       function(stream) {
