@@ -357,15 +357,15 @@ RTCMediaHandler.prototype = {
 
     this.peerConnection.onpeeridentity = function(e) { 
       self.logger.debug('pc.onpeeridentity : '+Utils.toString(e));
-    }
+    };
 
     this.peerConnection.onidpassertionerror = function(e) { 
       self.logger.debug('pc.onidpassertionerror : '+Utils.toString(e));
-    }
+    };
 
     this.peerConnection.onidpvalidationerror = function(e) { 
       self.logger.debug('pc.onidpvalidationerror : '+Utils.toString(e));
-    }
+    };
     
     this.peerConnection.onremovestream = function(e) {
       self.logger.debug('pc.onremovestream : '+ e.stream.id);
