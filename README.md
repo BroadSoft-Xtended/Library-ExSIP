@@ -1,119 +1,66 @@
-<p align="center"><a href="http://jssip.net"><img src="http://jssip.net/images/jssip-banner-new.png"/></a></p>
+## What you need to build ExSIP
 
-[![Build Status](https://travis-ci.org/versatica/JsSIP.png?branch=new-design)](https://travis-ci.org/versatica/JsSIP)
-
-## Overview
-
-* Runs in the browser and Node.js.
-* SIP over [WebSocket](http://jssip.net/documentation/misc/sip_websocket/) (use real SIP in your web apps)
-* Audio/video calls ([WebRTC](http://jssip.net/documentation/misc/webrtc)), instant messaging and presence
-* Lightweight! (~140KB)
-* Easy to use and powerful user API
-* Works with OverSIP, Kamailio, Asterisk. Mobicents and repro (reSIProcate) servers ([more info](http://jssip.net/documentation/misc/interoperability))
-* Written by the authors of [RFC 7118 "The WebSocket Protocol as a Transport for SIP"](http://tools.ietf.org/html/rfc7118) and [OverSIP](http://oversip.net)
+You just need to have [Node.js](http://nodejs.org/) and [Git](http://git-scm.com/).
 
 
-## Getting Started
+### Node.js
 
-The following simple JavaScript code creates a JsSIP User Agent instance and makes a SIP call:
+* [Install Node.js via package manager](https://github.com/joyent/node/wiki/Installing-Node.js-via-package-manager)
+  e.g. on fedora
+   yum install npm
 
-```javascript
-// Create our JsSIP instance and run it:
+* [Install Node.js from sources](http://nodejs.org)
 
-var configuration = {
-  'ws_servers': 'ws://sip-ws.example.com',
-  'uri': 'sip:alice@example.com',
-  'password': 'superpassword'
-};
+### Git
 
-var coolPhone = new JsSIP.UA(configuration);
-
-coolPhone.start();
+* [Install Git](http://git-scm.com/book/en/Getting-Started-Installing-Git)
 
 
-// Make an audio/video call:
+### PhantomJS
 
-// HTML5 <video> elements in which local and remote video will be shown
-var selfView =   document.getElementById('my-video');
-var remoteView =  document.getElementById('peer-video');
+(optional, just for running unit tests)
 
-// Register callbacks to desired call events
-var eventHandlers = {
-  'progress': function(e){
-    console.log('call is in progress');
-  },
-  'failed': function(e){
-    console.log('call failed with cause: '+ e.data.cause);
-  },
-  'ended': function(e){
-    console.log('call ended with cause: '+ e.data.cause);
-  },
-  'confirmed': function(e){
-    var rtcSession = e.sender;
-
-    console.log('call confirmed');
-
-    // Attach local stream to selfView
-    if (rtcSession.getLocalStreams().length > 0) {
-      selfView.src = window.URL.createObjectURL(rtcSession.getLocalStreams()[0]);
-    }
-
-    // Attach remote stream to remoteView
-    if (rtcSession.getRemoteStreams().length > 0) {
-      remoteView.src = window.URL.createObjectURL(rtcSession.getRemoteStreams()[0]);
-    }
-  }
-};
-
-var options = {
-  'eventHandlers': eventHandlers,
-  'mediaConstraints': {'audio': true, 'video': true}
-};
+* [Install PhantomJS](http://phantomjs.org/download.html)
+* In modern Debian/Ubuntu systems PhantomJS can be installed via `apt-get install phantomjs`
 
 
-coolPhone.call('sip:bob@example.com', options);
+## How to build ExSIP
+
+Install grunt-cli globally:
+```
+$ npm install -g grunt-cli
 ```
 
-Want to see more? Check the full [Getting Started](http://jssip.net/documentation/0.3.x/getting_started/) section in the project website.
+Enter the directory and install the Node.js dependencies:
+```
+$ cd ExSIP && npm install
+```
+
+Make sure you have `grunt` installed by testing:
+```
+$ grunt -version
+```
+
+Finally, run `grunt` command with no arguments to get a complete version of ExSIP:
+```
+$ grunt dist
+```
+
+The built version of ExSIP will be available in the `dist/` subdirectory in both flavors: normal (uncompressed)  and minified, both linted with [JSLint](http://jslint.com/). There will be also a file named `dist/exsip-devel.js` which is an exact copy of the uncompressed file.
 
 
-## Online Demo
+## Development version
 
-Check our **Tryit JsSIP** online demo:
-
-* [tryit.jssip.net](http://tryit.jssip.net)
+Run `grunt devel` for just generating the `dist/exsip-devel.js` file. An uncompressed ExSIP source file named `exsip-devel.js` will be created in `dist` directory.
 
 
-## Website and Documentation
+## Test units
 
-* [jssip.net](http://jssip.net/)
+ExSIP includes test units based on [QUnit](http://qunitjs.com/). Test units use the `dist/exsip-devel.js` file. Run the tests as follows:
+```
+$ grunt test
 
-
-## Download
-
-* As Node module: `$ npm install jssip`
-* As Bower module: `$ bower install jssip`
-* Manually: [jssip.net/download](http://jssip.net/download/)
-
-
-## Authors
-
-#### José Luis Millán
-
-* Main author. Core Designer and Developer.
-* <jmillan@aliax.net> (Github [@jmillan](https://github.com/jmillan))
-
-#### Iñaki Baz Castillo
-
-* Core Designer and Developer.
-* <ibc@aliax.net> (Github [@ibc](https://github.com/ibc))
-
-#### Saúl Ibarra Corretgé
-
-* Core Designer.
-* <saghul@gmail.com> (Github [@saghul](https://github.com/saghul))
-
-
-## License
-
-JsSIP is released under the [MIT license](http://jssip.net/license).
+Running "qunit-serverless:all" (qunit-serverless) task
+...
+654 tests complete (1.6 seconds)
+```
