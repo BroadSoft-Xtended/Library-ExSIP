@@ -1023,31 +1023,34 @@
   };
 
   RTCSession.prototype.hold = function(inviteSuccessCallback, inviteFailureCallback) {
-    var self = this;
-    this.changeSession({audioMode: ExSIP.C.INACTIVE, audioPort: "0", videoMode: ExSIP.C.INACTIVE, videoPort: "0"}, function(){
-        self.held();
-        if(inviteSuccessCallback) {
-          inviteSuccessCallback();
-        }
-      },
-      inviteFailureCallback);
+    this.changeSession({hold: true}, inviteSuccessCallback, inviteFailureCallback);
   };
 
   RTCSession.prototype.unhold = function(inviteSuccessCallback, inviteFailureCallback) {
-    var self = this;
-    this.changeSession({audioMode: ExSIP.C.SENDRECV, videoMode: ExSIP.C.SENDRECV}, function(){
-        self.resumed();
-        if(inviteSuccessCallback) {
-          inviteSuccessCallback();
-        }
-      },
-      inviteFailureCallback);
+    this.changeSession({resume: true}, inviteSuccessCallback, inviteFailureCallback);
   };
 
   RTCSession.prototype.changeSession = function(sdpOptions, inviteSuccessCallback, inviteFailureCallback) {
     var self = this;
+    logger.debug('changeSession : ' + JSON.stringify(sdpOptions));
+    if(sdpOptions.hold) {
+      sdpOptions.audioMode = ExSIP.C.INACTIVE;
+      sdpOptions.videoMode = ExSIP.C.INACTIVE;
+    } else if(sdpOptions.resume) {
+      sdpOptions.audioMode = ExSIP.C.SENDRECV;
+      sdpOptions.videoMode = ExSIP.C.SENDRECV;
+    }
     this.reconnectRtcMediaHandler(function(){
-      self.sendInviteRequest(undefined, undefined, inviteSuccessCallback, inviteFailureCallback);
+      self.sendInviteRequest(undefined, undefined, function(){
+        if(sdpOptions.hold) {
+          self.held();
+        } else if(sdpOptions.resume) {
+          self.resumed();
+        }
+        if(inviteSuccessCallback) {
+          inviteSuccessCallback();
+        }
+      }, inviteFailureCallback);
     }, function(){
       logger.error("Could not change local mode");
     }, sdpOptions);
