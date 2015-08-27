@@ -20,6 +20,7 @@ var RTCMediaHandler = function(session, constraints) {
   this.peerConnection = null;
   this.createOfferConstraints = null;
   this.dataChannel = null;
+  this.ready = true;
 
   this.init(constraints);
 };
@@ -118,12 +119,21 @@ RTCMediaHandler.prototype = {
     var self = this;
     options = options || {};
 
-    this.onIceCompleted = function() {
-      logger.log('createOffer : onIceCompleted', self.session.ua);
-      if (self.peerConnection.localDescription) {
+    function onSetLocalDescriptionSuccess() {
+      if (self.peerConnection.iceGatheringState === 'complete' && (self.peerConnection.iceConnectionState === 'connected' || self.peerConnection.iceConnectionState === 'completed') ||
+          !self.peerConnection.localDescription.isActive()) {
+        self.ready = true;
         onSuccess(self.peerConnection.localDescription.sdp);
+      } else {
+        self.onIceCompleted = function() {
+          self.onIceCompleted = undefined;
+          self.ready = true;
+          onSuccess(self.peerConnection.localDescription.sdp);
+        };
       }
-    };
+    }
+
+    this.ready = false;
 
     this.createOfferConstraints = options.createOfferConstraints;
     logger.log("createOffer with createOfferConstraints : "+ExSIP.Utils.toString(this.createOfferConstraints), this.session.ua);
@@ -143,15 +153,15 @@ RTCMediaHandler.prototype = {
         }
         self.setLocalDescription(
           sessionDescription,
-          function(){
-            if(!sessionDescription.isActive()) {
-              onSuccess(self.peerConnection.localDescription.sdp);
-            }
-          },
-          onFailure
+          onSetLocalDescriptionSuccess,
+          function(e) {
+            self.ready = true;
+            onFailure(e);
+          }
         );
       },
       function(e) {
+        self.ready = true;
         logger.error('unable to create offer');
         logger.error(e);
         onFailure(e);
@@ -162,10 +172,21 @@ RTCMediaHandler.prototype = {
   createAnswer: function(onSuccess, onFailure, constraints) {
     var self = this;
 
-    this.onIceCompleted = function() {
-      logger.log('createAnswer : onIceCompleted', self.session.ua);
-      onSuccess(self.peerConnection.localDescription.sdp);
-    };
+    function onSetLocalDescriptionSuccess() {
+      if (self.peerConnection.iceGatheringState === 'complete' && (self.peerConnection.iceConnectionState === 'connected' || self.peerConnection.iceConnectionState === 'completed') ||
+          !self.peerConnection.localDescription.isActive()) {
+        self.ready = true;
+        onSuccess(self.peerConnection.localDescription.sdp);
+      } else {
+        self.onIceCompleted = function() {
+          self.onIceCompleted = undefined;
+          self.ready = true;
+          onSuccess(self.peerConnection.localDescription.sdp);
+        };
+      }
+    }
+
+    this.ready = false;
 
     constraints = constraints ||  this.createOfferConstraints;
     logger.log("createAnswer with constraints : "+constraints, this.session.ua);
@@ -173,15 +194,15 @@ RTCMediaHandler.prototype = {
       function(sessionDescription){
         self.setLocalDescription(
           sessionDescription,
-          function(){
-            if(!sessionDescription.isActive()) {
-              onSuccess(self.peerConnection.localDescription.sdp);
-            }
-          },
-          onFailure
+          onSetLocalDescriptionSuccess,
+          function(e) {
+            self.ready = true;
+            onFailure(e);
+          }
         );
       },
       function(e) {
+        self.ready = true;
         logger.error('unable to create answer');
         logger.error(e);
         onFailure(e);
@@ -309,7 +330,16 @@ RTCMediaHandler.prototype = {
       logger.log('onsignalingstatechange : '+ this.signalingState, self.session.ua);
     };
 
-    this.setOnIceCandidateCallback();
+    this.peerConnection.onicecandidate = function(e) {
+      if (e.candidate && self.session.ua.rtcMediaHandlerOptions["enableICE"]) {
+        logger.log('ICE candidate received: '+ e.candidate.candidate, self.session.ua);
+      } else if (self.onIceCompleted !== undefined) {
+        logger.log('onIceCompleted with ready : '+ self.ready+" and candidate : "+ExSIP.Utils.toString(e.candidate), self.session.ua);
+        if(!self.ready && e.candidate) {
+          self.onIceCompleted();
+        }      
+      }
+    };
 
     // To be deprecated as per https://code.google.com/p/webrtc/issues/detail?id=1393
     this.peerConnection.ongatheringchange = function(e) {
@@ -355,26 +385,6 @@ RTCMediaHandler.prototype = {
       logger.error("state "+state +" not implemented - returning offer");
       return "offer";
     }
-  },
-
-  setOnIceCandidateCallback: function(){
-    var sent = false, self = this;
-    this.peerConnection.onicecandidate = function(e) {
-      if (e.candidate && self.session.ua.rtcMediaHandlerOptions["enableICE"]) {
-        logger.log('ICE candidate received: '+ e.candidate.candidate, self.session.ua);
-      } else if (self.onIceCompleted !== undefined) {
-//        if(e.candidate) {
-//          self.peerConnection.addIceCandidate(new ExSIP.WebRTC.RTCIceCandidate(e.candidate));
-//        }
-        logger.log('onIceCompleted with sent : '+ sent+" and candidate : "+ExSIP.Utils.toString(e.candidate), self.session.ua);
-//        if(!sent && e.srcElement.iceGatheringState === 'complete') {
-        // trigger if e.candidate is not null or in FF is null
-        if(!sent && self.peerConnection.isIceCandidateReady(e.candidate)) {
-          sent = true;
-          self.onIceCompleted();
-        }
-      }
-    };
   },
 
   sendData: function(data) {

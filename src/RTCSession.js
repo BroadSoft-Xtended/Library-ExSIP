@@ -1032,6 +1032,7 @@
 
   RTCSession.prototype.changeSession = function(sdpOptions, inviteSuccessCallback, inviteFailureCallback) {
     var self = this;
+    sdpOptions = sdpOptions || {};
     logger.debug('changeSession : ' + JSON.stringify(sdpOptions));
     if(sdpOptions.hold) {
       sdpOptions.audioMode = ExSIP.C.INACTIVE;
