@@ -56,6 +56,7 @@
     this.rtcMediaHandler = null;
     this.isOnHold = false;
     this.initialRemoteSdp = null;
+    this.reconnecting = false;
 
     // Session Timers
     this.timers = {
@@ -1032,6 +1033,10 @@
 
   RTCSession.prototype.changeSession = function(sdpOptions, inviteSuccessCallback, inviteFailureCallback) {
     var self = this;
+    if(this.reconnecting) {
+      logger.debug('reconnecting in progress');
+      return;
+    }
     sdpOptions = sdpOptions || {};
     logger.debug('changeSession : ' + JSON.stringify(sdpOptions));
     if(sdpOptions.hold) {
@@ -1041,8 +1046,10 @@
       sdpOptions.audioMode = ExSIP.C.SENDRECV;
       sdpOptions.videoMode = ExSIP.C.SENDRECV;
     }
+    this.reconnecting = true;
     this.reconnectRtcMediaHandler(function(){
       self.sendInviteRequest(undefined, undefined, function(){
+        self.reconnecting = false;
         if(sdpOptions.hold) {
           self.held();
         } else if(sdpOptions.resume) {
@@ -1051,8 +1058,14 @@
         if(inviteSuccessCallback) {
           inviteSuccessCallback();
         }
-      }, inviteFailureCallback);
+      }, function(){
+        self.reconnecting = false;
+        if(inviteFailureCallback) {
+          inviteFailureCallback();
+        }
+      });
     }, function(){
+      self.reconnecting = false;
       logger.error("Could not change local mode");
     }, sdpOptions);
   };
