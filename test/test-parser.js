@@ -178,6 +178,20 @@ test('Parse CSeq', function() {
   strictEqual(cseq.method, 'CHICKEN');
 });
 
+test('Parse To with tel', function() {
+  var data = '"Test Name" <tel:1234567890@example.com>';
+  var c1 = ExSIP.Grammar.parse(data, 'To');
+
+  ok(c1 instanceof(ExSIP.NameAddrHeader));
+  strictEqual(c1.display_name, 'Test Name');
+  ok(c1.uri instanceof(ExSIP.URI));
+  strictEqual(c1.uri.scheme, 'tel');
+  strictEqual(c1.uri.user, '1234567890');
+  strictEqual(c1.uri.host, 'example.com');
+  strictEqual(c1.uri.port, undefined);
+  strictEqual(c1.toString(), '"Test Name" <tel:1234567890@example.com>');
+});
+
 
 test('Parse challenge', function() {
   var data = 'Digest realm =  "[1:ABCD::abc]", nonce =  "31d0a89ed7781ce6877de5cb032bf114", qop="AUTH,autH-INt", algorithm =  md5  ,  stale =  TRUE , opaque = "00000188"';

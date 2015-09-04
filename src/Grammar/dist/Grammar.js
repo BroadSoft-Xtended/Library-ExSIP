@@ -3059,6 +3059,17 @@ ExSIP.Grammar = (function(){
             matchFailed("\"sip\"");
           }
         }
+        if (result0 === null) {
+          if (input.substr(pos, 3).toLowerCase() === "tel") {
+            result0 = input.substr(pos, 3);
+            pos += 3;
+          } else {
+            result0 = null;
+            if (reportFailures === 0) {
+              matchFailed("\"tel\"");
+            }
+          }
+        }
         if (result0 !== null) {
           result0 = (function(offset, uri_scheme) {
                             data.scheme = uri_scheme.toLowerCase(); })(pos0, result0);
