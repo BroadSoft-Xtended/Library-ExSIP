@@ -406,7 +406,9 @@ RTCMediaHandler.prototype = {
       if(stopLocalMedia) {
         if(this.localMedia) {
           logger.log('stopping local media '+ExSIP.Utils.toString(this.localMedia), this.session.ua);
-          this.localMedia.stop();
+          (this.localMedia.getTracks() || []).forEach(function(track){
+            track.stop();
+          });
         }
       }
     }

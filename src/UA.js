@@ -321,7 +321,9 @@
 
       if(this.localMedia) {
         logger.log("stopping existing local media stream", this);
-        this.localMedia.stop();
+        (this.localMedia.getTracks() || []).forEach(function(track){
+          track.stop();
+        });
       }
 
       logger.log('options : '+ExSIP.Utils.toString(options), this);
