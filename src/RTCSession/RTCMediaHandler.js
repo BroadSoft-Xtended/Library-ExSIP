@@ -430,7 +430,9 @@ RTCMediaHandler.prototype = {
       if(stopLocalMedia) {
         if(this.localMedia) {
           this.logger.log('stopping local media '+Utils.toString(this.localMedia), this.session.ua);
-          this.localMedia.stop();
+          (this.localMedia.getTracks() || []).forEach(function(track){
+            track.stop();
+          });
         }
       }
     }
