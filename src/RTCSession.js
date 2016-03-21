@@ -91,10 +91,8 @@
 
   RTCSession.prototype.initRtcMediaHandler = function(options) {
     options = options || {};
-    this.rtcMediaHandler = new RTCMediaHandler(this, options.RTCConstraints || this.ua.rtcConstraints() || {"optional": [{'DtlsSrtpKeyAgreement': 'true'}]});
-    if(options["copy"]) {
-      this.rtcMediaHandler.copy(options["copy"]);
-    }
+    this.rtcMediaHandler = new RTCMediaHandler(this);
+    return this.rtcMediaHandler.init(options.RTCConstraints || this.ua.rtcConstraints() || {"optional": [{'DtlsSrtpKeyAgreement': 'true'}]});
   };
 
   /**
@@ -407,14 +405,15 @@
     options["createOfferConstraints"] = options.createOfferConstraints || this.rtcMediaHandler.createOfferConstraints;
     this.rtcMediaHandler.close(!!options.localMedia);
 
-    this.initRtcMediaHandler(options);
-    this.rtcMediaHandler.localMedia = localMedia;
-    this.rtcMediaHandler.createOfferConstraints = options["createOfferConstraints"];
-    this.connectRtcMediaHandler(localMedia, function(){
-        self.started('local', undefined, true);
-        connectSuccess();
-      }, connectFailed, options
-    );
+    this.initRtcMediaHandler(options).then(function() {
+      self.rtcMediaHandler.localMedia = localMedia;
+      self.rtcMediaHandler.createOfferConstraints = options["createOfferConstraints"];
+      self.connectRtcMediaHandler(localMedia, function(){
+          self.started('local', undefined, true);
+          connectSuccess();
+        }, connectFailed, options
+      );
+    });
   };
 
   /**
