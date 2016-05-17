@@ -89,6 +89,7 @@ ExSIP.Grammar = (function(){
         "user_unreserved": parse_user_unreserved,
         "password": parse_password,
         "hostport": parse_hostport,
+        "number": parse_number,
         "host": parse_host,
         "hostname": parse_hostname,
         "domainlabel": parse_domainlabel,
@@ -2932,6 +2933,9 @@ ExSIP.Grammar = (function(){
             result2 = result2 !== null ? result2 : "";
             if (result2 !== null) {
               result3 = parse_hostport();
+              if (result3 === null) {
+                result3 = parse_number();
+              }
               if (result3 !== null) {
                 result0 = [result0, result1, result2, result3];
               } else {
@@ -2953,6 +2957,9 @@ ExSIP.Grammar = (function(){
         if (result0 !== null) {
           result0 = (function(offset) {
                             try {
+                                if(!data.hostport) {
+                                  data.hostport = data.number;
+                                }
                                 data.uri = new ExSIP.URI(data.scheme, data.user, data.host, data.port);
                                 delete data.scheme;
                                 delete data.user;
@@ -2991,6 +2998,9 @@ ExSIP.Grammar = (function(){
             result2 = result2 !== null ? result2 : "";
             if (result2 !== null) {
               result3 = parse_hostport();
+              if (result3 === null) {
+                result3 = parse_number();
+              }
               if (result3 !== null) {
                 result4 = parse_uri_parameters();
                 if (result4 !== null) {
@@ -3026,6 +3036,9 @@ ExSIP.Grammar = (function(){
           result0 = (function(offset) {
                             var header;
                             try {
+                                if(!data.host) {
+                                  data.host = data.number;
+                                }
                                 data.uri = new ExSIP.URI(data.scheme, data.user, data.host, data.port, data.uri_params, data.uri_headers);
                                 delete data.scheme;
                                 delete data.user;
@@ -3440,6 +3453,69 @@ ExSIP.Grammar = (function(){
           }
         } else {
           result0 = null;
+          pos = pos0;
+        }
+        return result0;
+      }
+      
+      function parse_number() {
+        var result0, result1, result2;
+        var pos0, pos1;
+        
+        pos0 = pos;
+        pos1 = pos;
+        if (input.charCodeAt(pos) === 43) {
+          result0 = "+";
+          pos++;
+        } else {
+          result0 = null;
+          if (reportFailures === 0) {
+            matchFailed("\"+\"");
+          }
+        }
+        result0 = result0 !== null ? result0 : "";
+        if (result0 !== null) {
+          if (/^[0-9\-]/.test(input.charAt(pos))) {
+            result2 = input.charAt(pos);
+            pos++;
+          } else {
+            result2 = null;
+            if (reportFailures === 0) {
+              matchFailed("[0-9\\-]");
+            }
+          }
+          if (result2 !== null) {
+            result1 = [];
+            while (result2 !== null) {
+              result1.push(result2);
+              if (/^[0-9\-]/.test(input.charAt(pos))) {
+                result2 = input.charAt(pos);
+                pos++;
+              } else {
+                result2 = null;
+                if (reportFailures === 0) {
+                  matchFailed("[0-9\\-]");
+                }
+              }
+            }
+          } else {
+            result1 = null;
+          }
+          if (result1 !== null) {
+            result0 = [result0, result1];
+          } else {
+            result0 = null;
+            pos = pos1;
+          }
+        } else {
+          result0 = null;
+          pos = pos1;
+        }
+        if (result0 !== null) {
+          result0 = (function(offset) {
+                            data.number = input.substring(pos, offset); })(pos0);
+        }
+        if (result0 === null) {
           pos = pos0;
         }
         return result0;
