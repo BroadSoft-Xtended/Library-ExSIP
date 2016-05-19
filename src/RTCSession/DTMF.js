@@ -127,7 +127,7 @@ DTMF.prototype.onDTMFSent = function(tone) {
     return;
   }
 
-  logger.log("Sent Dtmf tone: " + tone.tone, this.session.ua);
+  logger.log("Sent Dtmf tone: <" + tone.tone + ">", this.session.ua);
   for(var i=0; i < this.queuedDTMFs.length; i++) {
     var dtmf = this.queuedDTMFs[i];
     if(tone.tone === dtmf.tone) {
@@ -156,7 +156,9 @@ DTMF.prototype.enableDtmfSender = function(localstream, peerConnection) {
     logger.log("Created DTMF Sender with canInsertDTMF : "+this.dtmfSender.canInsertDTMF, this.session.ua);
 
     this.dtmfSender.ontonechange = function(tone) {
-      self.onDTMFSent(tone);
+      if(tone.tone !== "") {
+        self.onDTMFSent(tone);
+      }
     };
 
     this.processQueuedDTMFs();
