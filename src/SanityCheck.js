@@ -42,7 +42,7 @@ var sanityCheck,
 
 // Sanity Check functions for requests
 function rfc3261_8_2_2_1() {
-  if(message.s('to').uri.scheme !== 'sip') {
+  if(message.s('to').uri.scheme !== 'sip' && message.s('to').uri.scheme !== 'tel') {
     logger.warn('Scheme ('+message.s('to').uri.scheme+') is not sip. Dropping the request', ua);
     reply(416);
     return false;

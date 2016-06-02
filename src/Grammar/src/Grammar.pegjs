@@ -93,8 +93,11 @@ quoted_pair = "\\" ( [\x00-\x09] / [\x0B-\x0C] / [\x0E-\x7F] )
 // SIP URI
 //=======================
 
-SIP_URI_noparams  = uri_scheme ":"  userinfo ? hostport {
+SIP_URI_noparams  = uri_scheme ":"  userinfo ? (hostport / number) {
                     try {
+                        if(!data.hostport) {
+                          data.hostport = data.number;
+                        }
                         data.uri = new ExSIP.URI(data.scheme, data.user, data.host, data.port);
                         delete data.scheme;
                         delete data.user;
@@ -105,9 +108,12 @@ SIP_URI_noparams  = uri_scheme ":"  userinfo ? hostport {
                         data = -1;
                       }}
 
-SIP_URI         = uri_scheme ":"  userinfo ? hostport uri_parameters headers ? {
+SIP_URI         = uri_scheme ":"  userinfo ? (hostport / number) uri_parameters headers ? {
                     var header;
                     try {
+                        if(!data.host) {
+                          data.host = data.number;
+                        }
                         data.uri = new ExSIP.URI(data.scheme, data.user, data.host, data.port, data.uri_params, data.uri_headers);
                         delete data.scheme;
                         delete data.user;
@@ -135,6 +141,9 @@ password        = ( unreserved / escaped / "&" / "=" / "+" / "$" / "," )* {
                     data.password = input.substring(pos, offset); }
 
 hostport        = host ( ":" port )?
+
+number          = ( "+" ? [0-9-]+ ) {
+                    data.number = input.substring(pos, offset); }
 
 host            = ( hostname / IPv4address / IPv6reference ) {
                     data.host = input.substring(pos, offset).toLowerCase();

@@ -220,7 +220,6 @@
 
 
       var targetSession = self.newSession(options);
-      targetSession.rtcMediaHandler.copy(sessionToTransfer.rtcMediaHandler);
 
       var holdTargetSuccess = function(){
         logger.log("transfer : hold target success - sending attended refer", self);
@@ -233,7 +232,7 @@
 
       var sendTargetInviteSuccess = function(){
         logger.log("transfer : send invite to target success - putting target on hold", self);
-        targetSession.hold(holdTargetSuccess, holdTargetFailed);
+        setTimeout(function() { targetSession.hold(holdTargetSuccess, holdTargetFailed); }, 2000);
       };
 
       var sendTargetInviteFailed = function(response){
@@ -249,8 +248,13 @@
 
       var holdSuccess = function(){
         logger.log("transfer : hold success - sending invite to target", self);
-        targetSession.sendInviteRequest(transferTarget, {extraHeaders: ["Require: replaces"]},
-          sendTargetInviteSuccess, sendTargetInviteFailed);
+        targetSession.connectLocalMedia(options, function(){
+          logger.log("connect local succeeded", self.ua);
+          targetSession.sendInviteRequest(transferTarget, {extraHeaders: ["Require: replaces"]},
+            sendTargetInviteSuccess, sendTargetInviteFailed);
+        }, function(){
+          logger.warn("connect local failed", self.ua);
+        });
       };
 
       logger.log("transfer : holding session to transfer", self);
