@@ -560,49 +560,50 @@
     }
 
     //Initialize Media Session
-    this.initRtcMediaHandler();
-    this.rtcMediaHandler.onMessage(
-      request.body,
-      /*
-       * onSuccess
-       * SDP Offer is valid. Fire UA newRTCSession
-       */
-      function() {
-        request.reply(180, null, ['Contact: ' + self.contact]);
-        self.status = C.STATUS_WAITING_FOR_ANSWER;
-
-        // Set userNoAnswerTimer
-        self.timers.userNoAnswerTimer = window.setTimeout(function() {
-            request.reply(408);
-            self.failed('local',null, ExSIP.C.causes.NO_ANSWER);
-          }, self.ua.configuration.no_answer_timeout
-        );
-
-        /* Set expiresTimer
-         * RFC3261 13.3.1
+    this.initRtcMediaHandler().then(function() {
+      self.rtcMediaHandler.onMessage(
+        request.body,
+        /*
+         * onSuccess
+         * SDP Offer is valid. Fire UA newRTCSession
          */
-        if (expires) {
-          self.timers.expiresTimer = window.setTimeout(function() {
-              if(self.status === C.STATUS_WAITING_FOR_ANSWER) {
-                request.reply(487);
-                self.failed('system', null, ExSIP.C.causes.EXPIRES);
-              }
-            }, expires
-          );
-        }
+        function() {
+          request.reply(180, null, ['Contact: ' + self.contact]);
+          self.status = C.STATUS_WAITING_FOR_ANSWER;
 
-        self.newRTCSession('remote', request);
-      },
-      /*
-       * onFailure
-       * Bad media description
-       */
-      function(e) {
-        logger.warn('invalid SDP', self.ua);
-        logger.warn(e, self.ua);
-        request.reply(488);
-      }
-    );
+          // Set userNoAnswerTimer
+          self.timers.userNoAnswerTimer = window.setTimeout(function() {
+              request.reply(408);
+              self.failed('local',null, ExSIP.C.causes.NO_ANSWER);
+            }, self.ua.configuration.no_answer_timeout
+          );
+
+          /* Set expiresTimer
+           * RFC3261 13.3.1
+           */
+          if (expires) {
+            self.timers.expiresTimer = window.setTimeout(function() {
+                if(self.status === C.STATUS_WAITING_FOR_ANSWER) {
+                  request.reply(487);
+                  self.failed('system', null, ExSIP.C.causes.EXPIRES);
+                }
+              }, expires
+            );
+          }
+
+          self.newRTCSession('remote', request);
+        },
+        /*
+         * onFailure
+         * Bad media description
+         */
+        function(e) {
+          logger.warn('invalid SDP', self.ua);
+          logger.warn(e, self.ua);
+          request.reply(488);
+        }
+      );
+    });
   };
 
   /**
