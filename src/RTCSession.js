@@ -646,20 +646,21 @@
 
     // Session parameter initialization
     this.from_tag = ExSIP.Utils.newTag();
-    this.initRtcMediaHandler(options);
+    this.initRtcMediaHandler(options).then(function(){
+      if (!ExSIP.WebRTC.isSupported) {
+        self.failed('local', null, ExSIP.C.causes.WEBRTC_NOT_SUPPORTED);
+      } else {
+        self.getUserMedia(mediaConstraints, function(){
+          logger.log('offer succeeded', self.ua);
+          success();
+        }, function(){
+          logger.log('offer failed', self.ua);
+          self.failed('local', null, ExSIP.C.causes.WEBRTC_ERROR);
+          failure();
+        }, options);
+      }
+    });
 
-    if (!ExSIP.WebRTC.isSupported) {
-      this.failed('local', null, ExSIP.C.causes.WEBRTC_NOT_SUPPORTED);
-    } else {
-      this.getUserMedia(mediaConstraints, function(){
-        logger.log('offer succeeded', self.ua);
-        success();
-      }, function(){
-        logger.log('offer failed', self.ua);
-        self.failed('local', null, ExSIP.C.causes.WEBRTC_ERROR);
-        failure();
-      }, options);
-    }
   };
 
   /**
