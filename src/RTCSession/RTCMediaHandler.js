@@ -11,18 +11,13 @@
 
   var logger = new ExSIP.Logger(ExSIP.name +' | '+ 'RTCMediaHandler');
 
-var RTCMediaHandler = function(session, constraints) {
-  constraints = constraints || {};
-  logger.log('constraints : '+ExSIP.Utils.toString(constraints), session.ua);
-
+var RTCMediaHandler = function(session) {
   this.session = session;
   this.localMedia = null;
   this.peerConnection = null;
   this.createOfferConstraints = null;
   this.dataChannel = null;
   this.ready = true;
-
-  this.init(constraints);
 };
 
 RTCMediaHandler.prototype = {
@@ -276,6 +271,9 @@ RTCMediaHandler.prototype = {
   * @param {Function} onSuccess Fired when there are no more ICE candidates
   */
   init: function(constraints) {
+    constraints = constraints || {};
+    logger.log('constraints : '+ExSIP.Utils.toString(constraints), this.session.ua);
+
     var idx, length, server, scheme, url,
       self = this,
       servers = [],
@@ -298,69 +296,89 @@ RTCMediaHandler.prototype = {
       });
     }
 
-    logger.log("servers : "+ExSIP.Utils.toString(servers), this.session.ua);
-    this.peerConnection = new ExSIP.WebRTC.RTCPeerConnection({'iceServers': servers}, constraints);
+    var initPeerConnection = function(cert) {
+      logger.log("init peer connection : "+ExSIP.Utils.toString(cert), self.session.ua);
+      self.peerConnection = new ExSIP.WebRTC.RTCPeerConnection({'iceServers': servers, certificates: [cert]}, constraints);
 
-    this.peerConnection.onaddstream = function(e) {
-      logger.log('stream added: '+ e.stream.id, self.session.ua);
-    };
+      self.peerConnection.onaddstream = function(e) {
+        logger.log('stream added: '+ e.stream.id, self.session.ua);
+      };
 
-    this.peerConnection.onremovestream = function(e) {
-      logger.log('stream removed: '+ e.stream.id, self.session.ua);
-    };
+      self.peerConnection.onremovestream = function(e) {
+        logger.log('stream removed: '+ e.stream.id, self.session.ua);
+      };
 
-    this.peerConnection.oniceconnectionstatechange = function() {
-      logger.log('oniceconnectionstatechange : '+ this.iceConnectionState, self.session.ua);
-      if(this.iceConnectionState === 'connected') {
-        self.session.iceConnected();
-      }
-      else if(this.iceConnectionState === 'completed') {
-        self.session.iceCompleted();
-      }
-      else if(this.iceConnectionState === 'closed') {
-        self.session.iceClosed();
-      }
-    };
+      self.peerConnection.oniceconnectionstatechange = function() {
+        logger.log('oniceconnectionstatechange : '+ this.iceConnectionState, self.session.ua);
+        if(this.iceConnectionState === 'connected') {
+          self.session.iceConnected();
+        }
+        else if(this.iceConnectionState === 'completed') {
+          self.session.iceCompleted();
+        }
+        else if(this.iceConnectionState === 'closed') {
+          self.session.iceClosed();
+        }
+      };
 
-    this.peerConnection.onnegotiationneeded = function(e) {
-      logger.log('onnegotiationneeded : '+ e.type, self.session.ua);
-    };
+      self.peerConnection.onnegotiationneeded = function(e) {
+        logger.log('onnegotiationneeded : '+ e.type, self.session.ua);
+      };
 
-    this.peerConnection.onsignalingstatechange = function() {
-      logger.log('onsignalingstatechange : '+ this.signalingState, self.session.ua);
-    };
+      self.peerConnection.onsignalingstatechange = function() {
+        logger.log('onsignalingstatechange : '+ this.signalingState, self.session.ua);
+      };
 
-    this.peerConnection.onicecandidate = function(e) {
-      if (e.candidate && self.session.ua.rtcMediaHandlerOptions["enableICE"]) {
-        logger.log('ICE candidate received: '+ e.candidate.candidate, self.session.ua);
-      } else if (self.onIceCompleted !== undefined) {
-        logger.log('onIceCompleted with ready : '+ self.ready+" and candidate : "+ExSIP.Utils.toString(e.candidate), self.session.ua);
-        if(!self.ready && e.candidate) {
+      self.peerConnection.onicecandidate = function(e) {
+        if (e.candidate && self.session.ua.rtcMediaHandlerOptions["enableICE"]) {
+          logger.log('ICE candidate received: '+ e.candidate.candidate, self.session.ua);
+        } else if (self.onIceCompleted !== undefined) {
+          logger.log('onIceCompleted with ready : '+ self.ready+" and candidate : "+ExSIP.Utils.toString(e.candidate), self.session.ua);
+          if(!self.ready && e.candidate) {
+            self.onIceCompleted();
+          }      
+        }
+      };
+
+      // To be deprecated as per https://code.google.com/p/webrtc/issues/detail?id=1393
+      self.peerConnection.ongatheringchange = function(e) {
+        var state = (typeof e === 'string' || e instanceof String) ? e : e.currentTarget.iceGatheringState;
+        logger.log('ongatheringchange for state : '+ state+'"', self.session.ua);
+        if (state === 'complete' && this.iceConnectionState !== 'closed' && self.onIceCompleted !== undefined) {
           self.onIceCompleted();
-        }      
+        }
+      };
+
+      self.peerConnection.onicechange = function() {
+        logger.log('ICE connection state changed to "'+ this.iceConnectionState +'"', self.session.ua);
+      };
+
+      self.peerConnection.onstatechange = function() {
+        logger.log('PeerConnection state changed to "'+ this.readyState +'"', self.session.ua);
+      };
+
+      if(self.session.ua.configuration.enable_datachannel) {
+        self.dataChannel = new DataChannel(self.session, self.peerConnection);
       }
     };
 
-    // To be deprecated as per https://code.google.com/p/webrtc/issues/detail?id=1393
-    this.peerConnection.ongatheringchange = function(e) {
-      var state = (typeof e === 'string' || e instanceof String) ? e : e.currentTarget.iceGatheringState;
-      logger.log('ongatheringchange for state : '+ state+'"', self.session.ua);
-      if (state === 'complete' && this.iceConnectionState !== 'closed' && self.onIceCompleted !== undefined) {
-        self.onIceCompleted();
-      }
-    };
-
-    this.peerConnection.onicechange = function() {
-      logger.log('ICE connection state changed to "'+ this.iceConnectionState +'"', self.session.ua);
-    };
-
-    this.peerConnection.onstatechange = function() {
-      logger.log('PeerConnection state changed to "'+ this.readyState +'"', self.session.ua);
-    };
-
-    if(self.session.ua.configuration.enable_datachannel) {
-      this.dataChannel = new DataChannel(this.session, this.peerConnection);
-    }
+    logger.log("servers : "+ExSIP.Utils.toString(servers), this.session.ua);
+    var certificate = self.session.ua.configuration.certificate || 'RSA';
+    if(certificate === 'ECDSA') {
+      certificate = {
+        name: 'ECDSA',
+        namedCurve: 'P-256'
+      };
+    } else if(certificate === 'RSA') {
+      certificate = { 
+        name: "RSASSA-PKCS1-v1_5", 
+        modulusLength: 2048, 
+        publicExponent: new Uint8Array([1, 0, 1]), 
+        hash: "SHA-256" 
+      };
+    } 
+    logger.log("certificate : "+ExSIP.Utils.toString(certificate), this.session.ua);
+    return ExSIP.WebRTC.RTCPeerConnection.generateCertificate(certificate).then(initPeerConnection);
   },
 
   getSetLocalDescriptionType: function(){

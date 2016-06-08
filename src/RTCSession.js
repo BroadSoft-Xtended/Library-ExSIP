@@ -91,10 +91,8 @@
 
   RTCSession.prototype.initRtcMediaHandler = function(options) {
     options = options || {};
-    this.rtcMediaHandler = new RTCMediaHandler(this, options.RTCConstraints || this.ua.rtcConstraints() || {"optional": [{'DtlsSrtpKeyAgreement': 'true'}]});
-    if(options["copy"]) {
-      this.rtcMediaHandler.copy(options["copy"]);
-    }
+    this.rtcMediaHandler = new RTCMediaHandler(this);
+    return this.rtcMediaHandler.init(options.RTCConstraints || this.ua.rtcConstraints() || {"optional": [{'DtlsSrtpKeyAgreement': 'true'}]});
   };
 
   /**
@@ -407,14 +405,15 @@
     options["createOfferConstraints"] = options.createOfferConstraints || this.rtcMediaHandler.createOfferConstraints;
     this.rtcMediaHandler.close(!!options.localMedia);
 
-    this.initRtcMediaHandler(options);
-    this.rtcMediaHandler.localMedia = localMedia;
-    this.rtcMediaHandler.createOfferConstraints = options["createOfferConstraints"];
-    this.connectRtcMediaHandler(localMedia, function(){
-        self.started('local', undefined, true);
-        connectSuccess();
-      }, connectFailed, options
-    );
+    this.initRtcMediaHandler(options).then(function() {
+      self.rtcMediaHandler.localMedia = localMedia;
+      self.rtcMediaHandler.createOfferConstraints = options["createOfferConstraints"];
+      self.connectRtcMediaHandler(localMedia, function(){
+          self.started('local', undefined, true);
+          connectSuccess();
+        }, connectFailed, options
+      );
+    });
   };
 
   /**
@@ -561,49 +560,50 @@
     }
 
     //Initialize Media Session
-    this.initRtcMediaHandler();
-    this.rtcMediaHandler.onMessage(
-      request.body,
-      /*
-       * onSuccess
-       * SDP Offer is valid. Fire UA newRTCSession
-       */
-      function() {
-        request.reply(180, null, ['Contact: ' + self.contact]);
-        self.status = C.STATUS_WAITING_FOR_ANSWER;
-
-        // Set userNoAnswerTimer
-        self.timers.userNoAnswerTimer = window.setTimeout(function() {
-            request.reply(408);
-            self.failed('local',null, ExSIP.C.causes.NO_ANSWER);
-          }, self.ua.configuration.no_answer_timeout
-        );
-
-        /* Set expiresTimer
-         * RFC3261 13.3.1
+    this.initRtcMediaHandler().then(function() {
+      self.rtcMediaHandler.onMessage(
+        request.body,
+        /*
+         * onSuccess
+         * SDP Offer is valid. Fire UA newRTCSession
          */
-        if (expires) {
-          self.timers.expiresTimer = window.setTimeout(function() {
-              if(self.status === C.STATUS_WAITING_FOR_ANSWER) {
-                request.reply(487);
-                self.failed('system', null, ExSIP.C.causes.EXPIRES);
-              }
-            }, expires
-          );
-        }
+        function() {
+          request.reply(180, null, ['Contact: ' + self.contact]);
+          self.status = C.STATUS_WAITING_FOR_ANSWER;
 
-        self.newRTCSession('remote', request);
-      },
-      /*
-       * onFailure
-       * Bad media description
-       */
-      function(e) {
-        logger.warn('invalid SDP', self.ua);
-        logger.warn(e, self.ua);
-        request.reply(488);
-      }
-    );
+          // Set userNoAnswerTimer
+          self.timers.userNoAnswerTimer = window.setTimeout(function() {
+              request.reply(408);
+              self.failed('local',null, ExSIP.C.causes.NO_ANSWER);
+            }, self.ua.configuration.no_answer_timeout
+          );
+
+          /* Set expiresTimer
+           * RFC3261 13.3.1
+           */
+          if (expires) {
+            self.timers.expiresTimer = window.setTimeout(function() {
+                if(self.status === C.STATUS_WAITING_FOR_ANSWER) {
+                  request.reply(487);
+                  self.failed('system', null, ExSIP.C.causes.EXPIRES);
+                }
+              }, expires
+            );
+          }
+
+          self.newRTCSession('remote', request);
+        },
+        /*
+         * onFailure
+         * Bad media description
+         */
+        function(e) {
+          logger.warn('invalid SDP', self.ua);
+          logger.warn(e, self.ua);
+          request.reply(488);
+        }
+      );
+    });
   };
 
   /**
@@ -647,20 +647,21 @@
 
     // Session parameter initialization
     this.from_tag = ExSIP.Utils.newTag();
-    this.initRtcMediaHandler(options);
+    this.initRtcMediaHandler(options).then(function(){
+      if (!ExSIP.WebRTC.isSupported) {
+        self.failed('local', null, ExSIP.C.causes.WEBRTC_NOT_SUPPORTED);
+      } else {
+        self.getUserMedia(mediaConstraints, function(){
+          logger.log('offer succeeded', self.ua);
+          success();
+        }, function(){
+          logger.log('offer failed', self.ua);
+          self.failed('local', null, ExSIP.C.causes.WEBRTC_ERROR);
+          failure();
+        }, options);
+      }
+    });
 
-    if (!ExSIP.WebRTC.isSupported) {
-      this.failed('local', null, ExSIP.C.causes.WEBRTC_NOT_SUPPORTED);
-    } else {
-      this.getUserMedia(mediaConstraints, function(){
-        logger.log('offer succeeded', self.ua);
-        success();
-      }, function(){
-        logger.log('offer failed', self.ua);
-        self.failed('local', null, ExSIP.C.causes.WEBRTC_ERROR);
-        failure();
-      }, options);
-    }
   };
 
   /**
