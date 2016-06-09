@@ -116,7 +116,10 @@ module.exports = function(grunt) {
         eqnull: true,
         onecase:true,
         unused:true,
-        supernew: true
+        supernew: true,
+        "globals": {
+          "Promise": true,
+        }
       },
       globals: {}
     },
