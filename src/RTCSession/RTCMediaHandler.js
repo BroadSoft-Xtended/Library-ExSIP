@@ -378,11 +378,6 @@ RTCMediaHandler.prototype = {
       };
     } 
     logger.log("certificate : "+ExSIP.Utils.toString(certificate), this.session.ua);
-    if(!ExSIP.WebRTC.RTCPeerConnection.generateCertificate) {
-      ExSIP.WebRTC.RTCPeerConnection.generateCertificate = function(certificate) {
-        return new Promise(function(resolve){ resolve(certificate); });
-      };
-    }
     return ExSIP.WebRTC.RTCPeerConnection.generateCertificate(certificate).then(initPeerConnection);
   },
 
