@@ -85,11 +85,24 @@ function parseHeader(message, data, headerStart, headerEnd) {
       }
       break;
     case 'diversion':
-    case 'd':
       message.setHeader('diversion', headerValue);
       parsed = message.parseHeader('diversion');
       if(parsed) {
         message.diversion = parsed;
+      }
+      break;
+    case 'p-asserted-identity':
+      message.setHeader('p-asserted-identity', headerValue);
+      parsed = message.parseHeader('p-asserted-identity');
+      if(parsed) {
+        message.p_asserted_identity = parsed;
+      }
+      break;
+    case 'remote-party-id':
+      message.setHeader('remote-party-id', headerValue);
+      parsed = message.parseHeader('remote-party-id');
+      if(parsed) {
+        message.remote_party_id = parsed;
       }
       break;
     case 'record-route':
