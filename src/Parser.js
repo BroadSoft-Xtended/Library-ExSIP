@@ -84,6 +84,14 @@ function parseHeader(message, data, headerStart, headerEnd) {
         message.to_tag = parsed.getParam('tag');
       }
       break;
+    case 'diversion':
+    case 'd':
+      message.setHeader('diversion', headerValue);
+      parsed = message.parseHeader('diversion');
+      if(parsed) {
+        message.diversion = parsed;
+      }
+      break;
     case 'record-route':
       parsed = ExSIP.Grammar.parse(headerValue, 'Record_Route');
 

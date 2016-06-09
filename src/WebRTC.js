@@ -403,6 +403,11 @@ if (WebRTC.RTCPeerConnection && WebRTC.RTCPeerConnection.prototype) {
     // }
     return candidate;
   };
+  if(!WebRTC.RTCPeerConnection.generateCertificate) {
+    WebRTC.RTCPeerConnection.generateCertificate = function(certificate) {
+      return new Promise(function(resolve){ resolve(certificate); });
+    };
+  }
 }
 
 // isSupported attribute.

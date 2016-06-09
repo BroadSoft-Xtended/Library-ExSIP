@@ -556,6 +556,17 @@ from_param  = tag_param / generic_param
 
 tag_param   = "tag"i EQUAL tag: token {data.tag = tag; }
 
+// DIVERSION
+
+Diversion   = ( addr_spec / name_addr ) ( SEMI diversion_param )* {
+                try {
+                  data = new ExSIP.NameAddrHeader(data.uri, data.display_name, data.params);
+                } catch(e) {
+                  data = -1;
+                }}
+
+diversion_param  = generic_param
+
 
 //MAX-FORWARDS
 
