@@ -568,6 +568,30 @@ Diversion   = ( addr_spec / name_addr ) ( SEMI diversion_param )* {
 diversion_param  = generic_param
 
 
+// P-ASSERTED-IDENTITY
+
+P_Asserted_Identity = ( addr_spec / name_addr ) ( SEMI p_asserted_identity_param )* {
+                try {
+                  data = new ExSIP.NameAddrHeader(data.uri, data.display_name, data.params);
+                } catch(e) {
+                  data = -1;
+                }}
+
+p_asserted_identity_param  = generic_param
+
+
+// REMOTE-PARTY-ID
+
+Remote_Party_Id = ( addr_spec / name_addr ) ( SEMI remote_party_id_param )* {
+                try {
+                  data = new ExSIP.NameAddrHeader(data.uri, data.display_name, data.params);
+                } catch(e) {
+                  data = -1;
+                }}
+
+remote_party_id_param  = generic_param
+
+
 //MAX-FORWARDS
 
 Max_Forwards  = forwards: DIGIT+ {
