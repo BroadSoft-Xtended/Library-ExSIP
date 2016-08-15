@@ -62,7 +62,7 @@ RTCMediaHandler.prototype = {
     };
 
     var createAnswer = function(){
-      self.createAnswer(connectSucceeded, connectFailed, options.mediaConstraints);
+      self.createAnswer(connectSucceeded, connectFailed, options.createOfferConstraints);
     };
 
     var createOffer = function(){

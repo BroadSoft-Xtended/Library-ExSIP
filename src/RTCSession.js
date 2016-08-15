@@ -293,7 +293,9 @@
     window.clearTimeout(this.timers.userNoAnswerTimer);
 
     logger.log('answer : getUserMedia', self.ua);
-    this.getUserMedia(mediaConstraints, answerCreationSucceeded, answerCreationFailed, {isAnswer: true, remoteSdp: request.body});
+    options.isAnswer = true;
+    options.remoteSdp = request.body;
+    this.getUserMedia(mediaConstraints, answerCreationSucceeded, answerCreationFailed, options);
   };
 
   /**
