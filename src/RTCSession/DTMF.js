@@ -85,15 +85,11 @@ DTMF.prototype.send = function(tone, options) {
 };
 
 DTMF.prototype.processQueuedDTMFs = function() {
-  var self = this;
-  if(this.queuedDTMFs.length === 0) {
+  if(!this.dtmfSender || this.queuedDTMFs.length === 0) {
     return;
   }
   if(!this.dtmfSender.canInsertDTMF) {
-    logger.log("DTMF Sender cannot insert DTMF - trying again after timeout", this.session.ua);
-    this.sendTimeoutId = window.setTimeout(function(){
-      self.processQueuedDTMFs();
-    }, 1000);
+    logger.log("DTMF Sender cannot insert DTMF, local description is not set or telephone-event codec hasn't been negotiated successfully", this.session.ua);
     return;
   }
   var tones = "";
@@ -165,6 +161,12 @@ DTMF.prototype.enableDtmfSender = function(localstream, peerConnection) {
   }
   else {
     logger.error("No Local Stream to create DTMF Sender");
+  }
+};
+
+DTMF.prototype.disableDtmfSender = function() {
+  if(this.dtmfSender) {
+    this.dtmfSender = null;
   }
 };
 

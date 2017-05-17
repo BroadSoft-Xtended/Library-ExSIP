@@ -681,6 +681,8 @@
       this.rtcMediaHandler.close(!this.ua.reuseLocalMedia());
     }
 
+    this.dtmf.disableDtmfSender();
+
     // 2nd Step. Terminate signaling.
 
     // Clear session timers
