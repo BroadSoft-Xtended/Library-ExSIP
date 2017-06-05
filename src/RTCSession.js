@@ -293,7 +293,7 @@
     window.clearTimeout(this.timers.userNoAnswerTimer);
 
     logger.log('answer : getUserMedia', self.ua);
-    this.getUserMedia(mediaConstraints, answerCreationSucceeded, answerCreationFailed, {isAnswer: true, remoteSdp: request.body});
+    this.getUserMedia(mediaConstraints, answerCreationSucceeded, answerCreationFailed, {isAnswer: true, remoteSdp: request.body, "mediaConstraints": options.createOfferConstraints });
   };
 
   /**
@@ -395,7 +395,7 @@
     if(sdp.length === 0) {
       logger.log("empty sdp");
     }
-    this.reconnectRtcMediaHandler(connectSuccess, connectFailed, {isAnswer: true, remoteSdp: sdp, isReconnect: true});
+    this.reconnectRtcMediaHandler(connectSuccess, connectFailed, {isAnswer: true, remoteSdp: sdp, isReconnect: true, "mediaConstraints": options.createOfferConstraints});
   };
 
   RTCSession.prototype.reconnectRtcMediaHandler = function(connectSuccess, connectFailed, options) {
@@ -906,6 +906,7 @@
     console.log(options);
     var userMediaSucceeded = function(stream) {
       self.ua.localMedia = stream;
+      self.rtcMediaHandler.createOfferConstraints = options["createOfferConstraints"];
       self.connectRtcMediaHandler(stream, creationSucceeded, creationFailed, options);
 //      self.reconnectRtcMediaHandler(creationSucceeded, creationFailed, {localMedia: stream});
     };
