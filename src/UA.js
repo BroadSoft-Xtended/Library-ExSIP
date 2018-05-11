@@ -916,8 +916,7 @@
                 enable_ims: false,
                 hack_via_tcp: false,
                 hack_ip_in_contact: false,
-                p_asserted_identity: null,
-                certificate: null
+                p_asserted_identity: null
             };
 
         // Pre-Configuration
@@ -1094,7 +1093,6 @@
                 "hack_via_tcp", // false.
                 "enable_ims", // false.
                 "p_asserted_identity", // false.
-                "certificate", // false.
                 "enable_datachannel", // false.
                 "hack_ip_in_contact", //false
                 "no_answer_timeout", // 30 seconds.
@@ -1286,10 +1284,6 @@
 
             p_asserted_identity: function(p_asserted_identity) {
               return String(p_asserted_identity);
-            },
-
-            certificate: function(certificate) {
-              return String(certificate);
             },
 
             enable_datachannel: function(enable_datachannel) {
