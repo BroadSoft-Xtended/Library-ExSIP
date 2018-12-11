@@ -296,9 +296,9 @@ RTCMediaHandler.prototype = {
       });
     }
 
-    var initPeerConnection = function() {
-      logger.log("init peer connection...", self.session.ua);
-      self.peerConnection = new ExSIP.WebRTC.RTCPeerConnection({'iceServers': servers}, constraints);
+    var initPeerConnection = function(cert) {
+      logger.log("init peer connection : "+ExSIP.Utils.toString(cert), self.session.ua);
+      self.peerConnection = new ExSIP.WebRTC.RTCPeerConnection({'iceServers': servers, certificates: [cert]}, constraints);
 
       self.peerConnection.onaddstream = function(e) {
         logger.log('stream added: '+ e.stream.id, self.session.ua);
@@ -363,7 +363,22 @@ RTCMediaHandler.prototype = {
     };
 
     logger.log("servers : "+ExSIP.Utils.toString(servers), this.session.ua);
-    return Promise.resolve().then(initPeerConnection);
+    var certificate = self.session.ua.configuration.certificate || 'RSA';
+    if(certificate === 'ECDSA') {
+      certificate = {
+        name: 'ECDSA',
+        namedCurve: 'P-256'
+      };
+    } else if(certificate === 'RSA') {
+      certificate = { 
+        name: "RSASSA-PKCS1-v1_5", 
+        modulusLength: 2048, 
+        publicExponent: new Uint8Array([1, 0, 1]), 
+        hash: "SHA-256" 
+      };
+    } 
+    logger.log("certificate : "+ExSIP.Utils.toString(certificate), this.session.ua);
+    return ExSIP.WebRTC.RTCPeerConnection.generateCertificate(certificate).then(initPeerConnection);
   },
 
   getSetLocalDescriptionType: function(){
