@@ -93,7 +93,6 @@ ExSIP.Grammar = (function(){
         "host": parse_host,
         "hostname": parse_hostname,
         "domainlabel": parse_domainlabel,
-        "toplabel": parse_toplabel,
         "IPv6reference": parse_IPv6reference,
         "IPv6address": parse_IPv6address,
         "h16": parse_h16,
@@ -3602,7 +3601,7 @@ ExSIP.Grammar = (function(){
           }
         }
         if (result0 !== null) {
-          result1 = parse_toplabel();
+          result1 = parse_domainlabel();
           if (result1 !== null) {
             if (input.charCodeAt(pos) === 46) {
               result2 = ".";
@@ -3662,38 +3661,6 @@ ExSIP.Grammar = (function(){
               result1 = null;
               if (reportFailures === 0) {
                 matchFailed("[a-zA-Z0-9_\\-]");
-              }
-            }
-          }
-        } else {
-          result0 = null;
-        }
-        return result0;
-      }
-      
-      function parse_toplabel() {
-        var result0, result1;
-        
-        if (/^[a-zA-Z_\-]/.test(input.charAt(pos))) {
-          result1 = input.charAt(pos);
-          pos++;
-        } else {
-          result1 = null;
-          if (reportFailures === 0) {
-            matchFailed("[a-zA-Z_\\-]");
-          }
-        }
-        if (result1 !== null) {
-          result0 = [];
-          while (result1 !== null) {
-            result0.push(result1);
-            if (/^[a-zA-Z_\-]/.test(input.charAt(pos))) {
-              result1 = input.charAt(pos);
-              pos++;
-            } else {
-              result1 = null;
-              if (reportFailures === 0) {
-                matchFailed("[a-zA-Z_\\-]");
               }
             }
           }
