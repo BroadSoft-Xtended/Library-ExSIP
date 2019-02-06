@@ -487,11 +487,12 @@ RTCMediaHandler.prototype = {
 //    "a=candidate:0 1 udp 2113929216 204.117.64.113 44476 typ host\r\n";
 //
     if(this.peerConnection) {
-      // if(this.peerConnection.remoteDescription) {
-      //   logger.log('remote description already exists', this.session.ua);
-      //   onSuccess();
-      //   return;
-      // }
+      if(this.peerConnection.remoteDescription) {
+        logger.log('remote description already exists', this.session.ua);
+        onSuccess();
+        return;
+      }
+
       if(!description.sdp) {
         logger.log('empty sdp on setRemoteDescription - calling success', this.session.ua);
         onSuccess();
