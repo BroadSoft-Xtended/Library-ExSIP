@@ -353,8 +353,12 @@ RTCMediaHandler.prototype = {
         logger.log('ICE connection state changed to "'+ this.iceConnectionState +'"', self.session.ua);
       };
 
-      self.peerConnection.onstatechange = function() {
-        logger.log('PeerConnection state changed to "'+ this.readyState +'"', self.session.ua);
+      self.peerConnection.onconnectionstatechange = function() {
+        logger.log('PeerConnection state changed to "'+ this.connectionState +'"', self.session.ua);
+	if (this.connectionState === 'connected' && self.session.dtmf.queuedDTMFs.length > 0) {
+          logger.log('Processing queued DTMF tones', self.session.ua);
+          self.session.dtmf.processQueuedDTMFs();
+        }
       };
 
       if(self.session.ua.configuration.enable_datachannel) {

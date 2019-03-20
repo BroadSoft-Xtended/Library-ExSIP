@@ -113,9 +113,12 @@ DTMF.prototype.queueTone = function(tone, duration, interToneGap) {
   window.clearTimeout(this.sendTimeoutId);
   this.queuedDTMFs.push({tone: tone, duration: duration, interToneGap: interToneGap});
   var self = this;
-  this.sendTimeoutId = window.setTimeout(function(){
-    self.processQueuedDTMFs();
-  }, 2 * duration);
+  if(this.session.rtcMediaHandler.peerConnection.connectionState === 'connected') {
+    this.sendTimeoutId = window.setTimeout(function(){
+      logger.log("Processing queued DTMF tones", self.session.ua);
+      self.processQueuedDTMFs();
+    }, duration);
+  }
 };
 
 DTMF.prototype.onDTMFSent = function(tone) {
